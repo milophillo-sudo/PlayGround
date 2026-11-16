@@ -480,11 +480,22 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
 
   // mannequin / display figure
   const mann = new THREE.Group(); mann.position.set(2.5, 0, 5.6); mann.rotation.y = -0.4; root.add(mann);
-  mann.add(cyl(0.18, 0.24, 0.9, new THREE.MeshStandardMaterial({ color: 0xc4b39a, roughness: 0.9 }), 8, 0, 1.2, 0));
-  mann.add(box(0.36, 0.45, 0.2, new THREE.MeshStandardMaterial({ color: 0xc4b39a, roughness: 0.9 }), 0, 1.85, 0));
-  const mannHead = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 7), new THREE.MeshStandardMaterial({ color: 0xbfae96, roughness: 0.9 }));
-  mannHead.position.set(0, 2.2, 0); mann.add(mannHead);
-  mann.add(cyl(0.12, 0.2, 0.5, MAT.darkMetal, 7, 0, 0.25, 0));
+  const mannMat = new THREE.MeshStandardMaterial({ color: 0x9c8e78, roughness: 0.95 });
+  mann.add(cyl(0.05, 0.05, 0.9, MAT.darkMetal, 6, 0, 0.45, 0));
+  mann.add(cyl(0.28, 0.3, 0.05, MAT.darkMetal, 12, 0, 0.03, 0));
+  const torso = cyl(0.17, 0.22, 0.62, mannMat, 10, 0, 1.42, 0);
+  mann.add(torso);
+  mann.add(box(0.42, 0.16, 0.22, mannMat, 0, 1.76, 0));
+  for (const s of [-1, 1]) {
+    const arm = cyl(0.055, 0.07, 0.55, mannMat, 7, s * 0.26, 1.5, 0);
+    arm.rotation.z = s * 0.12; mann.add(arm);
+    const forearm = cyl(0.045, 0.055, 0.42, mannMat, 7, s * 0.3, 1.08, 0.03);
+    forearm.rotation.x = 0.25; mann.add(forearm);
+  }
+  mann.add(cyl(0.05, 0.06, 0.1, mannMat, 6, 0, 1.86, 0));
+  const mannHead = new THREE.Mesh(new THREE.SphereGeometry(0.115, 9, 8), mannMat);
+  mannHead.scale.set(0.86, 1.1, 0.95);
+  mannHead.position.set(0, 1.98, 0); mann.add(mannHead);
   addCollider(2.1, 2.9, 5.2, 6.0, 'mannequin');
 
   // scattered cans (10 pickups)
@@ -494,7 +505,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     ['TOMATO', '#a03428'], ['DOG FOOD', '#5c6b3a'],
   ];
   const canPositions = [
-    [-9.5, 1.24, 6.7], [-5.9, 0.78, 2.4], [-1.2, 0.94, -5.6], [-15.3, 1.62, -1.0],
+    [-10.9, 1.24, 6.35], [-5.9, 0.78, 2.4], [-1.2, 0.94, -5.6], [-15.3, 1.62, -1.0],
     [12.9, 1.98, -7.2], [-12.5, 0.22, 5.6], [9.6, 0.94, 8.0], [-10.4, 0.55, -9.3],
     [-13.9, 0.5, 9.4], [2.5, 0.34, 4.9],
   ];
@@ -544,22 +555,23 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   const lamps = [];
   for (const [x, z] of [[-6, -6], [5, -6], [-6, 5], [6, 5], [-11, 10], [11, 10]]) {
     const wire = cyl(0.008, 0.008, 0.9, MAT.black, 4, x, 4.7, z); root.add(wire);
-    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.32, 10, 1, true), new THREE.MeshStandardMaterial({ color: 0x2b2c25, roughness: 0.8, side: THREE.DoubleSide }));
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.26, 10, 1, true), new THREE.MeshStandardMaterial({ color: 0x1e1f1a, roughness: 0.9, side: THREE.DoubleSide }));
     shade.position.set(x, 4.25, z); root.add(shade);
     const bulbMat = new THREE.MeshStandardMaterial({ color: 0xffe2b4, emissive: 0xffb45d, emissiveIntensity: 1.8, roughness: 0.4 });
     const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.07, 7, 6), bulbMat);
     bulb.position.set(x, 4.18, z); root.add(bulb);
-    const light = new THREE.PointLight(0xffc07a, 8, 12, 2);
+    const light = new THREE.PointLight(0xffc07a, 14, 16, 2);
     light.position.set(x, 4.0, z); root.add(light);
-    lamps.push({ light, bulbMat, base: 8 });
+    lamps.push({ light, bulbMat, base: 14 });
   }
 
-  // moonlight shafts through front windows
-  const shaftMat = new THREE.MeshBasicMaterial({ color: 0x93a9a6, transparent: true, opacity: 0.04, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  // soft pools of moonlight just inside the front windows
+  const shaftMat = new THREE.SpriteMaterial({ map: glowTexture('rgba(150,180,178,1)', 'rgba(120,150,148,0)'), color: 0x9fb8b4, transparent: true, opacity: 0.05, depthWrite: false, blending: THREE.AdditiveBlending });
   for (let i = 0; i < 3; i++) {
-    const shaft = new THREE.Mesh(new THREE.ConeGeometry(1.8, 9, 4, 1, true), shaftMat);
-    shaft.position.set(-8 + i * 8, 3.2, 7.6); shaft.rotation.x = 0.5; shaft.rotation.z = 0.1;
-    root.add(shaft);
+    const pool = new THREE.Sprite(shaftMat.clone());
+    pool.position.set(-8 + i * 8, 1.1, 9.2);
+    pool.scale.set(9, 5, 1);
+    root.add(pool);
   }
 
   // dust
@@ -614,7 +626,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
       flicker = t + 0.4 + Math.random() * 2.4;
       for (const l of lamps) {
         const off = Math.random() > 0.72;
-        l.light.intensity = off ? 1.2 : l.base;
+        l.light.intensity = off ? 2.6 : l.base;
         l.bulbMat.emissiveIntensity = off ? 0.2 : 1.8;
       }
       warningLight.intensity = Math.random() > 0.25 ? 6 : 1.5;

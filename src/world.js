@@ -202,6 +202,15 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
   const root = new THREE.Group();
   scene.add(root);
 
+  // night sky + ambient moonlight so the lot reads on every display
+  const env = makeEnvironment(scene, {
+    fog: 0x111a17, fogDensity: 0.017,
+    top: 0x070e15, horizon: 0x8a6248, ground: 0x0a0e0b,
+    sunColor: 0xffb283, sunDir: [-0.22, 0.06, -1], sunSize: 0.0026, haze: 0.85,
+    ambient: 0.62, dirColor: 0xffb888, dirIntensity: 1.55, dirPos: [-20, 28, 12],
+    hemiSky: 0x7d8b80, hemiGround: 0x191d14, stars: 0.6,
+  });
+
   /* ---- ground & road ---- */
   const lot = new THREE.Mesh(new THREE.PlaneGeometry(62, 44), new THREE.MeshStandardMaterial({ map: (() => { const t = MAT.asphalt.map.clone(); t.repeat.set(5, 4); t.needsUpdate = true; return t; })(), roughness: 0.97 }));
   lot.rotation.x = -Math.PI / 2;
@@ -600,7 +609,7 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
   ];
 
   return {
-    root, building, doors, gate, boxStack, vent, ventMarker, monster,
+    env, root, building, doors, gate, boxStack, vent, ventMarker, monster,
     signLight, entranceLight, floodLight, ash, animate, colliders,
     spawn: new THREE.Vector3(0, 0, 22),
     bounds: { minX: -27.6, maxX: 27.6, minZ: -38.5, maxZ: 26.5 },

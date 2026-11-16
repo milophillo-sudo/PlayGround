@@ -88,6 +88,7 @@ export class Game {
     this.keypadUnlocked = false;
     this.keypadEntry = '';
     this.keypadOpen = false;
+    this.noteOpen = false;
     this.escape = null;
     this.qte = null;
     this.dead = false;
@@ -659,7 +660,7 @@ export class Game {
       for (const can of this.interior.cans) {
         if (can.userData.taken) continue;
         const d = Math.hypot(p.x - can.position.x, p.z - can.position.z);
-        if (d < 1.55) consider(d, 'TAKE ' + can.userData.name, 'can', can);
+        if (d < 1.55) consider(Math.max(0, d - 0.3), 'TAKE ' + can.userData.name, 'can', can);
       }
       const near = (v, max, pad = 0) => {
         if (!v) return 1e9;
@@ -1026,10 +1027,11 @@ export class Game {
     const scene = new THREE.Scene();
     this.scene = scene;
     scene.background = new THREE.Color(0x090b09);
-    scene.fog = new THREE.FogExp2(0x0b0d0a, 0.026);
-    scene.add(new THREE.HemisphereLight(0x8a8f78, 0x14150f, 0.5));
-    const fill = new THREE.DirectionalLight(0xa9b7a6, 0.3);
-    fill.position.set(-10, 14, 8);
+    scene.fog = new THREE.FogExp2(0x0c0e0b, 0.015);
+    scene.add(new THREE.HemisphereLight(0xa2a98f, 0x1e2016, 1.05));
+    scene.add(new THREE.AmbientLight(0x7d7a64, 0.42));
+    const fill = new THREE.DirectionalLight(0xb3c0ad, 0.55);
+    fill.position.set(-10, 16, 8);
     scene.add(fill);
 
     this.interior = buildStoreInterior(scene, { evening: true });
@@ -1792,19 +1794,21 @@ export class Game {
       }
       const p = this.player.position;
       const targetY = 1.45 - this.crouchAmt * 0.35;
-      const dist = 3.55;
+      const dist = 4.8;
       const hd = Math.cos(this.pitch) * dist;
+      const shoulder = 0.62;
+      const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
       const desired = new THREE.Vector3(
-        p.x + Math.sin(this.yaw) * hd,
-        p.y + targetY + 0.55 + Math.sin(this.pitch) * 2.2,
-        p.z + Math.cos(this.yaw) * hd
+        p.x + sy * hd + cy * shoulder,
+        p.y + targetY + 1.02 + Math.sin(this.pitch) * 2.3,
+        p.z + cy * hd - sy * shoulder
       );
       const b = this.bounds;
       desired.x = clamp(desired.x, b.minX + 0.5, b.maxX - 0.5);
       desired.z = clamp(desired.z, b.minZ + 0.5, b.maxZ - 0.5);
-      desired.y = clamp(desired.y, 0.75, 4.55);
+      desired.y = clamp(desired.y, 0.85, 4.6);
       this.camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
-      const lookTarget = new THREE.Vector3(p.x, p.y + targetY + 0.1, p.z);
+      const lookTarget = new THREE.Vector3(p.x - sy * 1.8, p.y + targetY + 0.08, p.z - cy * 1.8);
       this.cameraLook.lerp(lookTarget, 1 - Math.exp(-12 * dt));
       this.camera.lookAt(this.cameraLook);
       return;
@@ -1820,19 +1824,20 @@ export class Game {
       }
       const p = this.player.position;
       const targetY = 1.55;
-      const dist = 4.4;
+      const dist = 5.1;
       const hd = Math.cos(this.pitch) * dist;
+      const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
       const desired = new THREE.Vector3(
-        p.x + Math.sin(this.yaw) * hd,
-        p.y + targetY + 0.6 + Math.sin(this.pitch) * 2.4,
-        p.z + Math.cos(this.yaw) * hd
+        p.x + sy * hd + cy * 0.7,
+        p.y + targetY + 0.9 + Math.sin(this.pitch) * 2.4,
+        p.z + cy * hd - sy * 0.7
       );
       const b = this.bounds;
       desired.x = clamp(desired.x, b.minX + 1, b.maxX - 1);
       desired.z = clamp(desired.z, b.minZ + 1, b.maxZ - 1);
       desired.y = clamp(desired.y, 0.8, 9);
       this.camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
-      const lookTarget = new THREE.Vector3(p.x, p.y + targetY + 0.1, p.z);
+      const lookTarget = new THREE.Vector3(p.x - sy * 1.6, p.y + targetY + 0.1, p.z - cy * 1.6);
       this.cameraLook.lerp(lookTarget, 1 - Math.exp(-12 * dt));
       this.camera.lookAt(this.cameraLook);
       if (this.cameraShake > 0) {
@@ -1861,12 +1866,13 @@ export class Game {
     const p = this.player.position;
     const targetY = 1.52 - this.crouchAmt * 0.42;
     const pitch = this.pitch;
-    const dist = 4.25 - this.crouchAmt * 0.35;
+    const dist = 4.6 - this.crouchAmt * 0.35;
     const hd = Math.cos(pitch) * dist;
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const desired = new THREE.Vector3(
-      p.x + Math.sin(this.yaw) * hd,
-      p.y + targetY + 0.65 + Math.sin(pitch) * 3.0,
-      p.z + Math.cos(this.yaw) * hd
+      p.x + sy * hd + cy * 0.5,
+      p.y + targetY + 0.78 + Math.sin(pitch) * 3.0,
+      p.z + cy * hd - sy * 0.5
     );
     if (desired.x > -22.5 && desired.x < 22.5 && desired.z < -16.4) {
       desired.z = -16.2;
@@ -1878,7 +1884,7 @@ export class Game {
     desired.y = Math.max(0.65, desired.y);
     const k = 1 - Math.exp(-8 * dt);
     this.camera.position.lerp(desired, k);
-    const lookTarget = new THREE.Vector3(p.x, p.y + targetY + 0.18, p.z);
+    const lookTarget = new THREE.Vector3(p.x - sy * 1.3, p.y + targetY + 0.18, p.z - cy * 1.3);
     this.cameraLook.lerp(lookTarget, 1 - Math.exp(-11 * dt));
     this.camera.lookAt(this.cameraLook);
     if (this.cameraShake > 0) {

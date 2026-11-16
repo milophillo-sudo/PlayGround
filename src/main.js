@@ -501,4 +501,14 @@ window.__lastCan = {
   renderer,
   startGame,
   showMenu,
+  // fast-forward game logic (used by automated playthroughs)
+  async advance(seconds = 1) {
+    if (!game) return;
+    const steps = Math.min(1800, Math.max(1, Math.round(seconds * 60)));
+    for (let i = 0; i < steps; i++) {
+      game.update(1 / 60);
+      if (i % 8 === 7) await new Promise(r => setTimeout(r, 0));
+    }
+    if (game.scene && game.camera) renderer.render(game.scene, game.camera);
+  },
 };
