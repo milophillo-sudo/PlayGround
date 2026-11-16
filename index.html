@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0a0c0a" />
+  <title>THE LAST CAN — Chapter One: Trespasser</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene" aria-label="3D game world"></canvas>
+    <div id="grain" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="letterbox" aria-hidden="true"><div class="bar top"></div><div class="bar bottom"></div></div>
+
+    <!-- LOADING -->
+    <section id="loading" class="screen visible" aria-live="polite">
+      <div class="load-inner">
+        <div class="load-mark">TL</div>
+        <div class="load-title">THE LAST CAN</div>
+        <div class="load-line"><i></i></div>
+        <div class="load-sub">LOADING THE END OF THE WORLD</div>
+      </div>
+    </section>
+
+    <!-- MAIN MENU -->
+    <section id="menu" class="screen">
+      <div class="menu-top">
+        <div class="menu-brand">
+          <span class="brand-mark">TL</span>
+          <span class="brand-copy">A MONSTER APOCALYPSE STORY</span>
+        </div>
+        <div class="menu-top-right">
+          <span class="menu-chapter">CHAPTER ONE</span>
+          <button id="muteBtn" class="icon-btn" aria-label="Toggle sound">
+            <span class="sound-on">SOUND ON</span><span class="sound-off">SOUND OFF</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="menu-main">
+        <div class="title-block">
+          <div class="kicker"><span></span> AN INTERACTIVE STORY <span></span></div>
+          <h1 class="game-title"><span>THE LAST</span><span class="title-accent">CAN</span></h1>
+          <p class="tagline">Some doors were sealed for a reason.</p>
+          <div class="title-rule"></div>
+          <p class="menu-blurb">A boy. An empty highway. And a town that never got the warning.</p>
+        </div>
+
+        <div class="menu-actions">
+          <button id="playBtn" class="wood-play" aria-label="Play">
+            <span class="nails" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+            <span class="wood-grain" aria-hidden="true"></span>
+            <span class="play-tri" aria-hidden="true"></span>
+            <span class="play-label">PLAY</span>
+            <span class="play-sub">BEGIN CHAPTER ONE</span>
+          </button>
+          <div class="menu-links">
+            <button id="optionsBtn" class="ghost-btn">OPTIONS</button>
+            <span class="dot"></span>
+            <button id="creditsBtn" class="ghost-btn">CREDITS</button>
+            <span class="dot"></span>
+            <button id="howBtn" class="ghost-btn">HOW TO PLAY</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-footer">
+        <span>HEADPHONES RECOMMENDED</span>
+        <span class="footer-center">© 2026 HOMEWOOD PICTURES</span>
+        <span>EST. DAY 47</span>
+      </div>
+    </section>
+
+    <!-- CUTSCENE LAYER -->
+    <div id="cutsceneUI" class="hidden">
+      <div id="sceneCard" class="scene-card">
+        <span id="sceneCardKicker">DAY 47</span>
+        <strong id="sceneCardTitle">THE LAST CAN</strong>
+      </div>
+      <div id="subtitleWrap">
+        <span id="speakerTag"></span>
+        <p id="subtitle"></p>
+      </div>
+      <button id="skipBtn" class="skip-btn" aria-label="Skip intro">SKIP INTRO <span>›</span></button>
+      <div id="cutProgress"><i></i></div>
+    </div>
+
+    <!-- GAMEPLAY HUD -->
+    <div id="hud" class="hidden">
+      <div id="chapterCard" class="chapter-card">
+        <span id="chapterKicker">CHAPTER ONE</span>
+        <strong id="chapterTitle">TRESPASSER</strong>
+        <small id="chapterSub">HOMEWOOD COUNTY &nbsp;·&nbsp; DAY 57</small>
+      </div>
+      <div class="hud-top">
+        <div class="objective">
+          <span class="obj-label">OBJECTIVE</span>
+          <span id="objectiveText">FIND A WAY PAST THE GATE</span>
+          <span id="objectiveSub">The store looks sealed. Look for a weakness.</span>
+        </div>
+        <div class="hud-chapter">
+          <span>CHAPTER ONE</span>
+          <strong>TRESPASSER</strong>
+        </div>
+      </div>
+      <div id="canHud" class="can-hud hidden">
+        <span class="can-ico"></span>
+        <strong id="canCount">0</strong><span>/10</span>
+        <small>CANS FOUND</small>
+      </div>
+      <div id="escapeTimer" class="escape-timer hidden">
+        <span>THE DOOR WON'T HOLD</span>
+        <strong id="escapeSeconds">20</strong>
+        <i>SECONDS</i>
+      </div>
+      <div class="hud-bottom">
+        <div class="controls-hint" id="controlsHint">
+          <span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> MOVE</span>
+          <span><kbd>MOUSE</kbd> LOOK</span>
+          <span><kbd>SHIFT</kbd> RUN</span>
+          <span id="crouchHint"><kbd>C</kbd> CROUCH</span>
+        </div>
+        <div class="hud-status">
+          <span class="heart"></span><span id="threatLabel">THE AIR IS QUIET</span>
+        </div>
+      </div>
+      <div id="lookHint" class="look-hint">CLICK TO LOOK AROUND <span>•</span> ESC TO PAUSE</div>
+      <div id="interactPrompt" class="interact-prompt hidden"><kbd>E</kbd><span id="interactText">INSPECT</span></div>
+
+      <div id="tutorial" class="tutorial hidden">
+        <div class="tut-key"><kbd>C</kbd></div>
+        <div class="tut-copy">
+          <span class="tut-label">NEW ACTION</span>
+          <strong>CROUCH</strong>
+          <p>Hold <b>C</b> to crouch. Stay low and slip through the gap in the fence.</p>
+        </div>
+        <div class="tut-bar"><i></i></div>
+      </div>
+
+      <div id="gameCaption" class="game-caption">
+        <span id="gcSpeaker"></span>
+        <p id="gcText"></p>
+      </div>
+
+      <div id="qte" class="qte hidden">
+        <div class="qte-shade"></div>
+        <div class="qte-card">
+          <span id="qteKicker">QUICK ACTION</span>
+          <h3 id="qteTitle">ROTATE THE JACK</h3>
+          <p id="qteHint">Tap the handle — or press SPACE — to crank it.</p>
+          <button id="qteTap" class="qte-dial" aria-label="Quick action"><b id="qteDial">↻</b></button>
+          <div class="qte-track"><i id="qteFill"></i></div>
+          <div class="qte-time"><i id="qteTimeBar"></i></div>
+        </div>
+      </div>
+
+      <div id="mobileUI" class="mobile-ui hidden">
+        <div id="joystick" class="joystick"><div class="stick"></div></div>
+        <div class="mobile-buttons">
+          <button id="crouchBtn" class="round-btn crouch-btn" aria-label="Crouch"><span>C</span><small>CROUCH</small></button>
+          <button id="interactBtn" class="round-btn interact-btn hidden" aria-label="Interact"><span>E</span><small>USE</small></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHOICE -->
+    <div id="choiceUI" class="hidden">
+      <div class="choice-shade"></div>
+      <div class="choice-wrap">
+        <div class="choice-head">
+          <span class="choice-kicker">THE DOOR</span>
+          <h2>What do you do?</h2>
+          <p>The glass is cracked. Something moves inside.</p>
+        </div>
+        <div id="choiceList" class="choice-list"></div>
+        <div class="choice-timer">
+          <span id="choiceTimerLabel">CHOOSE</span>
+          <div class="choice-timer-track"><i id="choiceTimerBar"></i></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STORY INFORMATION -->
+    <section id="storyInfo" class="hidden" aria-live="polite">
+      <div class="story-shade"></div>
+      <div class="story-card">
+        <span id="storyKicker" class="story-kicker">THE STORY</span>
+        <h2 id="storyTitle">YOU FOLLOW,<br><em>AS YOUR CHARACTER'S STORY.</em></h2>
+        <p id="storyCopy">Every choice turns the page. Tim slipped through the vent — and into whatever waited inside.</p>
+        <button id="storyContinue" class="outline-btn">CONTINUE</button>
+        <div class="story-line"><i></i></div>
+      </div>
+    </section>
+
+    <!-- KEYPAD -->
+    <div id="keypad" class="keypad hidden">
+      <div class="keypad-card">
+        <div class="keypad-head">
+          <span>FUEL ROOM</span><button id="keypadClose" class="x-btn" aria-label="Close keypad">×</button>
+        </div>
+        <div class="keypad-display" id="keypadDisplay">------</div>
+        <div class="keypad-grid" id="keypadGrid"></div>
+        <div class="keypad-foot"><span id="keypadMsg">ENTER 6 DIGITS</span><i class="keypad-led"></i></div>
+      </div>
+    </div>
+
+    <!-- NOTE -->
+    <div id="noteOverlay" class="note-overlay hidden">
+      <div class="note-paper">
+        <div class="note-head">HOMEWOOD FURNITURE — STAFF MEMO</div>
+        <p>The fuel room code is the <b>last two digits</b> of the <b>year</b>, then <b>day</b>, then <b>month</b> — in that order.</p>
+        <p class="note-red">Someone painted the build date on the wall. They didn't want to forget.</p>
+        <div class="note-scribble">— J.</div>
+        <button id="noteClose" class="outline-btn">PUT IT DOWN</button>
+      </div>
+    </div>
+
+    <!-- DEATH -->
+    <div id="deathFx" class="death-fx" aria-hidden="true">
+      <div class="death-copy"><span>YOU DIED</span><small>THE STORY ISN'T FINISHED WITH YOU</small></div>
+    </div>
+
+    <!-- END -->
+    <section id="endScreen" class="screen">
+      <div class="end-glow"></div>
+      <div class="end-inner">
+        <div class="end-kicker">END OF CHAPTER ONE</div>
+        <h2 id="endTitle">SOMETHING HEARD THAT</h2>
+        <p id="endCopy">The glass was louder than the rain.</p>
+        <div class="remembered" id="remembered">THE DEAD WILL REMEMBER THAT</div>
+        <div class="end-stats">
+          <div><span>TIME INSIDE</span><strong id="statTime">00:00</strong></div>
+          <div><span>CHOICE</span><strong id="statChoice">SMASHED THE DOOR</strong></div>
+          <div><span>CAN COUNT</span><strong id="statCans">1 CAN LEFT</strong></div>
+        </div>
+        <div class="end-actions">
+          <button id="replayBtn" class="wood-play small"><span class="wood-grain"></span><span class="play-label">PLAY AGAIN</span></button>
+          <button id="menuBtn" class="outline-btn">MAIN MENU</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- MODALS -->
+    <div id="modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-head"><span id="modalKicker">OPTIONS</span><button id="modalClose" class="x-btn" aria-label="Close">×</button></div>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+
+    <div id="pause" class="screen paused">
+      <div class="pause-inner">
+        <div class="kicker"><span></span> PAUSED <span></span></div>
+        <h2>THE ROAD WAITS</h2>
+        <div class="pause-actions">
+          <button id="resumeBtn" class="outline-btn">RESUME</button>
+          <button id="pauseOptionsBtn" class="ghost-btn">OPTIONS</button>
+          <button id="pauseMenuBtn" class="ghost-btn">QUIT TO MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="flash" aria-hidden="true"></div>
+    <div id="fade" aria-hidden="true"></div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
