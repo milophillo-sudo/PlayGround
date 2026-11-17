@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#05060a" />
+<title>DETENTION — Afterschool Lockdown</title>
+<link rel="stylesheet" href="./styles.css" />
+<script type="importmap">
+  { "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <div id="fx-vignette"></div>
+  <div id="fx-grain"></div>
+  <div id="fx-scan"></div>
+  <div id="fx-blood"></div>
+  <div id="fx-flash"></div>
+
+  <div id="hud" class="hidden">
+    <div id="objective-panel">
+      <div class="label">OBJECTIVE</div>
+      <div id="objective-text">—</div>
+      <div id="objective-sub"></div>
+    </div>
+
+    <div id="map-panel">
+      <div class="label">MAP <span id="note-count">0 / 7 JOKE NOTES</span></div>
+      <canvas id="minimap" width="180" height="130"></canvas>
+      <div id="bot-roster"></div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div id="status-panel">
+      <div class="meter-row">
+        <span class="meter-label">HEALTH</span>
+        <div class="meter"><i id="health-fill"></i></div>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label">NOISE</span>
+        <div class="meter"><i id="noise-fill"></i></div>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label">BREATH</span>
+        <div class="meter"><i id="stamina-fill"></i></div>
+      </div>
+      <div class="meter-row">
+        <span class="meter-label">TORCH</span>
+        <div class="meter"><i id="battery-fill"></i></div>
+      </div>
+      <div id="torch-state">TORCH OFF [F]</div>
+    </div>
+
+    <div id="prompt"><span id="prompt-text"></span><i id="prompt-hold"></i></div>
+    <div id="pov-banner"><span id="pov-kicker">NOW CONTROLLING</span><b id="pov-name">—</b></div>
+    <div id="subtitle-wrap">
+      <div id="speaker"></div>
+      <div id="subtitle"></div>
+    </div>
+    <div id="toast"></div>
+    <div id="stamina-flash"></div>
+    <div id="detection"><span>!</span><span>SEEN</span></div>
+  </div>
+
+  <!-- TITLE -->
+  <div id="title-screen" class="screen">
+    <div class="title-inner">
+      <div class="kicker">MILLBROOK HIGH PRESENTS</div>
+      <h1>DETENTION</h1>
+      <div class="subtitle">AFTERSCHOOL LOCKDOWN</div>
+      <div class="tagline">The bell rang. Nobody went home.<br /><span>8 keys. 8 doors. One crowbar. One very committed hall monitor.</span></div>
+      <div class="btn-row">
+        <button id="btn-play" class="big-btn">START DETENTION</button>
+        <button id="btn-controls" class="ghost-btn">CONTROLS</button>
+      </div>
+      <div class="title-note">Best played with headphones · Contains: jump scares, bad grades</div>
+    </div>
+    <div class="credits-corner">YOUR GRADE: Q</div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div id="controls-screen" class="screen hidden">
+    <div class="panel">
+      <h2>HOW TO SKIP CLASS</h2>
+      <div class="controls-grid">
+        <div><kbd>W A S D</kbd><span>Move</span></div>
+        <div><kbd>MOUSE</kbd><span>Look</span></div>
+        <div><kbd>SHIFT</kbd><span>Sprint (loud)</span></div>
+        <div><kbd>C / CTRL</kbd><span>Crouch (quiet)</span></div>
+        <div><kbd>F</kbd><span>Flashlight (visible)</span></div>
+        <div><kbd>E</kbd><span>Interact / rescue / hide</span></div>
+        <div><kbd>SPACE</kbd><span>Skip cutscene</span></div>
+        <div><kbd>ESC</kbd><span>Pause</span></div>
+        <div><kbd>M</kbd><span>Mute</span></div>
+      </div>
+      <div class="controls-tips">
+        <p><b>Stay quiet.</b> The Hall Monitor hears running, doors and bad decisions.</p>
+        <p><b>Follow the keys.</b> Key 1 is outside Room 101. Every keyed room hides the next key. Key 8 is the exit.</p>
+        <p><b>Find the crowbar</b> to pry the barricade. It is not where you hope it is.</p>
+        <p><b>You get 40 seconds</b> when you go down. Bots will try to reach you. You can rescue them too.</p>
+      </div>
+      <button id="btn-controls-back" class="ghost-btn">BACK</button>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div id="pause-screen" class="screen hidden">
+    <div class="panel narrow">
+      <h2>PAUSED</h2>
+      <p class="muted">The hall monitor is also taking a break. Probably.</p>
+      <div class="pause-buttons">
+        <button id="btn-resume" class="big-btn">RESUME</button>
+        <button id="btn-restart" class="ghost-btn">RESTART CHECKPOINT</button>
+        <button id="btn-quit" class="ghost-btn">QUIT TO TITLE</button>
+      </div>
+      <div class="slider-row"><label for="volume">VOLUME</label><input id="volume" type="range" min="0" max="100" value="70" /></div>
+    </div>
+  </div>
+
+  <!-- CAUGHT -->
+  <div id="caught-screen" class="screen hidden">
+    <div class="caught-inner">
+      <div class="caught-kicker">HALL MONITOR INTERVENTION</div>
+      <h2>CAUGHT</h2>
+      <div id="caught-line">"No running in the halls."</div>
+      <div id="caught-tip">Tip: crouch behind the lockers. He can't see you if you believe hard enough.</div>
+      <button id="btn-retry" class="big-btn">ACCEPT DETENTION</button>
+    </div>
+  </div>
+
+  <!-- WIN -->
+  <div id="win-screen" class="screen hidden">
+    <div class="win-inner">
+      <div class="win-kicker">SURVIVED · SOMEHOW</div>
+      <h1>ESCAPED</h1>
+      <div id="win-grade">FINAL GRADE: Q+</div>
+      <div id="win-stats"></div>
+      <div id="win-line">You made it to the school gate. Your report card did not.</div>
+      <button id="btn-again" class="big-btn">SKIP SCHOOL AGAIN</button>
+      <div class="win-small">No students were harmed. Several report cards were.</div>
+    </div>
+  </div>
+
+  <!-- REPORT CARD OVERLAY -->
+  <div id="report-card" class="overlay hidden">
+    <div class="card">
+      <div class="card-head">
+        <span>MILLBROOK HIGH SCHOOL</span>
+        <span>SEMESTER REPORT</span>
+      </div>
+      <div class="card-name" id="card-name">STUDENT: YOU</div>
+      <div class="card-rows" id="card-rows"></div>
+      <div class="card-foot" id="card-foot">PARENT SIGNATURE: ____________________</div>
+      <div class="card-stamp" id="card-stamp">Q</div>
+    </div>
+  </div>
+
+  <!-- NOTE POPUP -->
+  <div id="note-popup" class="overlay hidden">
+    <div class="note">
+      <div class="note-pin">📌</div>
+      <div class="note-title" id="note-title">JOKE NOTE</div>
+      <div class="note-body" id="note-body"></div>
+      <div class="note-hint">Click or press E to fold it back into your pocket</div>
+    </div>
+  </div>
+
+  <!-- CINEMATIC LAYER -->
+  <div id="cine-ui" class="hidden">
+    <div id="cine-grain"></div>
+    <div id="cine-speedlines"></div>
+    <div id="cine-flash"></div>
+    <div id="cine-flare"></div>
+    <div id="cine-subtitle-wrap">
+      <div id="cine-speaker"></div>
+      <div id="cine-subtitle"></div>
+    </div>
+    <div id="cine-card">
+      <div class="cine-kicker"></div>
+      <div class="cine-title"></div>
+      <div class="cine-rule"></div>
+    </div>
+    <div id="cine-grade" class="hidden">
+      <div class="cg-paper">
+        <div class="cg-head"><span>MILLBROOK HIGH SCHOOL</span><span>SEMESTER REPORT</span></div>
+        <div class="cg-name">STUDENT: <b>JAKE</b></div>
+        <div class="cg-rows"></div>
+        <div class="cg-stamp">Z+</div>
+        <div class="cg-foot">PARENT SIGNATURE: <span class="cg-sig">definitely real</span></div>
+      </div>
+    </div>
+    <div id="cine-skip">SPACE — SKIP SCENE</div>
+  </div>
+
+  <div id="down-fx">
+    <div class="down-blue"></div>
+    <div class="down-vignette"></div>
+    <div class="down-waves"></div>
+    <div class="down-title">YOU ARE DOWN</div>
+    <div class="down-timer"><span id="down-secs">40</span><small>a classmate can still reach you</small></div>
+  </div>
+  <div id="jumpscare-fx">
+    <div class="js-red"></div>
+    <div class="js-static"></div>
+    <div class="js-slashes"></div>
+  </div>
+
+  <div id="letterbox"><div class="bar top"></div><div class="bar bottom"></div></div>
+  <div id="fade"></div>
+  <div id="chapter-card"><div class="chapter-kicker"></div><div class="chapter-title"></div></div>
+
+  <!-- TOUCH -->
+  <div id="touch-ui" class="hidden">
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+    <div id="touch-buttons">
+      <button class="tbtn" id="tb-flash">TORCH</button>
+      <button class="tbtn" id="tb-crouch">CROUCH</button>
+      <button class="tbtn" id="tb-sprint">RUN</button>
+      <button class="tbtn interact" id="tb-interact">E</button>
+    </div>
+  </div>
+
+  <div id="loading" class="screen">
+    <div class="load-inner">
+      <div class="load-logo">DETENTION</div>
+      <div class="load-bar"><i></i></div>
+      <div class="load-text">Waking the hall monitor…</div>
+    </div>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
