@@ -438,6 +438,11 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
   const floodFace = box(0.32, 0.04, 0.2, new THREE.MeshStandardMaterial({ color: 0xffe2b4, emissive: 0xffbd76, emissiveIntensity: 3 }), 4.85, 4.08, 0.65); gate.add(floodFace);
   const floodLight = new THREE.SpotLight(0xffc68a, 110, 24, 0.55, 0.55, 1.6);
   floodLight.position.set(4.8, 4.1, 1.0); floodLight.target.position.set(0, 1.2, 0); gate.add(floodLight, floodLight.target);
+  // security lamp on the inside face of the gate
+  const gateFill = new THREE.PointLight(0xffb877, 20, 16, 2);
+  gateFill.position.set(-8.8, 3.5, 9.2); root.add(gateFill);
+  const gateFillGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,200,140,1)', 'rgba(255,140,60,0)'), transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }));
+  gateFillGlow.position.set(-8.8, 3.5, 9.2); gateFillGlow.scale.set(2.6, 2.6, 1); root.add(gateFillGlow);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,210,150,1)', 'rgba(255,160,80,0)'), transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.position.set(4.85, 4.1, 0.7); glow.scale.set(3.4, 3.4, 1); gate.add(glow);
 

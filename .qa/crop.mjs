@@ -1,0 +1,13 @@
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
+const runtime = join(process.env.HOME, '.local/share/omgithub-playwright');
+const require = createRequire(join(runtime, 'package.json'));
+const { chromium } = require('playwright');
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 800, height: 500 } });
+const b64 = readFileSync(join(process.cwd(), '.qa/shots/13-crawl.png')).toString('base64');
+await page.setContent(`<body style="margin:0;background:#000"><div style="width:800px;height:500px;overflow:hidden;position:relative"><img src="data:image/png;base64,${b64}" style="position:absolute;left:-800px;top:-20px;width:2560px;image-rendering:pixelated"></div></body>`);
+await page.waitForTimeout(300);
+await page.screenshot({ path: '.qa/shots/head-crop.png' });
+await browser.close();

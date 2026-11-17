@@ -8,6 +8,7 @@ import { canvasTex, mulberry32 } from './textures.js';
 class FaceRig {
   constructor(head, { skin, hair, teen = false, mask = null } = {}) {
     this.head = head;
+    this.baseHeadY = head.position.y;
     this.teen = teen;
     this.mask = mask;
     this.expression = 'neutral';
@@ -195,11 +196,12 @@ class FaceRig {
       this.parts.browL.position.y += Math.sin(t * 5.4) * 0.0018 * env;
       this.parts.browR.position.y += Math.cos(t * 4.7) * 0.0018 * env;
       this.head.rotation.z = Math.sin(t * 2.1) * 0.018 * env;
-      this.head.position.y = 1.62 + Math.sin(t * 3.1) * 0.006 * env;
+      this.head.position.y = this.baseHeadY + Math.sin(t * 3.1) * 0.006 * env;
     } else {
       this.parts.jaw.rotation.x += (0 - this.parts.jaw.rotation.x) * Math.min(1, dt * 10);
       this.parts.mouth.scale.y += (1 - this.parts.mouth.scale.y) * Math.min(1, dt * 10);
       this.head.rotation.z += (0 - this.head.rotation.z) * Math.min(1, dt * 4);
+      this.head.position.y += (this.baseHeadY - this.head.position.y) * Math.min(1, dt * 8);
     }
   }
 }

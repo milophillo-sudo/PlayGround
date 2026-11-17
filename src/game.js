@@ -95,7 +95,7 @@ export class Game {
     this.escapeAttempts = 0;
     this.branchLabel = '';
     this.chaseChoice = '';
-    this.truckCam = { pos: new THREE.Vector3(0.32, 1.42, 0.02), look: new THREE.Vector3(-0.28, 1.32, 1.72) };
+    this.truckCam = { pos: new THREE.Vector3(0.12, 1.64, -0.55), look: new THREE.Vector3(0.0, 1.52, 5.6) };
     this.bindEvents();
     this.initKeypad();
   }
@@ -1101,8 +1101,8 @@ export class Game {
     await this.tween(0.9, (u) => {
       this.tim.group.position.lerpVectors(from, to, u);
       this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, 0, 0.15);
-      this.camera.position.lerp(new THREE.Vector3(8.3, 2.0, -18.4), 0.08);
-      this.cameraLook.lerp(new THREE.Vector3(8.3, 1.45, -13.2), 0.1);
+      this.camera.position.lerp(new THREE.Vector3(6.7, 1.9, -17.1), 0.08);
+      this.cameraLook.lerp(new THREE.Vector3(8.7, 1.4, -12.4), 0.1);
       this.camera.lookAt(this.cameraLook);
     });
 
@@ -1200,8 +1200,8 @@ export class Game {
       this.tim.group.rotation.y = 0;
       this.tim.setCrouch(0);
       this.mace.group.position.set(8.4, 0, -11.9);
-      this.camera.position.set(8.3, 2.0, -18.4);
-      this.cameraLook.set(8.3, 1.45, -13.2);
+      this.camera.position.set(6.7, 1.9, -17.1);
+      this.cameraLook.set(8.7, 1.4, -12.4);
     }
     this.escape = { time: 20, active: true };
     this.showEscapeTimer(true);
@@ -1224,8 +1224,8 @@ export class Game {
       this.tim.group.position.lerpVectors(tFrom, tTo, u);
       this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, Math.PI, 0.1);
       this.tim.setLocomotion(1.2, 1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(8.4, 1.85, -17.6), 0.07);
-      this.cameraLook.lerp(new THREE.Vector3(8.0, 1.35, -13.2), 0.08);
+      this.camera.position.lerp(new THREE.Vector3(5.6, 1.82, -16.8), 0.07);
+      this.cameraLook.lerp(new THREE.Vector3(8.0, 1.3, -13.4), 0.08);
       this.camera.lookAt(this.cameraLook);
     });
     this.interior.blockFuelDoor();
@@ -1241,8 +1241,8 @@ export class Game {
       this.tim.group.position.lerpVectors(runFrom, runTo, u);
       this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, Math.PI, 0.12);
       this.tim.setLocomotion(2.2, 1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(9.4, 1.65, -17.8), 0.08);
-      this.cameraLook.lerp(new THREE.Vector3(10.6, 1.05, -19.2), 0.09);
+      this.camera.position.lerp(new THREE.Vector3(5.0, 2.15, -14.2), 0.08);
+      this.cameraLook.lerp(new THREE.Vector3(9.4, 1.05, -18.3), 0.09);
       this.camera.lookAt(this.cameraLook);
     });
     this.tim.setLocomotion(0, 1 / 60);
@@ -1266,8 +1266,8 @@ export class Game {
     this.caption('', 'The jack bit. The door rose an inch at a time.', 2.8);
     await this.tween(1.1, (u) => {
       this.interior.setIronLift(u * 0.92);
-      this.camera.position.lerp(new THREE.Vector3(11.0, 1.1, -17.4), 0.08);
-      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.8, -19.6), 0.09);
+      this.camera.position.lerp(new THREE.Vector3(7.9, 1.85, -15.6), 0.08);
+      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.7, -19.5), 0.09);
       this.camera.lookAt(this.cameraLook);
     });
     this.caption('MACE', 'No. No — NO!', 2.2);
@@ -1290,8 +1290,8 @@ export class Game {
       this.tim.parts.legL.knee.rotation.x = 0.8;
       this.tim.parts.legR.knee.rotation.x = 0.8;
       this.tim.updateFace(1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(10.6, 0.95, -18.0), 0.06);
-      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.55, -20.8), 0.08);
+      this.camera.position.lerp(new THREE.Vector3(8.7, 1.35, -17.0), 0.06);
+      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.45, -20.7), 0.08);
       this.camera.lookAt(this.cameraLook);
     });
     this.tim.poseLock = false;
@@ -1416,7 +1416,7 @@ export class Game {
     this.extraAsh = null;
 
     this.tim = new TimCharacter();
-    this.tim.group.position.set(0, 0, -15.1);
+    this.tim.group.position.set(0, 0, -16.25);
     this.tim.group.rotation.y = 0;
     this.tim.setExpression('scared');
     this.tim.setCrouch(0);
@@ -1424,25 +1424,25 @@ export class Game {
     this.player = this.tim.group;
 
     this.jake = createJake();
-    this.jake.group.position.set(0, 0, -14.0);
+    this.jake.group.position.set(0.18, 0, -15.0);
     this.jake.group.rotation.y = Math.PI;
     this.jake.setExpression('snarl');
-    this.jake.parts.armR.shoulder.rotation.x = -1.25;
-    this.jake.parts.armR.elbow.rotation.x = -0.95;
-    this.jake.parts.armL.shoulder.rotation.x = -1.0;
-    this.jake.parts.armL.elbow.rotation.x = -0.8;
+    this.jake.parts.armR.shoulder.rotation.x = -1.42;
+    this.jake.parts.armR.elbow.rotation.x = -0.72;
+    this.jake.parts.armL.shoulder.rotation.x = -1.05;
+    this.jake.parts.armL.elbow.rotation.x = -0.86;
     scene.add(this.jake.group);
 
     this.mace = createMace();
-    this.mace.group.position.set(2.1, 0, -12.9);
-    this.mace.group.rotation.y = Math.PI;
+    this.mace.group.position.set(2.35, 0, -15.1);
+    this.mace.group.rotation.y = Math.PI - 0.45;
     this.mace.setGunRaised(true);
     this.mace.setExpression('angry');
     scene.add(this.mace.group);
 
-    const truck = createTruck({ headlights: false });
-    truck.position.set(8.2, 0, 24.8);
-    truck.rotation.y = Math.PI + 0.08;
+    const truck = createTruck({ headlights: true });
+    truck.position.set(1.5, 0, 27.5);
+    truck.rotation.y = Math.PI + 0.06;
     scene.add(truck);
     this.chaseTruck = truck;
 
@@ -1450,8 +1450,8 @@ export class Game {
     this.state = 'sequence';
     this.yaw = 0;
     this.pitch = 0.08;
-    this.camera.position.set(2.5, 1.65, -11.8);
-    this.cameraLook.set(0, 1.5, -15.0);
+    this.camera.position.set(1.42, 1.66, -13.72);
+    this.cameraLook.set(-0.05, 1.34, -16.2);
     this.camera.lookAt(this.cameraLook);
     document.getElementById('canHud')?.classList.add('hidden');
     document.getElementById('escapeTimer')?.classList.add('hidden');
@@ -1499,7 +1499,8 @@ export class Game {
       this.jake.group.rotation.y = Math.PI - u * 0.7;
       this.jake.setExpression('shock');
       this.cameraShake = 0.1;
-      this.camera.position.lerp(new THREE.Vector3(2.2, 1.55, -11.4), 0.1);
+      this.camera.position.lerp(new THREE.Vector3(2.5, 1.55, -14.4), 0.1);
+      this.cameraLook.lerp(new THREE.Vector3(-0.3, 1.3, -15.6), 0.1);
       this.camera.lookAt(this.cameraLook);
     });
     this.tim.poseLock = false;
@@ -1513,15 +1514,15 @@ export class Game {
     // run to the gate
     this.state = 'sequence';
     const from = this.tim.group.position.clone();
-    const to = new THREE.Vector3(-10, 0, 8.8);
+    const to = new THREE.Vector3(-10.1, 0, 10.4);
     await this.tween(3.2, (u) => {
       this.tim.group.position.lerpVectors(from, to, u);
       this.tim.group.rotation.y = 0;
       this.tim.setLocomotion(4.6, 1 / 60);
       this.stepTimer -= 1 / 60;
       if (this.stepTimer <= 0) { this.stepTimer = 0.3; audio.step(true); }
-      this.camera.position.lerp(new THREE.Vector3(-8.8, 2.1, 4.6), 0.05);
-      this.cameraLook.lerp(new THREE.Vector3(-10, 1.45, 9.2), 0.06);
+      this.camera.position.lerp(new THREE.Vector3(-14.9, 2.75, 7.1), 0.05);
+      this.cameraLook.lerp(new THREE.Vector3(-9.6, 1.3, 13.4), 0.06);
       this.camera.lookAt(this.cameraLook);
       this.jake.group.position.z += 4.8 * (1 / 60);
       this.mace.group.position.z += 4.6 * (1 / 60);
@@ -1539,8 +1540,8 @@ export class Game {
     this.callbacks.onPrompt?.(null);
     document.exitPointerLock?.();
     audio.heartbeat();
-    this.camera.position.set(-7.4, 1.8, 7.2);
-    this.cameraLook.set(-10.2, 1.35, 12.2);
+    this.camera.position.set(-14.9, 2.75, 7.1);
+    this.cameraLook.set(-9.6, 1.25, 13.4);
     this.camera.lookAt(this.cameraLook);
     this.callbacks.showChoice?.([
       { title: 'SHOOT AT THEM', desc: 'You still have the pistol. Make them duck.', key: '1' },
@@ -1586,13 +1587,13 @@ export class Game {
     }
     this.caption('TIM', 'The truck. Come on.', 2.0);
     const from = this.tim.group.position.clone();
-    const to = new THREE.Vector3(7.4, 0, 23.0);
-    await this.tween(2.4, (u) => {
+    const to = new THREE.Vector3(1.2, 0, 25.6);
+    await this.tween(3.0, (u) => {
       this.tim.group.position.lerpVectors(from, to, u);
       this.tim.group.rotation.y = 0;
       this.tim.setLocomotion(4.8, 1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(6.0, 2.2, 19.0), 0.06);
-      this.cameraLook.lerp(new THREE.Vector3(8.2, 1.4, 24.8), 0.07);
+      this.camera.position.lerp(new THREE.Vector3(2.9, 2.45, 20.2), 0.06);
+      this.cameraLook.lerp(new THREE.Vector3(1.2, 1.35, 26.2), 0.07);
       this.camera.lookAt(this.cameraLook);
     });
     this.callbacks.onFade?.(1);
@@ -1620,8 +1621,8 @@ export class Game {
     this.state = 'sequence';
     this.camera.fov = 42;
     this.camera.updateProjectionMatrix();
-    this.truckCam.pos.set(0.34, 1.42, 0.02);
-    this.truckCam.look.set(-0.3, 1.32, 1.72);
+    this.truckCam.pos.set(0.12, 1.64, -0.55);
+    this.truckCam.look.set(0.0, 1.52, 5.6);
     this.camera.position.copy(this.truckCam.pos);
     this.camera.lookAt(this.truckCam.look);
     document.getElementById('canHud')?.classList.add('hidden');

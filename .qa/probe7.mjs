@@ -1,0 +1,33 @@
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+const runtime = join(process.env.HOME, '.local/share/omgithub-playwright');
+const require = createRequire(join(runtime, 'package.json'));
+const { chromium } = require('playwright');
+const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
+page.on('console', (m) => console.log('CONSOLE', m.type(), m.text().slice(0, 300)));
+page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'load' });
+await page.waitForTimeout(1500);
+await page.evaluate(() => window.__lastCan.startGame());
+await page.waitForTimeout(800);
+await page.evaluate(() => window.__lastCan.game.chaseSequence());
+await page.evaluate(() => window.__lastCan.advance(4));
+await page.waitForTimeout(500);
+console.log('info', await page.evaluate(() => {
+  const r = window.__lastCan.renderer;
+  const g = window.__lastCan.game;
+  let lights = 0;
+  g.scene.traverse(o => { if (o.isLight) lights++; });
+  return { lights, calls: r.info.render.calls, tris: r.info.render.triangles, progs: r.info.programs?.length, cam: g.camera.position.toArray() };
+}));
+const t0 = Date.now();
+const frames = await page.evaluate(() => new Promise(res => {
+  let n = 0; const t = performance.now();
+  const tick = () => { if (++n >= 3) res(performance.now() - t); else requestAnimationFrame(tick); };
+  requestAnimationFrame(tick);
+}));
+console.log('3 frames ms', frames, 'wall', Date.now() - t0);
+await page.screenshot({ path: '.qa/shots/chase-new.png', timeout: 120000 });
+console.log('shot ok');
+await browser.close();

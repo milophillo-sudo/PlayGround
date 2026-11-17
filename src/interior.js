@@ -226,8 +226,11 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   keyDoor.position.set(8.5, 0, -13.0);
   root.add(keyDoor);
   const keyDoorMat = new THREE.MeshStandardMaterial({ map: metalTexture({ seed: 91, base: [66, 70, 66] }), roughness: 0.6, metalness: 0.55 });
-  const keyFrame = box(5.0, 3.4, 0.22, MAT.darkMetal, 0, 1.7, 0);
-  keyDoor.add(keyFrame);
+  // steel jambs + header (leave the middle open so the doors can actually swing)
+  keyDoor.add(box(0.32, 3.5, 0.24, MAT.darkMetal, -2.42, 1.75, 0));
+  keyDoor.add(box(0.32, 3.5, 0.24, MAT.darkMetal, 2.42, 1.75, 0));
+  keyDoor.add(box(5.16, 0.34, 0.24, MAT.darkMetal, 0, 3.34, 0));
+  keyDoor.add(box(5.0, 0.06, 0.26, MAT.darkMetal, 0, 0.03, 0));
   const leafL = new THREE.Group(); leafL.position.set(-2.35, 0, 0); keyDoor.add(leafL);
   const leafR = new THREE.Group(); leafR.position.set(2.35, 0, 0); keyDoor.add(leafR);
   const leafLm = box(2.28, 3.2, 0.14, keyDoorMat, 1.14, 1.6, 0.03); leafL.add(leafLm);
@@ -492,10 +495,10 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     const forearm = cyl(0.045, 0.055, 0.42, mannMat, 7, s * 0.3, 1.08, 0.03);
     forearm.rotation.x = 0.25; mann.add(forearm);
   }
-  mann.add(cyl(0.05, 0.06, 0.1, mannMat, 6, 0, 1.86, 0));
-  const mannHead = new THREE.Mesh(new THREE.SphereGeometry(0.115, 9, 8), mannMat);
-  mannHead.scale.set(0.86, 1.1, 0.95);
-  mannHead.position.set(0, 1.98, 0); mann.add(mannHead);
+  mann.add(cyl(0.055, 0.065, 0.1, mannMat, 6, 0, 1.87, 0));
+  const mannHead = new THREE.Mesh(new THREE.SphereGeometry(0.15, 9, 8), mannMat);
+  mannHead.scale.set(0.82, 1.12, 0.9);
+  mannHead.position.set(0, 2.04, 0); mann.add(mannHead);
   addCollider(2.1, 2.9, 5.2, 6.0, 'mannequin');
 
   // scattered cans (10 pickups)
@@ -584,6 +587,20 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   root.add(exitSign);
   const exitLight = new THREE.PointLight(0x5dff96, 2.2, 5, 2); exitLight.position.set(8.5, 4.0, -12.2); root.add(exitLight);
 
+  // fuel-room work lights — a cage lamp over the bench and a hot bulb by the door
+  const cage = new THREE.Group(); cage.position.set(8.4, 3.5, -16.0); root.add(cage);
+  cage.add(cyl(0.01, 0.01, 0.9, MAT.black, 4, 0, 0.45, 0));
+  const cageShade = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.22, 9, 1, true), new THREE.MeshStandardMaterial({ color: 0x3a3a2e, roughness: 0.9, side: THREE.DoubleSide }));
+  cageShade.position.y = 0.02; cage.add(cageShade);
+  const cageBulb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 7, 6), new THREE.MeshStandardMaterial({ color: 0xffe6bc, emissive: 0xffc27a, emissiveIntensity: 2.4 }));
+  cageBulb.position.y = -0.06; cage.add(cageBulb);
+  const workLight = new THREE.PointLight(0xffd9a6, 22, 14, 2);
+  workLight.position.set(8.4, 3.35, -16.0); root.add(workLight);
+  const doorBulb = new THREE.PointLight(0xff8a4a, 9, 8, 2);
+  doorBulb.position.set(8.6, 2.4, -13.4); root.add(doorBulb);
+  const benchGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,210,150,1)', 'rgba(255,150,70,0)'), transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }));
+  benchGlow.position.set(8.4, 3.3, -16.0); benchGlow.scale.set(3.4, 3.4, 1); root.add(benchGlow);
+
   /* ---------------- markers ---------------- */
   const markerTex = glowTexture('rgba(255,196,110,1)', 'rgba(255,150,60,0)');
   const makeMarker = (x, y, z, color = 0xffb168) => {
@@ -666,7 +683,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   return {
     root, cans, colliders, wallMeshes, floor, fuel, keyDoor, keypad, keyLed, keyPadGlow: keypadGlow,
     bloodSign, note, locker, jack, ironDoor, ironFrame, ironCollider, fuelPickup, fuelGlow, genset, table, leafL, leafR,
-    keyMarker, fuelMarker, jackMarker, warningLight, exitLight,
+    keyMarker, fuelMarker, jackMarker, warningLight, exitLight, workLight, doorBulb,
     state, animate, dust, spawn, bounds, interactables,
     openKeypadDoor() {
       state.keypadOpen = true;

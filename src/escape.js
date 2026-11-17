@@ -45,11 +45,11 @@ function crackTexture(seed = 1) {
 }
 
 export function buildTruckScene(scene, { mode = 'start' } = {}) {
-  scene.fog = new THREE.FogExp2(mode === 'drive' ? 0x0c1212 : 0x0a0e0d, mode === 'drive' ? 0.028 : 0.04);
+  scene.fog = new THREE.FogExp2(mode === 'drive' ? 0x0c1212 : 0x0a0e0d, mode === 'drive' ? 0.024 : 0.03);
   scene.background = new THREE.Color(0x060a0a);
-  const hemi = new THREE.HemisphereLight(0x566a66, 0x0c0d0a, 0.5);
+  const hemi = new THREE.HemisphereLight(0x6d827c, 0x10120d, 0.85);
   scene.add(hemi);
-  const moon = new THREE.DirectionalLight(0x9db4ab, 0.5);
+  const moon = new THREE.DirectionalLight(0xa8c0b6, 0.95);
   moon.position.set(-18, 24, 12); scene.add(moon);
 
   // ground & road ahead
@@ -100,6 +100,14 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   const cab = new THREE.Group();
   scene.add(cab);
   cab.add(createTruckInterior());
+  // dome light + instrument glow so the cab reads on dark displays
+  const cabLight = new THREE.PointLight(0xffc98f, 7.5, 4.6, 2);
+  cabLight.position.set(0.1, 1.82, 0.05); scene.add(cabLight);
+  const dashLight = new THREE.PointLight(0xff9b52, 3, 2.4, 2);
+  dashLight.position.set(-0.45, 1.3, 1.0); scene.add(dashLight);
+  const gaugeMat = new THREE.MeshStandardMaterial({ color: 0x0d1712, emissive: 0x4dff9a, emissiveIntensity: 0.9, roughness: 0.4 });
+  cab.add(box(0.44, 0.13, 0.03, gaugeMat, -0.58, 1.19, 1.36));
+  cab.add(box(0.12, 0.05, 0.02, new THREE.MeshStandardMaterial({ color: 0x2a0d08, emissive: 0xff3a1a, emissiveIntensity: 1.2 }), 0.0, 1.26, 1.52));
   // windshield glass
   const windshield = new THREE.Group();
   const windMat = new THREE.MeshPhysicalMaterial({ color: 0x9fb2a9, transparent: true, opacity: mode === 'start' ? 0.16 : 0.1, roughness: 0.05, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false });
@@ -125,12 +133,12 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   // headlight beams
   const beams = [];
   for (const s of [-1, 1]) {
-    const spot = new THREE.SpotLight(0xffdcaa, mode === 'drive' ? 160 : 0, 60, 0.5, 0.55, 1.3);
+    const spot = new THREE.SpotLight(0xffdcaa, mode === 'drive' ? 160 : 46, 60, 0.5, 0.55, 1.3);
     spot.position.set(s * 0.7, 0.2, 4.2);
     spot.target.position.set(s * 0.9, -1.5, 36);
     scene.add(spot, spot.target);
     beams.push(spot);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,230,180,1)', 'rgba(255,180,80,0)'), transparent: true, opacity: mode === 'drive' ? 0.55 : 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,230,180,1)', 'rgba(255,180,80,0)'), transparent: true, opacity: mode === 'drive' ? 0.55 : 0.28, depthWrite: false, blending: THREE.AdditiveBlending }));
     glow.position.set(s * 0.7, 0.25, 4.3); glow.scale.set(2.6, 2.6, 1); scene.add(glow);
   }
   // hood
@@ -162,24 +170,30 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   let mace = null;
   const attackers = [];
   if (mode === 'start') {
+    // Mace stands in the headlights, blocking the road ahead
     mace = createMace();
-    mace.group.position.set(-2.75, -0.02, 0.45);
-    mace.group.rotation.y = Math.PI / 2;
-    mace.parts.armR.shoulder.rotation.x = -1.25;
-    mace.parts.armR.elbow.rotation.x = -0.85;
-    mace.parts.armL.shoulder.rotation.x = -1.1;
+    mace.group.position.set(0.32, -0.02, 6.3);
+    mace.group.rotation.y = Math.PI;
+    mace.parts.armR.shoulder.rotation.x = -1.32;
+    mace.parts.armR.elbow.rotation.x = -0.62;
+    mace.parts.armL.shoulder.rotation.x = -1.12;
     mace.parts.armL.elbow.rotation.x = -0.9;
     mace.holdingGun = true;
     scene.add(mace.group);
     attackers.push(mace);
+    // cold rim light so the masked man reads against the dark
+    const maceRim = new THREE.PointLight(0xa9c4bc, 16, 12, 2);
+    maceRim.position.set(-1.6, 3.4, 8.6);
+    scene.add(maceRim);
   }
   let jake = null;
   if (mode === 'start') {
+    // Jake flanks the driver's window, just out of the camera's forward view
     jake = createJake();
-    jake.group.position.set(2.4, -0.02, 2.2);
-    jake.group.rotation.y = Math.PI;
-    jake.parts.armR.shoulder.rotation.x = -1.15;
-    jake.parts.armR.elbow.rotation.x = -0.5;
+    jake.group.position.set(-2.45, -0.02, 1.55);
+    jake.group.rotation.y = Math.PI / 2;
+    jake.parts.armR.shoulder.rotation.x = -1.2;
+    jake.parts.armR.elbow.rotation.x = -0.55;
     jake.holdingGun = true;
     scene.add(jake.group);
     attackers.push(jake);
@@ -247,7 +261,7 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   const muzzleLights = [];
   const muzzleFlash = (side = -1) => {
     const g = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,235,180,1)', 'rgba(255,140,40,0)'), transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
-    g.position.set(side * 2.4, 1.35, 1.4);
+    g.position.set(side < 0 ? -2.1 : 0.4, 1.45, side < 0 ? 0.9 : 5.1);
     g.scale.set(1.4, 1.4, 1);
     scene.add(g);
     const light = new THREE.PointLight(0xffd7a0, 26, 12, 2);
