@@ -7,12 +7,13 @@ const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=sw
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 page.on('console', (m) => console.log('CONSOLE', m.type(), m.text().slice(0, 300)));
 page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+page.on('crash', () => console.log('PAGE CRASH'));
 await page.goto('http://127.0.0.1:4173/index.html', { waitUntil: 'load' });
 await page.waitForTimeout(1500);
 await page.evaluate(() => window.__lastCan.startGame());
 await page.waitForTimeout(800);
-await page.evaluate(() => window.__lastCan.game.chaseSequence());
-await page.evaluate(() => window.__lastCan.advance(4));
+await page.evaluate(() => { window.__lastCan.game.chaseSequence(); });
+await page.waitForTimeout(3000); await page.evaluate(() => window.__lastCan.advance(1));
 await page.waitForTimeout(500);
 console.log('info', await page.evaluate(() => {
   const r = window.__lastCan.renderer;

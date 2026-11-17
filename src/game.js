@@ -1416,42 +1416,85 @@ export class Game {
     this.extraAsh = null;
 
     this.tim = new TimCharacter();
-    this.tim.group.position.set(0, 0, -16.25);
-    this.tim.group.rotation.y = 0;
+    this.tim.group.position.set(0, 0, -16.42);
+    this.tim.group.rotation.y = 0.08;
     this.tim.setExpression('scared');
     this.tim.setCrouch(0);
+    this.tim.poseLock = true;
+    this.tim.parts.armL.shoulder.rotation.x = -0.78;
+    this.tim.parts.armL.shoulder.rotation.z = 0.52;
+    this.tim.parts.armL.elbow.rotation.x = -1.35;
+    this.tim.parts.armR.shoulder.rotation.x = -0.84;
+    this.tim.parts.armR.shoulder.rotation.z = -0.5;
+    this.tim.parts.armR.elbow.rotation.x = -1.28;
+    this.tim.parts.torso.rotation.x = 0.05;
+    this.tim.parts.head.rotation.x = -0.16;
     scene.add(this.tim.group);
     this.player = this.tim.group;
 
     this.jake = createJake();
-    this.jake.group.position.set(0.18, 0, -15.0);
-    this.jake.group.rotation.y = Math.PI;
+    this.jake.group.position.set(0.12, 0, -15.42);
+    this.jake.group.rotation.y = Math.PI - 0.05;
     this.jake.setExpression('snarl');
-    this.jake.parts.armR.shoulder.rotation.x = -1.42;
-    this.jake.parts.armR.elbow.rotation.x = -0.72;
-    this.jake.parts.armL.shoulder.rotation.x = -1.05;
-    this.jake.parts.armL.elbow.rotation.x = -0.86;
+    this.jake.poseLock = true;
+    this.jake.parts.armR.shoulder.rotation.x = -1.3;
+    this.jake.parts.armR.shoulder.rotation.z = -0.24;
+    this.jake.parts.armR.elbow.rotation.x = -0.5;
+    this.jake.parts.armL.shoulder.rotation.x = -1.06;
+    this.jake.parts.armL.shoulder.rotation.z = 0.18;
+    this.jake.parts.armL.elbow.rotation.x = -0.92;
     scene.add(this.jake.group);
 
     this.mace = createMace();
-    this.mace.group.position.set(2.35, 0, -15.1);
-    this.mace.group.rotation.y = Math.PI - 0.45;
+    this.mace.group.position.set(2.7, 0, -16.2);
+    this.mace.group.rotation.y = -Math.PI / 2 + 0.3;
     this.mace.setGunRaised(true);
     this.mace.setExpression('angry');
     scene.add(this.mace.group);
 
-    const truck = createTruck({ headlights: true });
+    // the blade at Tim's throat — a clean, readable prop
+    if (this.jake.parts.knife) this.jake.parts.knife.visible = false;
+    const threatKnife = new THREE.Group();
+    threatKnife.position.set(0.34, 1.4, -16.1);
+    threatKnife.rotation.set(0.1, -0.5, 1.3);
+    threatKnife.scale.setScalar(1.15);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe4e9de, metalness: 0.85, roughness: 0.16, emissive: 0x2a3630, emissiveIntensity: 0.8 });
+    threatKnife.add(box(0.075, 0.42, 0.02, bladeMat, 0, 0.2, 0));
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.11, 4), bladeMat);
+    tip.position.set(0, 0.46, 0);
+    threatKnife.add(tip);
+    threatKnife.add(box(0.12, 0.035, 0.04, new THREE.MeshStandardMaterial({ color: 0x30322c, metalness: 0.5, roughness: 0.6 }), 0, -0.01, 0));
+    threatKnife.add(box(0.05, 0.15, 0.05, new THREE.MeshStandardMaterial({ color: 0x2a2420, roughness: 0.9 }), 0, -0.1, 0));
+    const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,255,240,1)', 'rgba(180,220,210,0)'), transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glint.position.set(0, 0.22, 0.04);
+    glint.scale.set(0.16, 0.16, 1);
+    threatKnife.add(glint);
+    scene.add(threatKnife);
+    this.threatKnife = threatKnife;
+
+    const truck = createTruck({ headlights: false });
     truck.position.set(1.5, 0, 27.5);
     truck.rotation.y = Math.PI + 0.06;
     scene.add(truck);
     this.chaseTruck = truck;
+    // cheap headlight pool: one spotlight + two glows (many real lights crash software GL)
+    const beam = new THREE.SpotLight(0xffd6a0, 95, 42, 0.62, 0.55, 1.5);
+    beam.position.set(0.72, 1.0, 2.95);
+    beam.target.position.set(0.4, -0.6, 20);
+    truck.add(beam, beam.target);
+    for (const s of [-1, 1]) {
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,230,180,1)', 'rgba(255,180,80,0)'), transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending }));
+      glow.position.set(s * 0.72, 0.96, 2.94);
+      glow.scale.set(1.5, 1.5, 1);
+      truck.add(glow);
+    }
 
     this.phase = 'chase';
     this.state = 'sequence';
     this.yaw = 0;
     this.pitch = 0.08;
-    this.camera.position.set(1.42, 1.66, -13.72);
-    this.cameraLook.set(-0.05, 1.34, -16.2);
+    this.camera.position.set(1.9, 1.72, -13.6);
+    this.cameraLook.set(-0.1, 1.36, -16.2);
     this.camera.lookAt(this.cameraLook);
     document.getElementById('canHud')?.classList.add('hidden');
     document.getElementById('escapeTimer')?.classList.add('hidden');
@@ -1504,9 +1547,10 @@ export class Game {
       this.camera.lookAt(this.cameraLook);
     });
     this.tim.poseLock = false;
+    this.jake.poseLock = false;
     audio.step(true);
     audio.cloth();
-    this.jake.group.position.set(1.6, 0, -12.4);
+    this.jake.group.position.set(1.9, 0, -13.6);
     this.jake.parts.armR.shoulder.rotation.x = 0;
     this.caption('TIM', 'Move!', 1.2);
     await this.wait(0.7);
