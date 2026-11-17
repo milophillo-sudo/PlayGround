@@ -608,7 +608,7 @@ async function loadAudio() {
     dom.loadFill.style.width = '100%';
     dom.startLabel.textContent = 'START SESSION';
     dom.startBtn.disabled = false;
-    dom.startLanes.textContent = '4 → 8';
+    dom.startLanes.textContent = '4 · 6 · 8';
     gameState = 'menu';
   } catch (err) {
     console.error(err);
