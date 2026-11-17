@@ -269,6 +269,168 @@ function cityTexture(seed, horizon) {
   return t;
 }
 
+function clockFaceTexture() {
+  const [c, x] = canvas(1024, 1024);
+  x.translate(512, 512);
+  const haze = x.createRadialGradient(0, 0, 60, 0, 0, 505);
+  haze.addColorStop(0, 'rgba(255,255,255,.03)');
+  haze.addColorStop(0.55, 'rgba(255,255,255,.01)');
+  haze.addColorStop(0.82, 'rgba(255,255,255,.08)');
+  haze.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = haze;
+  x.beginPath(); x.arc(0, 0, 505, 0, Math.PI * 2); x.fill();
+
+  // outer and inner rims
+  x.save();
+  x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 5;
+  x.shadowColor = '#fff'; x.shadowBlur = 28;
+  x.beginPath(); x.arc(0, 0, 470, 0, Math.PI * 2); x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.2)'; x.lineWidth = 2;
+  x.beginPath(); x.arc(0, 0, 440, 0, Math.PI * 2); x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.13)'; x.lineWidth = 2;
+  x.setLineDash([7, 18]);
+  x.beginPath(); x.arc(0, 0, 344, 0, Math.PI * 2); x.stroke();
+  x.restore();
+
+  // 60 minute ticks, with heavier hour marks
+  for (let i = 0; i < 60; i++) {
+    const hour = i % 5 === 0;
+    x.save();
+    x.rotate(i * Math.PI / 30);
+    x.strokeStyle = hour ? 'rgba(255,255,255,.92)' : 'rgba(255,255,255,.3)';
+    x.lineWidth = hour ? 7 : 2;
+    x.shadowColor = '#fff'; x.shadowBlur = hour ? 18 : 7;
+    x.beginPath();
+    x.moveTo(0, -468);
+    x.lineTo(0, -(hour ? 414 : 444));
+    x.stroke();
+    x.restore();
+  }
+
+  // four cardinal diamonds make the face read as a clock, not an orbit ring
+  for (let i = 0; i < 4; i++) {
+    x.save();
+    x.rotate(i * Math.PI / 2);
+    x.fillStyle = 'rgba(255,255,255,.82)';
+    x.shadowColor = '#fff'; x.shadowBlur = 22;
+    x.beginPath();
+    x.moveTo(0, -500); x.lineTo(13, -516); x.lineTo(0, -532); x.lineTo(-13, -516);
+    x.closePath(); x.fill();
+    x.restore();
+  }
+
+  return tex(c);
+}
+
+function clockDialTexture() {
+  const [c, x] = canvas(512, 512);
+  x.translate(256, 256);
+
+  const halo = x.createRadialGradient(0, 0, 40, 0, 0, 250);
+  halo.addColorStop(0, 'rgba(255,255,255,.05)');
+  halo.addColorStop(0.7, 'rgba(255,255,255,.02)');
+  halo.addColorStop(0.92, 'rgba(255,255,255,.16)');
+  halo.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = halo;
+  x.beginPath(); x.arc(0, 0, 250, 0, Math.PI * 2); x.fill();
+
+  x.strokeStyle = 'rgba(255,255,255,.42)'; x.lineWidth = 2;
+  x.beginPath(); x.arc(0, 0, 206, 0, Math.PI * 2); x.stroke();
+
+  // 12 hour notches plus a bright pointer blade, so the spin reads clearly.
+  for (let i = 0; i < 12; i++) {
+    const major = i % 3 === 0;
+    x.save();
+    x.rotate(i * Math.PI / 6);
+    x.strokeStyle = major ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.3)';
+    x.lineWidth = major ? 4 : 1.5;
+    x.beginPath(); x.moveTo(0, -204); x.lineTo(0, major ? -172 : -188); x.stroke();
+    x.restore();
+  }
+  x.save();
+  x.shadowColor = '#fff'; x.shadowBlur = 22;
+  x.fillStyle = 'rgba(255,255,255,.95)';
+  x.beginPath();
+  x.moveTo(-7, -16); x.lineTo(0, -196); x.lineTo(7, -16);
+  x.closePath(); x.fill();
+  x.beginPath(); x.arc(0, 0, 11, 0, Math.PI * 2); x.fill();
+  x.restore();
+  return tex(c);
+}
+
+function clockHandTexture() {
+  const [c, x] = canvas(128, 1024);
+  // A tapered light blade: wide at the hub, needle-sharp at the tip.
+  const g = x.createLinearGradient(0, 1024, 0, 0);
+  g.addColorStop(0, 'rgba(255,255,255,.6)');
+  g.addColorStop(0.5, 'rgba(255,255,255,.95)');
+  g.addColorStop(0.9, 'rgba(255,255,255,1)');
+  g.addColorStop(1, 'rgba(255,255,255,.2)');
+  x.fillStyle = g;
+  x.shadowColor = '#fff'; x.shadowBlur = 22;
+  x.beginPath();
+  x.moveTo(64 - 17, 1010);
+  x.lineTo(64 - 6, 120);
+  x.lineTo(64, 34);
+  x.lineTo(64 + 6, 120);
+  x.lineTo(64 + 17, 1010);
+  x.closePath();
+  x.fill();
+  // bright counterweight and tip
+  x.shadowBlur = 28;
+  x.fillStyle = 'rgba(255,255,255,1)';
+  x.beginPath(); x.arc(64, 72, 15, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.arc(64, 942, 20, 0, Math.PI * 2); x.fill();
+  return tex(c);
+}
+
+function floatNoteTexture() {
+  const [c, x] = canvas(256, 256);
+  x.translate(128, 128);
+  x.shadowColor = '#fff';
+  x.shadowBlur = 26;
+  x.fillStyle = 'rgba(255,255,255,.98)';
+  x.save();
+  x.rotate(-0.22);
+  // note head
+  x.beginPath();
+  x.ellipse(-8, 56, 30, 21, -0.18, 0, Math.PI * 2);
+  x.fill();
+  // stem
+  x.fillRect(16, -84, 8, 140);
+  // flag
+  x.beginPath();
+  x.moveTo(24, -84);
+  x.bezierCurveTo(82, -62, 86, 6, 38, 32);
+  x.bezierCurveTo(68, -6, 56, -50, 24, -60);
+  x.closePath();
+  x.fill();
+  x.restore();
+  return tex(c);
+}
+
+function pendulumRodTexture() {
+  const [c, x] = canvas(64, 1024);
+  const g = x.createLinearGradient(0, 0, 64, 0);
+  g.addColorStop(0, 'rgba(255,255,255,.06)');
+  g.addColorStop(0.38, 'rgba(255,255,255,.62)');
+  g.addColorStop(0.52, 'rgba(255,255,255,1)');
+  g.addColorStop(0.66, 'rgba(255,255,255,.58)');
+  g.addColorStop(1, 'rgba(255,255,255,.06)');
+  x.fillStyle = g;
+  x.shadowColor = '#fff';
+  x.shadowBlur = 12;
+  x.fillRect(27, 26, 10, 972);
+  // finial at the bob end and the pivot counterweight
+  x.shadowBlur = 22;
+  x.beginPath(); x.arc(32, 44, 15, 0, Math.PI * 2); x.fill();
+  x.beginPath(); x.arc(32, 982, 25, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,.8)';
+  x.lineWidth = 3;
+  x.beginPath(); x.arc(32, 982, 25, 0, Math.PI * 2); x.stroke();
+  return tex(c);
+}
+
 // ---------------------------------------------------------------- scene
 export function createScene(canvasEl) {
   const isMobile = matchMedia('(pointer: coarse)').matches;
@@ -299,6 +461,8 @@ export function createScene(canvasEl) {
     glow: glowTexture(), ring: ringTexture(), line: laneLineTexture(),
     beam: beamTexture(), note: noteTexture(), hold: holdTexture(), hitline: hitLineTexture(),
     cityFar: cityTexture(0x1f3c5a, false), cityNear: cityTexture(0x6b2a44, true),
+    clockFace: clockFaceTexture(), clockHand: clockHandTexture(), clockDial: clockDialTexture(),
+    floatNote: floatNoteTexture(), pendulumRod: pendulumRodTexture(),
   };
 
   // ------------------------------------------------------------ background
@@ -500,6 +664,333 @@ export function createScene(canvasEl) {
     });
   }
 
+  // ------------------------------------------------------------ clock
+  // CHRONOSTASIS' signature background event. The two lanes that sit outside
+  // the playable 4/6-lane field become the clock's hands: lane 0 is the slow
+  // hour hand, lane 7 is the fast minute/second hand. They share the lane
+  // colors, so the background literally reuses the unused lanes rather than
+  // adding an unrelated decoration.
+  const clockGroup = new THREE.Group();
+  clockGroup.position.set(0, 13.2, -28);
+  clockGroup.visible = false;
+  bg.add(clockGroup);
+
+  const clockFaceMat = new THREE.SpriteMaterial({
+    map: TEX.clockFace, color: 0xfff1c8, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const clockFace = new THREE.Sprite(clockFaceMat);
+  clockFace.scale.set(21.6, 21.6, 1);
+  clockFace.renderOrder = -5;
+  clockGroup.add(clockFace);
+
+  const clockAuraMat = new THREE.SpriteMaterial({
+    map: TEX.glow, color: 0xffc85e, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const clockAura = new THREE.Sprite(clockAuraMat);
+  clockAura.scale.set(29, 29, 1);
+  clockAura.renderOrder = -6;
+  clockGroup.add(clockAura);
+
+  const slowColor = new THREE.Color(LANE_COLORS[0]);
+  const fastColor = new THREE.Color(LANE_COLORS[7]);
+  const clockSlowMat = new THREE.SpriteMaterial({
+    map: TEX.clockHand, color: slowColor, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const clockSlow = new THREE.Sprite(clockSlowMat);
+  clockSlow.center.set(0.5, 0.07);
+  clockSlow.position.set(0, 0, 0.22);
+  clockSlow.scale.set(1.02, 6.8, 1);
+  clockSlow.renderOrder = -4;
+  clockGroup.add(clockSlow);
+
+  const clockFastMat = new THREE.SpriteMaterial({
+    map: TEX.clockHand, color: fastColor, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const clockFast = new THREE.Sprite(clockFastMat);
+  clockFast.center.set(0.5, 0.07);
+  clockFast.position.set(0, 0, 0.26);
+  clockFast.scale.set(0.76, 9.6, 1);
+  clockFast.renderOrder = -4;
+  clockGroup.add(clockFast);
+
+  const clockHubMat = new THREE.SpriteMaterial({
+    map: TEX.glow, color: 0xfff3d0, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const clockHub = new THREE.Sprite(clockHubMat);
+  clockHub.scale.set(1.9, 1.9, 1);
+  clockHub.position.z = 0.3;
+  clockHub.renderOrder = -3;
+  clockGroup.add(clockHub);
+
+  // Each unused outer lane also carries its own dial. Lane 0 spins with the
+  // slow hour hand, lane 7 with the fast minute hand, so the two dormant lanes
+  // visibly host the background clock even while the central face is far away.
+  function makeLaneDial(lane) {
+    const mat = new THREE.SpriteMaterial({
+      map: TEX.clockDial, color: new THREE.Color(LANE_COLORS[lane]), transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    // Nudge the dial toward the field so its full ring stays on screen at wide
+    // aspect ratios; it still sits inside the unused lane's footprint.
+    sprite.position.set(lane === 0 ? 0.86 : -0.86, 7.6, 0.24);
+    sprite.scale.set(2.75, 2.75, 1);
+    sprite.renderOrder = 2;
+    sprite.visible = false;
+    lanes[lane].group.add(sprite);
+    return sprite;
+  }
+  const dialSlow = makeLaneDial(0);
+  const dialFast = makeLaneDial(7);
+
+  const clock = {
+    group: clockGroup, face: clockFace, aura: clockAura, hub: clockHub,
+    handSlow: clockSlow, handFast: clockFast, dialSlow, dialFast,
+    slowColor, fastColor,
+    target: 0, fade: 0, mode: 'off', frozen: false, rate: 1,
+    runTime: 0, anchorT: 0, anchorRun: 0,
+    slowAngle: 0, fastAngle: 0, slowKick: 0, fastKick: 0, kick: 0,
+  };
+
+  // ------------------------------------------------------------ pendulum
+  // STASIS gimmick: one lane leaves the playfield and becomes the swinging rod
+  // of an antique clock. Its bob passes through a fixed centre target, and the
+  // chart schedules one floating note for every time the bob crosses centre.
+  const PENDULUM_GOLD = 0xffd166;
+  const pendulum = {
+    active: false, target: 0, fade: 0,
+    period: 2.4146, originT: 0, baseAmp: 0.42,
+    pivot: new THREE.Vector3(0, 11.8, 1.2),
+    center: new THREE.Vector3(0, 2.6, 1.32),
+    length: 9.2, angle: 0.42,
+    kick: 0, missFlash: 0,
+    times: [], states: [], notes: [],
+  };
+  const pendRoot = new THREE.Group();
+  pendRoot.visible = false;
+  scene.add(pendRoot);
+  const goldColor = new THREE.Color(PENDULUM_GOLD);
+  const goldPale = new THREE.Color(0xfff1c8);
+  const redColor = new THREE.Color(0xff335f);
+
+  function swingSprite(map, color, order, scale) {
+    const mat = new THREE.SpriteMaterial({
+      map, color: color.clone(), transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(scale, scale, 1);
+    sprite.renderOrder = order;
+    sprite.visible = false;
+    pendRoot.add(sprite);
+    return sprite;
+  }
+
+  const pendRod = swingSprite(TEX.pendulumRod, goldPale, 5, 1);
+  // Anchor at the texture's bottom (the pivot) so the arm rotates from the clock hub.
+  pendRod.center.set(0.5, 0);
+  const pendPivot = swingSprite(TEX.glow, goldPale, 6, 1.5);
+  const pendBobGlow = swingSprite(TEX.glow, goldColor, 7, 2.6);
+  const pendBob = swingSprite(TEX.ring, goldPale, 8, 2.2);
+  const pendTargetGlow = swingSprite(TEX.glow, goldColor, 6, 3.6);
+  const pendTarget = swingSprite(TEX.ring, goldPale, 7, 2.9);
+  const pendTargetInner = swingSprite(TEX.glow, goldPale, 6, 1.5);
+
+  // Loose notes drifting around the dial while the gimmick runs.
+  const floaters = [];
+  for (let i = 0; i < 7; i++) {
+    const s = swingSprite(TEX.floatNote, goldPale, 6, 1);
+    s.userData.r = 2.7 + (i % 3) * 1.1;
+    s.userData.scale = 0.8 + (i % 4) * 0.16;
+    s.userData.op = 0.42 + (i % 3) * 0.12;
+    floaters.push(s);
+  }
+
+  function pendulumLayout() {
+    const portrait = state.portrait;
+    pendulum.pivot.set(0, portrait ? 11.0 : 11.8, 1.2);
+    pendulum.length = portrait ? 7.0 : 7.8;
+    pendulum.center.set(0, pendulum.pivot.y - pendulum.length, 1.32);
+    pendulum.baseAmp = portrait ? 0.27 : 0.42;
+    pendPivot.position.copy(pendulum.pivot);
+    pendTarget.position.copy(pendulum.center);
+    pendTargetGlow.position.copy(pendulum.center);
+    pendTargetInner.position.copy(pendulum.center);
+  }
+
+  function startPendulum({ start = 0, period = 2.4146, amplitude = 0.42, times = [] } = {}) {
+    pendulum.active = true;
+    pendulum.target = 1;
+    pendulum.period = period || 2.4146;
+    pendulum.originT = start;
+    pendulum.baseAmp = amplitude || 0.42;
+    pendulum.times = times.slice();
+    pendulum.states = times.map(() => 'pending');
+    pendulum.kick = Math.max(pendulum.kick, 0.5);
+    for (const s of pendulum.notes) {
+      pendRoot.remove(s);
+      s.material.dispose();
+    }
+    pendulum.notes = pendulum.times.map((nt, i) => {
+      const mat = new THREE.SpriteMaterial({
+        map: TEX.floatNote, color: goldColor.clone(), transparent: true, opacity: 0,
+        depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+      });
+      const s = new THREE.Sprite(mat);
+      const a = i * 2.399963;
+      const r = 3.3 + (i % 3) * 0.85;
+      s.userData.off = { x: Math.cos(a) * r, y: Math.sin(a) * r * 0.66 };
+      s.renderOrder = 7;
+      s.visible = false;
+      pendRoot.add(s);
+      return s;
+    });
+    pendulum.fade = Math.max(pendulum.fade, 0.002);
+    pendulumLayout();
+  }
+
+  function stopPendulum() {
+    pendulum.active = false;
+    pendulum.target = 0;
+    for (const s of pendulum.notes) s.visible = false;
+  }
+
+  function pendulumReset() {
+    stopPendulum();
+    pendulum.fade = 0;
+    pendulum.kick = 0;
+    pendulum.missFlash = 0;
+    pendulum.states = [];
+    pendRoot.visible = false;
+  }
+
+  function swingResolve(index, kind = 'hit') {
+    if (pendulum.states[index] !== undefined) pendulum.states[index] = kind;
+    const s = pendulum.notes[index];
+    if (s) s.visible = false;
+    const pos = pendulum.center;
+    if (kind === 'hit') {
+      pendulum.kick = 1;
+      spawnBurst(pos, PENDULUM_GOLD, 22, 3.4);
+      spawnShock(pos, PENDULUM_GOLD, 3.1);
+    } else {
+      pendulum.missFlash = 1;
+      spawnBurst(pos, 0xff335f, 10, 1.5);
+      spawnShock(pos, 0xff335f, 1.9);
+    }
+  }
+
+  function swingWhiff() {
+    pendulum.kick = Math.max(pendulum.kick, 0.14);
+  }
+
+  const pendV = new THREE.Vector3();
+  const pendV2 = new THREE.Vector3();
+  function pendulumTargetScreen() {
+    camera.updateMatrixWorld();
+    pendV.copy(pendulum.center).project(camera);
+    pendV2.copy(pendulum.center);
+    pendV2.y += 1.5;
+    pendV2.project(camera);
+    const x = (pendV.x * 0.5 + 0.5) * innerWidth;
+    const y = (-pendV.y * 0.5 + 0.5) * innerHeight;
+    const y2 = (-pendV2.y * 0.5 + 0.5) * innerHeight;
+    return { x, y, radius: Math.max(60, Math.min(118, Math.abs(y - y2))) };
+  }
+
+  function updatePendulum(dt, t) {
+    pendulum.fade += (pendulum.target - pendulum.fade) * (1 - Math.exp(-dt * 3.1));
+    const vis = pendulum.fade > 0.012;
+    pendRoot.visible = vis;
+    if (!vis) return;
+
+    pendulum.kick = Math.max(0, pendulum.kick - dt * 3.2);
+    pendulum.missFlash = Math.max(0, pendulum.missFlash - dt * 2.6);
+
+    const amp = pendulum.baseAmp;
+    const theta = amp * Math.cos(((t - pendulum.originT) / pendulum.period) * Math.PI * 2);
+    pendulum.angle = theta;
+    const bx = Math.sin(theta) * pendulum.length;
+    const by = -Math.cos(theta) * pendulum.length;
+    pendRod.position.copy(pendulum.pivot);
+    pendRod.scale.set(0.5, pendulum.length, 1);
+    pendRod.material.rotation = Math.PI + theta;
+    pendPivot.position.copy(pendulum.pivot);
+    pendBobGlow.position.set(pendulum.pivot.x + bx, pendulum.pivot.y + by, pendulum.pivot.z + 0.12);
+    pendBob.position.set(pendulum.pivot.x + bx, pendulum.pivot.y + by, pendulum.pivot.z + 0.16);
+
+    const crossing = Math.max(0, 1 - Math.abs(theta) / Math.max(0.001, amp));
+    const bobPulse = 1 + pendulum.kick * 0.22 + crossing * 0.05;
+    pendBobGlow.scale.set(2.6 * bobPulse, 2.6 * bobPulse, 1);
+    pendBob.scale.set(2.2 * bobPulse, 2.2 * bobPulse, 1);
+    pendRod.visible = true;
+    pendPivot.visible = true;
+    pendBob.visible = true;
+    pendBobGlow.visible = true;
+
+    const cf = pendulum.fade;
+    const flash = pendulum.missFlash;
+    pendRod.material.opacity = cf * 0.62;
+    pendPivot.material.opacity = cf * (0.55 + crossing * 0.3);
+    pendBobGlow.material.opacity = cf * (0.3 + crossing * 0.2 + pendulum.kick * 0.18);
+    pendBob.material.opacity = cf * (0.78 + pendulum.kick * 0.2);
+    pendBob.material.color.copy(goldPale).lerp(redColor, flash);
+    pendBobGlow.material.color.copy(goldColor).lerp(redColor, flash);
+
+    const tPulse = 1 + crossing * 0.08 + pendulum.kick * 0.14;
+    pendTarget.scale.set(2.9 * tPulse, 2.9 * tPulse, 1);
+    pendTargetGlow.scale.set(3.6 * tPulse, 3.6 * tPulse, 1);
+    pendTargetInner.scale.set(1.5 * tPulse, 1.5 * tPulse, 1);
+    pendTarget.material.opacity = cf * (0.5 + crossing * 0.3 + pendulum.kick * 0.18);
+    pendTargetGlow.material.opacity = cf * (0.07 + crossing * 0.05 + pendulum.kick * 0.08);
+    pendTargetInner.material.opacity = cf * (0.16 + crossing * 0.12);
+    pendTarget.material.color.copy(goldPale).lerp(redColor, flash * 0.7);
+
+    for (const n of pendulum.notes) {
+      const i = pendulum.notes.indexOf(n);
+      const nt = pendulum.times[i];
+      const state = pendulum.states[i];
+      const lead = nt - t;
+      if (state !== 'pending' || lead > 1.55 || lead < -0.35) {
+        n.visible = false;
+        continue;
+      }
+      const p = Math.max(0, Math.min(1, 1 - lead / 1.55));
+      const e = 1 - Math.pow(1 - p, 3);
+      const off = n.userData.off;
+      n.position.set(
+        pendulum.center.x + off.x * (1 - e),
+        pendulum.center.y + off.y * (1 - e) + Math.sin(t * 2.2 + i) * 0.1 * (1 - e),
+        pendulum.center.z + 0.14,
+      );
+      const sc = 1.5 + e * 0.55 + Math.sin(t * 7 + i) * 0.03;
+      n.scale.set(sc, sc, 1);
+      n.material.opacity = cf * (0.2 + e * 0.78);
+      n.visible = true;
+    }
+
+    for (let i = 0; i < floaters.length; i++) {
+      const f = floaters[i];
+      const a = t * 0.24 + i * 2.399963;
+      const r = f.userData.r;
+      f.position.set(
+        pendulum.center.x + Math.cos(a) * r,
+        pendulum.center.y + Math.sin(a * 1.3) * r * 0.6 + Math.sin(t * 0.9 + i) * 0.24,
+        pendulum.center.z + 0.05,
+      );
+      f.material.rotation = Math.sin(t * 0.5 + i) * 0.32;
+      const s = f.userData.scale;
+      f.scale.set(s, s, 1);
+      f.material.opacity = cf * f.userData.op * (0.55 + 0.45 * Math.sin(t * 1.5 + i * 1.7));
+      f.visible = true;
+    }
+  }
+
   // ------------------------------------------------------------ notes
   function makeNote(lane, type) {
     const color = new THREE.Color(LANE_COLORS[lane]);
@@ -699,6 +1190,9 @@ export function createScene(canvasEl) {
     const aspect = w / h;
     state.portrait = aspect < 0.92;
     rememberFrame(state.keyCount, true);
+    clock.group.position.set(0, state.portrait ? 15.2 : 13.2, -28);
+    clock.group.scale.setScalar(state.portrait ? 0.86 : 1);
+    pendulumLayout();
     for (let i = 0; i < 8; i++) {
       const x = (i - 3.5) * state.spacing;
       lanes[i].baseX = x;
@@ -763,6 +1257,10 @@ export function createScene(canvasEl) {
       lanes[i].targetColor.copy(lanes[i].color).lerp(new THREE.Color(sec.color), 0.24);
       if (live) lanes[i].flash = Math.max(lanes[i].flash, 0.22);
     }
+    // The clock hands inherit the current colors of the two unused outer
+    // lanes, keeping the background event tied to the lane field.
+    clock.slowColor.copy(lanes[0].targetColor);
+    clock.fastColor.copy(lanes[7].targetColor);
     hitLineMat.color.set(sec.accent);
   }
 
@@ -785,6 +1283,62 @@ export function createScene(canvasEl) {
 
   function setCity(level) {
     state.cityTarget = Math.max(0, Math.min(1, level));
+  }
+
+  function setClock(mode = 'run', power = 1, at = null) {
+    const next = mode || 'off';
+    const prev = clock.mode;
+    const now = at ?? state.time;
+    // Keep the hand position continuous across section events and debug seeks.
+    if (prev === 'run' || prev === 'final') {
+      clock.anchorRun += Math.max(0, now - clock.anchorT);
+    } else if (prev === 'freeze') {
+      clock.anchorRun = clock.runTime;
+    }
+    clock.anchorT = now;
+    clock.mode = next;
+    if (next === 'off') {
+      clock.target = 0;
+      clock.frozen = false;
+      clock.rate = 1;
+    } else {
+      clock.target = 1;
+      clock.frozen = next === 'freeze';
+      clock.rate = next === 'final' ? 1.65 : 1;
+      clock.kick = Math.max(clock.kick, 0.25 + power * 0.35);
+      // Anchoring to song time (not wall time) makes pause/resume freeze the
+      // clock exactly like every other gameplay animation.
+    }
+  }
+
+  function clockTick(hand = 'fast', power = 1) {
+    if (clock.fade < 0.015) return;
+    clock.kick = Math.max(clock.kick, 0.2 + power * 0.32);
+    if (hand === 'slow') clock.slowKick = Math.max(clock.slowKick, 0.35 + power * 0.55);
+    else clock.fastKick = Math.max(clock.fastKick, 0.35 + power * 0.55);
+    if (power > 1.05 && clock.fade > 0.3) {
+      const pos = clock.group.localToWorld(new THREE.Vector3(0, 0, 0.35));
+      spawnShock(pos, hand === 'slow' ? slowColor.getHex() : fastColor.getHex(), 0.9 + power * 0.35);
+    }
+  }
+
+  function clockReset() {
+    clock.target = 0;
+    clock.fade = 0;
+    clock.mode = 'off';
+    clock.frozen = false;
+    clock.rate = 1;
+    clock.runTime = 0;
+    clock.anchorT = 0;
+    clock.anchorRun = 0;
+    clock.slowAngle = 0;
+    clock.fastAngle = 0;
+    clock.slowKick = 0;
+    clock.fastKick = 0;
+    clock.kick = 0;
+    clock.group.visible = false;
+    clock.dialSlow.visible = false;
+    clock.dialFast.visible = false;
   }
 
   function laneX(i) { return lanes[i].baseX; }
@@ -1119,6 +1673,54 @@ export function createScene(canvasEl) {
         layer.mat.opacity = state.city * (i ? 0.42 : 0.3);
       }
     }
+    // background clock: slow hour hand + stepped minute hand on the unused
+    // outer lanes. The chart only turns it on at motif boundaries.
+    clock.fade += (clock.target - clock.fade) * (1 - Math.exp(-dt * 2.6));
+    clock.group.visible = clock.fade > 0.008;
+    if (clock.group.visible) {
+      if (clock.target > 0 && !clock.frozen) {
+        clock.runTime = clock.anchorRun + Math.max(0, t - clock.anchorT);
+      }
+      if (!clock.frozen) {
+        const beatSec = 60 / Math.max(1, state.bpm);
+        const slowTarget = (clock.runTime / (beatSec * 32)) * Math.PI * 2;
+        // The fast hand steps on the song's eighth-note grid, so its ticks
+        // land with the music even though the clock has its own visual hub.
+        const fastStep = beatSec * (clock.mode === 'final' ? 0.34 : 0.5);
+        const fastTarget = Math.floor((t - state.beatOffset) / fastStep) * (Math.PI * 2 / 12);
+        clock.slowAngle += (slowTarget - clock.slowAngle) * (1 - Math.exp(-dt * 4));
+        clock.fastAngle += (fastTarget - clock.fastAngle) * (1 - Math.exp(-dt * 20));
+        clock.handSlow.material.rotation = -clock.slowAngle;
+        clock.handFast.material.rotation = -clock.fastAngle;
+      }
+      clock.slowKick = Math.max(0, clock.slowKick - dt * 3.6);
+      clock.fastKick = Math.max(0, clock.fastKick - dt * 4.4);
+      clock.kick = Math.max(0, clock.kick - dt * 3.1);
+      const cf = clock.fade;
+      clock.face.material.opacity = cf * (0.34 + clock.kick * 0.14);
+      clock.aura.material.opacity = cf * (0.085 + clock.kick * 0.08);
+      clock.hub.material.opacity = cf * (0.5 + clock.kick * 0.45);
+      clock.handSlow.material.opacity = cf * (0.72 + clock.slowKick * 0.34);
+      clock.handFast.material.opacity = cf * (0.82 + clock.fastKick * 0.28);
+      clock.handSlow.material.color.copy(clock.slowColor).lerp(white, clock.slowKick * 0.75);
+      clock.handFast.material.color.copy(clock.fastColor).lerp(white, clock.fastKick * 0.75);
+      const hs = 1.9 * (1 + clock.kick * 0.26 + Math.sin(t * 7.5) * 0.025);
+      clock.hub.scale.set(hs, hs, 1);
+      const fs = 1 + clock.kick * 0.012;
+      clock.face.scale.set(21.6 * fs, 21.6 * fs, 1);
+
+      clock.dialSlow.visible = true;
+      clock.dialFast.visible = true;
+      clock.dialSlow.material.rotation = -clock.slowAngle;
+      clock.dialFast.material.rotation = -clock.fastAngle;
+      clock.dialSlow.material.opacity = cf * (0.3 + clock.slowKick * 0.24);
+      clock.dialFast.material.opacity = cf * (0.36 + clock.fastKick * 0.24);
+      clock.dialSlow.material.color.copy(clock.slowColor).lerp(white, clock.slowKick * 0.7);
+      clock.dialFast.material.color.copy(clock.fastColor).lerp(white, clock.fastKick * 0.7);
+    }
+
+    updatePendulum(dt, t);
+
     for (const s of shards) {
       s.rotation.x += s.userData.spin.x * dt;
       s.rotation.y += s.userData.spin.y * dt;
@@ -1201,10 +1803,13 @@ export function createScene(canvasEl) {
   }
 
   return {
-    scene, camera, stage, noteRoot, state,
+    scene, camera, stage, noteRoot, state, clock,
     makeNote, setSection, animate, render, laneX, laneZ, worldPoint,
     laneScreenXs, laneScreenPoints, laneScreenGeometry, laneScreenAngle,
     setPreviewLanes, setCity, setTempo,
+    setClock, clockTick, clockReset,
+    startPendulum, stopPendulum, swingResolve, swingWhiff, pendulumReset, pendulumTargetScreen,
+    pendulum,
     pressFx, hitFx, missFx, ghostFx, echoFx, pulseFx, burstFx, vibeFx, motionEvent,
     clearGhosts, layout, dispose,
     get noteSpeed() { return state.noteSpeed; },

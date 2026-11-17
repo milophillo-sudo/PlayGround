@@ -1,5 +1,6 @@
 import { CHART as cryout } from './charts/cryout.js';
 import { CHART as world } from './charts/world.js';
+import { CHART as chronostasis } from './charts/chronostasis.js';
 
 // Track metadata is intentionally separate from the generated chart: the menu
 // can show a track before its audio has been decoded.
@@ -35,6 +36,22 @@ export const TRACKS = [
     chart: world,
     fadeStart: 140.8,
     fadeEnd: 142.9,
+  },
+  {
+    id: 'chronostasis',
+    title: 'CHRONOSTASIS',
+    shortTitle: 'CHRONOSTASIS',
+    artist: 'ORIGINAL TRACK',
+    bpm: 99.4,
+    duration: 142.1,
+    audio: './audio/chronostasis.mp3',
+    difficulty: 'EXPERT',
+    laneLabel: '4 · 6',
+    blurb: 'Clockwork skyline • frozen time • swinging pendulum',
+    accent: '#ffd166',
+    chart: chronostasis,
+    fadeStart: 138.4,
+    fadeEnd: 140.0,
   },
 ];
 

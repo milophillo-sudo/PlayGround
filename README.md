@@ -19,7 +19,7 @@
 
 ## CRYOUT — Dynamic 3D Rhythm
 
-A browser rhythm game built around a flat, bold hit-circle language placed inside a moving 3D field. Two fully charted tracks are included, each with its own section map, lane motion, effects, and difficulty curve.
+A browser rhythm game built around a flat, bold hit-circle language placed inside a moving 3D field. Three fully charted tracks are included, each with its own section map, lane motion, effects, and difficulty curve.
 
 ### Tracks
 
@@ -27,19 +27,22 @@ A browser rhythm game built around a flat, bold hit-circle language placed insid
 | --- | --- | --- | --- | --- |
 | **CRYOUT** | 100 | Advanced | 4 · 6 · 8 | 328 notes · 6 holds |
 | **WORLD YEARNING FOR AN END** | 120 | Hard | 4 · 6 | 448 notes · 5 holds |
+| **CHRONOSTASIS** | 99.4 | Expert | 4 · 6 | 432 notes · 1 hold · 8 pendulum taps |
 
-Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. Track metadata lives in `src/tracks.js`.
+Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. Each track has its own event recipe: CRYOUT keeps its authored 4/6/8-lane chart and signal accents, WORLD uses city/atmospheric accents, and CHRONOSTASIS derives its ticks, bursts, clock windows, and pendulum taps from its analysed motif peaks. Track metadata lives in `src/tracks.js`.
 
 ### Gameplay
 
-- **Track selection:** pick either song from the start screen. Audio decodes per track and is cached, and personal bests are stored per track in `localStorage`.
+- **Track selection:** pick any of the three tracks from the start screen. Audio decodes per track and is cached, and personal bests are stored per track in `localStorage`.
 - **Dynamic lane count:** charts move through 4, 6, and 8-lane sections; the field spacing, ring scale, note scale, camera and hit zones re-frame themselves around the playable lanes.
-- **Tap the whole lane:** invisible tap strips start at the hit circle, run straight up the lane along its projected angle, and extend slightly below the ring for thumbs. Pressing never draws an overlay — all feedback is in the 3D field.
+- **Tap the whole lane:** invisible tap strips start at the hit circle, run straight up the lane along its projected angle, extend below the ring for thumbs, and widen to fill the gap between neighbouring lanes. Pressing never draws an overlay — all feedback is in the 3D field.
 - **Incoming lanes unlock early:** a lane with a note on the way becomes tappable before its section officially starts, so notes never arrive on a hidden lane.
 - **Holds:** keep at least one finger anywhere on the screen to sustain every active hold. Releasing one thumb won't break another lane's hold.
 - **Moving lanes:** lanes fan, wave, slope, zigzag, and orbit with each section; notes and hold bodies are parented to the lane frame so they follow the same diagonal.
 - **Unused-lane echoes:** dormant lanes emit directional beat echoes that drift sideways, slow down, and fade.
 - **City intro:** the second track layers a two-plane parallax skyline behind the field during its intro, break, and outro.
+- **Clockwork background:** CHRONOSTASIS turns the two unused outer lanes into a background clock. The slow hand sweeps while the fast hand ticks on the beat; the chart starts the clock at motif boundaries, freezes it during the breakdown, and speeds it up for the final section.
+- **Frozen pendulum:** during the STASIS breakdown the clock stops and one lane becomes an antique pendulum. It swings left and right over a centre target while music-note glyphs float around it; tap the centre (click/tap the target or press `Space`) each time the bob crosses the middle. The gimmick runs until the next clock event and then hands the screen back to the lane chart.
 - **Feedback:** perfect/great/good/bad/miss windows, combo, score, accuracy, sync meter, hit bursts, shockwaves, screen flashes, and rank screen.
 - **Results:** animated “COMPILING RESULTS” transition followed by a full results layout with score, accuracy ring, judgement bars, combo trace, rank, and new-best delta.
 - **Pause safely:** `Esc` or the pause button freezes both the transport and the chart; switching tabs/windows pauses automatically.
@@ -47,7 +50,7 @@ Charts are generated offline from beat/onset analysis, then committed as static 
 
 ### Controls
 
-`A S D F J K L ;`, numpad `1–8`, or tap/click anywhere along a lane. `Esc` pauses.
+`A S D F J K L ;`, numpad `1–8`, or tap/click anywhere along a lane. During CHRONOSTASIS's STASIS breakdown, `Space` or a tap on the centre target hits the pendulum. `Esc` pauses.
 
 ### Development
 
@@ -63,8 +66,8 @@ The playfield is Three.js with an Unreal Bloom pass; audio transport is Web Audi
 
 ```bash
 node tools/analyze-audio.mjs input.wav analysis.json
-node tools/build-charts.mjs cryout-analysis.json world-analysis.json
+node tools/build-charts.mjs cryout-analysis.json world-analysis.json chronostasis-analysis.json
 ```
 
-The original Cryout chart is preserved in `tools/source/cryout-legacy.json`.
+The original Cryout chart is preserved in `tools/source/cryout-legacy.json`. The analyser reads mono 16-bit WAV; the repository MP3s can be decoded to that format offline before analysis. The chart builder derives clock windows and accents from detected motif peaks, so adding another song does not reuse the same event layout.
 

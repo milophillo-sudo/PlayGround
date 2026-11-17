@@ -56,6 +56,11 @@
         <button class="pad" data-lane="6"><span class="pk">L</span><i></i></button>
         <button class="pad" data-lane="7"><span class="pk">;</span></button>
       </div>
+
+      <button id="centerPad" aria-label="Tap when the pendulum crosses the centre" aria-hidden="true">
+        <span class="cp-ring"></span>
+        <span class="cp-label">TAP</span>
+      </button>
     </section>
 
     <!-- ======================= START ======================= -->
@@ -66,7 +71,7 @@
           <h1>CRY<br>OUT</h1>
           <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
           <div class="track-picker" id="trackPicker" role="tablist" aria-label="Track selection">
-            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">02</b></div>
+            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">03</b></div>
             <button class="track-card active" data-track="cryout" role="tab" aria-selected="true">
               <span class="tc-num">01</span>
               <span class="tc-copy"><b>CRYOUT</b><em>ORIGINAL TRACK</em></span>
@@ -76,6 +81,11 @@
               <span class="tc-num">02</span>
               <span class="tc-copy"><b>WORLD YEARNING</b><em>FOR AN END</em></span>
               <span class="tc-tags"><span>120 BPM</span><span>HARD</span><span class="thumb">THUMB</span><span class="tc-best"></span></span>
+            </button>
+            <button class="track-card" data-track="chronostasis" role="tab" aria-selected="false">
+              <span class="tc-num">03</span>
+              <span class="tc-copy"><b>CHRONOSTASIS</b><em>ORIGINAL TRACK</em></span>
+              <span class="tc-tags"><span>99 BPM</span><span>EXPERT</span><span class="thumb">CLOCK</span><span class="tc-best"></span></span>
             </button>
           </div>
           <div class="specs">
@@ -99,6 +109,7 @@
             <div class="keyrow"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><kbd>;</kbd></div>
             <p>Tap anywhere along a lane as its note lands. The ring is the hit position. Keep any finger down to sustain holds.</p>
             <div class="touchline"><span class="touchicon"></span> TAP THE WHOLE LANE ON MOBILE</div>
+            <div class="touchline pendline"><span class="pendicon"></span> CHRONOSTASIS · TAP THE CENTRE AS IT SWINGS</div>
           </div>
           <div class="panel">
             <div class="panel-title">SYSTEM</div>

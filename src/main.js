@@ -16,11 +16,13 @@ const WEIGHT = { perfect: 1, great: 0.85, good: 0.55, bad: 0.25, miss: 0 };
 const BEST_KEY = 'cryout-best-v2';
 const LEGACY_BEST_KEY = 'cryout-best-v1';
 const LANE_LEAD = 2.05; // notes become tappable before their section starts
+const COMBO_CAP = 512; // enough samples to keep the whole trace for both tracks
 
 // ---------------------------------------------------------------- dom
 const $ = (id) => document.getElementById(id);
 const dom = {
   canvas: $('scene'), hud: $('hud'), pads: [...document.querySelectorAll('.pad')],
+  centerPad: $('centerPad'),
   start: $('startScreen'), startBtn: $('startBtn'), startLabel: $('startBtnLabel'),
   loadFill: $('loadFill'), startLanes: $('startLanes'), startTrack: $('startTrack'),
   startLength: $('startLength'), startLevel: $('startLevel'), trackCards: [...document.querySelectorAll('.track-card')],
@@ -49,6 +51,8 @@ const audio = new AudioEngine();
 let selectedTrack = TRACK_BY_ID[DEFAULT_TRACK_ID] || TRACKS[0];
 let chart = selectedTrack.chart;
 let noteObjects = [];
+let swingNotes = [];
+let swingMode = false;
 let gameState = 'boot'; // boot | menu | playing | paused | results
 let currentSection = null;
 let sectionIndex = 0;
@@ -127,6 +131,9 @@ function clearNoteObjects() {
 
 function buildNotes() {
   clearNoteObjects();
+  swingNotes = (chart.swings || []).map((data, index) => ({
+    t: data.t, index, state: 'pending',
+  }));
   noteObjects = chart.notes.map((data, index) => {
     const created = scene.makeNote(data.lane, data.type);
     created.group.visible = false;
@@ -169,6 +176,10 @@ function resetGame() {
   comboClock = 0;
   vibeTimer = 0;
   scene.clearGhosts();
+  scene.clockReset();
+  endPendulum();
+  scene.pendulumReset();
+  for (const n of swingNotes) n.state = 'pending';
   sectionIndex = 0;
   currentSection = null;
   updateSection(chart.sections[0], true);
@@ -204,7 +215,7 @@ function updateHUD(t) {
   if (t - comboClock >= 0.32) {
     comboClock = t;
     comboHistory.push(stats.combo);
-    if (comboHistory.length > 260) comboHistory.shift();
+    if (comboHistory.length > COMBO_CAP) comboHistory.shift();
   }
   dom.score.textContent = String(stats.score).padStart(7, '0');
   const acc = stats.judged ? (stats.weight / stats.judged) * 100 : 100;
@@ -390,6 +401,107 @@ function releaseLane(lane) {
   else completeHold(n);
 }
 
+// ---------------------------------------------------------------- pendulum
+// The STASIS gimmick is judged separately from the lane notes: the bob crosses
+// the centre on a fixed swing grid, and the player taps the centre target.
+function startPendulum(ev) {
+  if (!swingNotes.length) return;
+  swingMode = true;
+  scene.startPendulum({
+    start: ev.t,
+    period: ev.period ?? 2.4146,
+    amplitude: ev.amplitude ?? 0.42,
+    times: swingNotes.map((n) => n.t),
+  });
+  document.body.classList.add('pendulum');
+  dom.centerPad.classList.add('show');
+  dom.centerPad.setAttribute('aria-hidden', 'false');
+  alignCenterPad();
+  toast('STASIS // TAP THE CENTRE', 1800);
+}
+
+function endPendulum() {
+  swingMode = false;
+  scene.stopPendulum();
+  document.body.classList.remove('pendulum');
+  if (dom.centerPad) {
+    dom.centerPad.classList.remove('show', 'pressed');
+    dom.centerPad.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function alignCenterPad() {
+  if (!swingMode || !dom.centerPad) return;
+  const p = scene.pendulumTargetScreen();
+  const size = Math.max(140, p.radius * 2);
+  dom.centerPad.style.left = p.x.toFixed(1) + 'px';
+  dom.centerPad.style.top = p.y.toFixed(1) + 'px';
+  dom.centerPad.style.width = size.toFixed(1) + 'px';
+  dom.centerPad.style.height = size.toFixed(1) + 'px';
+}
+
+function judgeSwing(note, offset) {
+  const a = Math.abs(offset);
+  let kind;
+  if (a <= WIN.perfect) kind = 'perfect';
+  else if (a <= WIN.great) kind = 'great';
+  else if (a <= WIN.good) kind = 'good';
+  else kind = 'bad';
+
+  note.state = 'done';
+  stats[kind]++;
+  stats.judged++;
+  stats.weight += WEIGHT[kind];
+  stats.score += SCORE[kind];
+  stats.health = Math.min(100, stats.health + (kind === 'perfect' ? 1.2 : kind === 'great' ? .9 : kind === 'good' ? .5 : -1.4));
+
+  if (kind === 'bad') setCombo(0, false);
+  else setCombo(stats.combo + 1);
+
+  showJudge(kind, kind === 'perfect' ? 'PERFECT' : kind === 'great' ? 'GREAT' : kind === 'good' ? 'GOOD' : 'BAD');
+  scene.swingResolve(note.index, 'hit');
+  audio.click(3, kind === 'perfect' ? 0.56 : 0.4);
+}
+
+function missSwing(note) {
+  if (note.state !== 'pending') return;
+  note.state = 'miss';
+  stats.miss++;
+  stats.judged++;
+  stats.health = Math.max(0, stats.health - 5);
+  setCombo(0, false);
+  showJudge('miss', 'MISS');
+  scene.swingResolve(note.index, 'miss');
+  audio.thud();
+}
+
+function updateSwing(t) {
+  if (!swingMode) return;
+  for (const n of swingNotes) {
+    if (n.state === 'pending' && t > n.t + HIT_WINDOW) missSwing(n);
+  }
+}
+
+function swingTap() {
+  if (gameState !== 'playing' || !swingMode) return;
+  const t = audio.time;
+  let best = null;
+  let bestAbs = Infinity;
+  for (const n of swingNotes) {
+    if (n.state !== 'pending') continue;
+    const d = t - n.t;
+    if (d < -EARLY_WINDOW || d > HIT_WINDOW) continue;
+    const a = Math.abs(d);
+    if (a < bestAbs) { bestAbs = a; best = n; }
+  }
+  if (!best) {
+    scene.swingWhiff();
+    audio.click(3, 0.1);
+    return;
+  }
+  judgeSwing(best, t - best.t);
+}
+
 // ---------------------------------------------------------------- note render
 const SPEED = 8.4;
 
@@ -508,6 +620,10 @@ function quitToMenu() {
   ghostCursor = 0;
   eventCursor = 0;
   scene.clearGhosts();
+  scene.clockReset();
+  endPendulum();
+  scene.pendulumReset();
+  if (selectedTrack.id === 'chronostasis') scene.setClock('run', 0.4);
   for (const p of dom.pads) p.classList.remove('pressed', 'active', 'sleep');
   document.documentElement.style.setProperty('--cyan', '#5ee7ff');
   document.documentElement.style.setProperty('--magenta', '#ff5fd2');
@@ -634,7 +750,7 @@ function finishGame() {
   const acc = stats.judged ? (stats.weight / stats.judged) * 100 : 100;
   const rank = rankFor(acc, stats.judged);
   comboHistory.push(stats.combo);
-  if (comboHistory.length > 260) comboHistory.shift();
+  if (comboHistory.length > COMBO_CAP) comboHistory.shift();
   const full = stats.miss === 0 && stats.bad === 0 && stats.judged > 0;
   const runScore = stats.score;
   const prevBest = bestMap[selectedTrack.id] || null;
@@ -696,8 +812,11 @@ function alignPads(ahead = new Set()) {
     const g = scene.laneScreenGeometry(i);
     const left = i > 0 ? g.x - scene.laneScreenGeometry(i - 1).x : g.x - scene.laneScreenGeometry(1).x;
     const right = i < 7 ? scene.laneScreenGeometry(i + 1).x - g.x : g.x - scene.laneScreenGeometry(6).x;
-    const gap = Math.max(24, Math.min(Math.abs(left), Math.abs(right)));
-    const width = Math.max(40, Math.min(176, gap * 0.94));
+    // Fill the whole gap between neighbouring lanes. The strip boundaries meet
+    // (and slightly overlap) at the midpoint, so a thumb landing between two
+    // lanes still hits one of them instead of an invisible dead zone.
+    const gap = Math.max(26, (Math.abs(left) + Math.abs(right)) * 0.5);
+    const width = Math.max(48, Math.min(240, gap * 1.1));
     // The strip is anchored at the hit circle and runs straight up the lane;
     // a small tail below the ring gives thumbs somewhere to land naturally.
     const bottom = g.y + 26;
@@ -714,6 +833,7 @@ function alignPads(ahead = new Set()) {
     if (p.classList.contains('sleep') === live) p.classList.toggle('sleep', !live);
     p.setAttribute('aria-hidden', String(!live));
   }
+  alignCenterPad();
 }
 
 function refreshSection(t) {
@@ -745,6 +865,15 @@ function updateChartEvents(t) {
         flashScreen(ev.power ?? 1);
         break;
       case 'motion': scene.motionEvent(ev.style, ev.amp, ev.speed, ev.pitch); break;
+      case 'clock':
+        scene.setClock(ev.mode, ev.power ?? 1, ev.t);
+        if (ev.mode !== 'freeze') endPendulum();
+        break;
+      case 'clockTick': scene.clockTick(ev.hand, ev.power ?? 1); break;
+      case 'pendulum':
+        if (ev.mode === 'start') startPendulum(ev);
+        else endPendulum();
+        break;
       default: break;
     }
   }
@@ -755,6 +884,13 @@ function keyDown(e) {
   if (e.code === 'Escape') {
     if (gameState === 'playing') { e.preventDefault(); pauseGame(); }
     else if (gameState === 'paused') { e.preventDefault(); resumeGame(); }
+    return;
+  }
+  if (e.code === 'Space') {
+    if (gameState === 'playing' && swingMode) {
+      e.preventDefault();
+      if (!e.repeat) swingTap();
+    }
     return;
   }
   if (e.repeat) return;
@@ -807,6 +943,27 @@ for (const pad of dom.pads) {
   pad.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
+if (dom.centerPad) {
+  const down = (e) => {
+    e.preventDefault();
+    if (gameState !== 'playing' || !swingMode) return;
+    touchPoints.add(e.pointerId);
+    try { dom.centerPad.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    dom.centerPad.classList.add('pressed');
+    swingTap();
+  };
+  const up = (e) => {
+    e.preventDefault();
+    touchPoints.delete(e.pointerId);
+    dom.centerPad.classList.remove('pressed');
+  };
+  dom.centerPad.addEventListener('pointerdown', down, { passive: false });
+  dom.centerPad.addEventListener('pointerup', up, { passive: false });
+  dom.centerPad.addEventListener('pointercancel', up, { passive: false });
+  dom.centerPad.addEventListener('lostpointercapture', up, { passive: false });
+  dom.centerPad.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
 // Count fingers pressed anywhere on the page, not just on a lane strip.
 document.addEventListener('pointerdown', (e) => {
   if (gameState === 'playing') touchPoints.add(e.pointerId);
@@ -852,6 +1009,8 @@ function applyTrackUI() {
   if (dom.hudBpm) dom.hudBpm.textContent = `${t.bpm} BPM`;
   if (dom.loadTrack) dom.loadTrack.textContent = `${t.shortTitle} // ${t.difficulty}`;
   for (const card of dom.trackCards) {
+    const meta = TRACK_BY_ID[card.dataset.track];
+    if (meta) card.style.setProperty('--card-accent', meta.accent);
     const on = card.dataset.track === t.id;
     card.classList.toggle('active', on);
     card.setAttribute('aria-selected', String(on));
@@ -874,6 +1033,9 @@ async function selectTrack(id, { autoLoad = true } = {}) {
   scene.setPreviewLanes(new Set());
   buildNotes();
   resetGame();
+  // Show the clock as a menu preview for CHRONOSTASIS; every other track keeps
+  // the background clean. Gameplay re-arms it from the chart's motif events.
+  if (next.id === 'chronostasis') scene.setClock('run', 0.4);
   if (!autoLoad) return;
   gameState = 'boot';
   dom.startBtn.disabled = true;
@@ -925,6 +1087,7 @@ function frame(now) {
     scene.setPreviewLanes(ahead);
     updateGhostEvents(t);
     updateChartEvents(t);
+    updateSwing(t);
     updateNotes(t);
     updateHUD(t);
     scene.animate(dt, t, true);
@@ -948,6 +1111,9 @@ window.__cryout = {
   audio, stats, scene, pressLane, releaseLane, selectTrack,
   get chart() { return chart; },
   get notes() { return noteObjects; },
+  get swings() { return swingNotes; },
+  get swingMode() { return swingMode; },
+  swingTap,
   get state() { return gameState; },
   get best() { return personalBest; },
 };
