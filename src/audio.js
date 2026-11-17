@@ -11,47 +11,57 @@ export class AudioEngine {
     this.loaded = false;
     this.muted = false;
     this.hitGain = null;
+    this.cache = new Map();
   }
 
   async load(url, onProgress) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('audio fetch failed: ' + res.status);
-    const total = Number(res.headers.get('content-length')) || 1150000;
-    let data;
-    if (res.body && res.body.getReader) {
-      const reader = res.body.getReader();
-      const chunks = [];
-      let got = 0;
-      onProgress?.(0);
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        got += value.length;
-        onProgress?.(Math.min(0.94, got / total));
+    let buffer = this.cache.get(url);
+    if (!buffer) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('audio fetch failed: ' + res.status);
+      const total = Number(res.headers.get('content-length')) || 1150000;
+      let data;
+      if (res.body && res.body.getReader) {
+        const reader = res.body.getReader();
+        const chunks = [];
+        let got = 0;
+        onProgress?.(0);
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          got += value.length;
+          onProgress?.(Math.min(0.94, got / total));
+        }
+        data = new Uint8Array(got);
+        let off = 0;
+        for (const c of chunks) { data.set(c, off); off += c.length; }
+      } else {
+        data = new Uint8Array(await res.arrayBuffer());
       }
-      data = new Uint8Array(got);
-      let off = 0;
-      for (const c of chunks) { data.set(c, off); off += c.length; }
-    } else {
-      data = new Uint8Array(await res.arrayBuffer());
+      onProgress?.(0.95);
+      this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+      buffer = await this.ctx.decodeAudioData(data.buffer);
+      this.cache.set(url, buffer);
     }
-    onProgress?.(0.95);
-    this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
-    this.buffer = await this.ctx.decodeAudioData(data.buffer);
-    this.duration = this.buffer.duration;
+    this.buffer = buffer;
+    this.duration = buffer.duration;
     this.loaded = true;
-    this.gain = this.ctx.createGain();
-    this.gain.gain.value = 0.92;
-    this.gain.connect(this.ctx.destination);
-    this.hitGain = this.ctx.createGain();
-    this.hitGain.gain.value = 0.5;
-    this.hitGain.connect(this.ctx.destination);
+    if (!this.gain) {
+      this.gain = this.ctx.createGain();
+      this.gain.gain.value = 0.92;
+      this.gain.connect(this.ctx.destination);
+    }
+    if (!this.hitGain) {
+      this.hitGain = this.ctx.createGain();
+      this.hitGain.gain.value = 0.5;
+      this.hitGain.connect(this.ctx.destination);
+    }
     onProgress?.(1);
-    return this.buffer;
+    return buffer;
   }
 
-  async start(at = 0) {
+  async start(at = 0, options = {}) {
     if (!this.loaded) return;
     if (!this.ctx) throw new Error('no audio context');
     if (this.ctx.state !== 'running') await this.ctx.resume();
@@ -62,10 +72,10 @@ export class AudioEngine {
     const when = this.ctx.currentTime + 0.12;
     this.startAt = when;
     this.offset = at;
-    // fade the long silent tail so results arrive without dead air
+    // fade the long tail so results arrive without dead air
     try {
-      const fadeStart = Math.max(0, 131.4 - at);
-      const fadeEnd = Math.max(0.05, 133.4 - at);
+      const fadeStart = Math.max(0, (options.fadeStart ?? this.duration - 6.7) - at);
+      const fadeEnd = Math.max(0.05, (options.fadeEnd ?? this.duration - 4.7) - at);
       this.gain.gain.cancelScheduledValues(this.ctx.currentTime);
       this.gain.gain.setValueAtTime(0.92, this.ctx.currentTime);
       this.gain.gain.setValueAtTime(0.92, when + fadeStart);

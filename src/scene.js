@@ -127,30 +127,46 @@ function noteTexture() {
   const [c, x] = canvas(256, 256);
   const cx = 128;
   x.translate(cx, cx);
-  // halo
-  const halo = x.createRadialGradient(0, 0, 0, 0, 0, 122);
-  halo.addColorStop(0, 'rgba(255,255,255,.9)');
-  halo.addColorStop(0.32, 'rgba(255,255,255,.28)');
+  // soft halo so the note reads as a glowing orb at distance
+  const halo = x.createRadialGradient(0, 0, 18, 0, 0, 124);
+  halo.addColorStop(0, 'rgba(255,255,255,.62)');
+  halo.addColorStop(0.45, 'rgba(255,255,255,.2)');
   halo.addColorStop(1, 'rgba(255,255,255,0)');
-  x.fillStyle = halo; x.beginPath(); x.arc(0, 0, 122, 0, Math.PI * 2); x.fill();
-  // diamond
-  x.beginPath();
-  x.moveTo(0, -94); x.quadraticCurveTo(22, -22, 94, 0);
-  x.quadraticCurveTo(22, 22, 0, 94); x.quadraticCurveTo(-22, 22, -94, 0);
-  x.quadraticCurveTo(-22, -22, 0, -94);
-  x.closePath();
-  x.fillStyle = 'rgba(255,255,255,.94)';
+  x.fillStyle = halo; x.beginPath(); x.arc(0, 0, 124, 0, Math.PI * 2); x.fill();
+
+  // main circle: the note mirrors the ring that marks the hit position
+  x.save();
+  x.strokeStyle = 'rgba(255,255,255,.98)';
+  x.lineWidth = 17;
   x.shadowColor = '#fff'; x.shadowBlur = 28;
-  x.fill();
-  // inner cut
-  x.beginPath();
-  x.moveTo(0, -49); x.quadraticCurveTo(12, -12, 49, 0);
-  x.quadraticCurveTo(12, 12, 0, 49); x.quadraticCurveTo(-12, 12, -49, 0);
-  x.quadraticCurveTo(-12, -12, 0, -49);
-  x.closePath();
-  x.fillStyle = 'rgba(255,255,255,.9)';
-  x.shadowBlur = 0;
-  x.fill();
+  x.beginPath(); x.arc(0, 0, 84, 0, Math.PI * 2); x.stroke();
+  x.restore();
+
+  // thin inner orbit
+  x.save();
+  x.strokeStyle = 'rgba(255,255,255,.5)';
+  x.lineWidth = 4;
+  x.shadowColor = '#fff'; x.shadowBlur = 10;
+  x.beginPath(); x.arc(0, 0, 56, 0, Math.PI * 2); x.stroke();
+  x.restore();
+
+  // bright core
+  const core = x.createRadialGradient(0, 0, 0, 0, 0, 30);
+  core.addColorStop(0, 'rgba(255,255,255,1)');
+  core.addColorStop(0.55, 'rgba(255,255,255,.75)');
+  core.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = core;
+  x.beginPath(); x.arc(0, 0, 30, 0, Math.PI * 2); x.fill();
+
+  // four cardinal ticks, echoing the hit ring
+  for (let i = 0; i < 4; i++) {
+    x.save(); x.rotate(i * Math.PI / 2);
+    x.strokeStyle = 'rgba(255,255,255,.9)';
+    x.lineWidth = 5;
+    x.shadowColor = '#fff'; x.shadowBlur = 12;
+    x.beginPath(); x.moveTo(0, -122); x.lineTo(0, -100); x.stroke();
+    x.restore();
+  }
   return tex(c);
 }
 function holdTexture() {
@@ -189,6 +205,69 @@ function hitLineTexture() {
   x.beginPath(); x.moveTo(0, 64); x.lineTo(1024, 64); x.stroke();
   return tex(c);
 }
+function cityTexture(seed, horizon) {
+  const [c, x] = canvas(2048, 512);
+  let s = seed >>> 0;
+  const rand = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  x.clearRect(0, 0, 2048, 512);
+  // atmospheric haze behind the silhouette
+  const haze = x.createLinearGradient(0, 150, 0, 512);
+  haze.addColorStop(0, 'rgba(80,190,255,0)');
+  haze.addColorStop(0.7, 'rgba(60,150,255,.09)');
+  haze.addColorStop(1, 'rgba(255,110,200,.08)');
+  x.fillStyle = haze; x.fillRect(0, 0, 2048, 512);
+
+  let px = -40;
+  while (px < 2088) {
+    const w = 24 + Math.floor(rand() * 74);
+    const h = 90 + Math.floor(rand() * 300);
+    const top = 512 - h;
+    x.save();
+    // dark block mass keeps buildings readable over the nebula
+    x.fillStyle = 'rgba(3,8,24,.82)';
+    x.fillRect(px, top, w, h);
+    // neon rim
+    x.strokeStyle = rand() < 0.28 ? 'rgba(255,120,200,.7)' : 'rgba(70,210,255,.55)';
+    x.lineWidth = 2;
+    x.shadowColor = x.strokeStyle; x.shadowBlur = 10;
+    x.strokeRect(px + 1, top + 1, w - 2, h - 2);
+    x.shadowBlur = 0;
+    // lit windows
+    const cols = Math.max(1, Math.floor((w - 10) / 12));
+    const rows = Math.max(2, Math.floor((h - 16) / 17));
+    for (let ry = 0; ry < rows; ry++) {
+      for (let cx = 0; cx < cols; cx++) {
+        if (rand() < 0.64) continue;
+        x.fillStyle = rand() < 0.22
+          ? 'rgba(255,205,130,.9)'
+          : rand() < 0.5 ? 'rgba(120,235,255,.85)' : 'rgba(255,120,195,.8)';
+        x.fillRect(px + 6 + cx * 12, top + 9 + ry * 17, 4, 6);
+      }
+    }
+    // antenna / roof light
+    if (rand() < 0.45) {
+      x.strokeStyle = 'rgba(150,225,255,.65)'; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(px + w * 0.5, top); x.lineTo(px + w * 0.5, top - 18 - rand() * 34); x.stroke();
+      x.fillStyle = 'rgba(255,90,150,.95)';
+      x.fillRect(px + w * 0.5 - 1.5, top - 22 - rand() * 30, 3, 3);
+    }
+    x.restore();
+    px += w + 3 + Math.floor(rand() * 11);
+  }
+  if (horizon) {
+    const g = x.createLinearGradient(0, 360, 0, 512);
+    g.addColorStop(0, 'rgba(255,140,90,0)');
+    g.addColorStop(1, 'rgba(255,140,90,.12)');
+    x.fillStyle = g; x.fillRect(0, 300, 2048, 212);
+  }
+  const t = tex(c);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}
 
 // ---------------------------------------------------------------- scene
 export function createScene(canvasEl) {
@@ -219,6 +298,7 @@ export function createScene(canvasEl) {
   const TEX = {
     glow: glowTexture(), ring: ringTexture(), line: laneLineTexture(),
     beam: beamTexture(), note: noteTexture(), hold: holdTexture(), hitline: hitLineTexture(),
+    cityFar: cityTexture(0x1f3c5a, false), cityNear: cityTexture(0x6b2a44, true),
   };
 
   // ------------------------------------------------------------ background
@@ -299,6 +379,31 @@ export function createScene(canvasEl) {
     m.userData.spin = new THREE.Vector3((Math.random() - .5) * .3, (Math.random() - .5) * .4, (Math.random() - .5) * .2);
     bg.add(m); shards.push(m);
   }
+
+  // ------------------------------------------------------------ city skyline
+  // A pair of parallax skyline planes. They are procedural textures, so the
+  // whole city is only two draw calls; it scrolls behind the field for the
+  // intro / breakdown of the second track without touching the frame budget.
+  const cityGroup = new THREE.Group();
+  cityGroup.position.z = -1;
+  bg.add(cityGroup);
+  const cityLayers = [];
+  function cityLayer(map, width, height, x, y, z, color) {
+    const mat = new THREE.MeshBasicMaterial({
+      map, color, transparent: true, opacity: 0, depthWrite: false, fog: false,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
+    mesh.position.set(x, y, z);
+    mesh.renderOrder = -2;
+    cityGroup.add(mesh);
+    cityLayers.push({ mesh, mat, map, base: y, speed: 0 });
+    return mesh;
+  }
+  cityLayer(TEX.cityFar, 150, 42, -24, 19, -54, 0xa8e4ff);
+  cityLayer(TEX.cityNear, 118, 34, 38, 12, -36, 0xffc2a0);
+  cityLayers[0].speed = 0.0028;
+  cityLayers[1].speed = 0.0062;
+  cityGroup.visible = false;
 
   // ------------------------------------------------------------ stage
   const stage = new THREE.Group();
@@ -391,7 +496,7 @@ export function createScene(canvasEl) {
     lanes.push({
       group: g, beam, line, ring, glow, ghost, color: color.clone(),
       targetColor: color.clone(), flash: 0, active: 0, baseX: x,
-      ghostFx: null,
+      ghostFx: null, angle: 0, pitch: 0, screenAngle: 0, screen: null,
     });
   }
 
@@ -400,7 +505,9 @@ export function createScene(canvasEl) {
     const color = new THREE.Color(LANE_COLORS[lane]);
     const group = new THREE.Group();
     group.renderOrder = 5;
-    noteRoot.add(group);
+    // Notes live inside their lane's moving frame: when the lane fans or
+    // tilts, the note positions (and hold bodies) follow the diagonal path.
+    lanes[lane].group.add(group);
 
     const headMat = new THREE.SpriteMaterial({
       map: TEX.note, color, transparent: true, opacity: 1,
@@ -503,6 +610,23 @@ export function createScene(canvasEl) {
     s.scale = scale;
   }
 
+  // Beat echoes: small ring pulses that leave a dormant lane sideways, drag
+  // to a stop and fade out. A fixed pool keeps this cheap during dense charts.
+  const echoes = [];
+  for (let i = 0; i < 54; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: TEX.ring, color: 0xffffff, transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    const s = new THREE.Sprite(mat);
+    s.scale.set(0.6, 0.6, 1);
+    s.renderOrder = 7;
+    s.visible = false;
+    stage.add(s);
+    echoes.push({ sprite: s, life: 0, max: 1, delay: 0, vx: 0, vy: 0, base: 0.5, alpha: 0.6, spin: 0 });
+  }
+  let echoCursor = 0;
+
   // ------------------------------------------------------------ state
   const state = {
     view: {
@@ -530,6 +654,17 @@ export function createScene(canvasEl) {
     portrait: false,
     mouse: new THREE.Vector2(),
     laneXNow: baseX.slice(),
+    bpm: 100,
+    beatOffset: 0.535,
+    energyPulse: 0,
+    motion: { style: 'fan', amp: 0.06, speed: 0.5, pitch: 0.03 },
+    targetMotion: { style: 'fan', amp: 0.06, speed: 0.5, pitch: 0.03 },
+    laneAngle: new Float32Array(8),
+    lanePitch: new Float32Array(8),
+    screenAngle: new Float32Array(8),
+    city: 0,
+    cityTarget: 0,
+    live: new Set([0, 1, 2, 3, 4, 5, 6, 7]),
   };
 
   // The field is re-framed from the number of playable lanes: fewer lanes get
@@ -608,11 +743,19 @@ export function createScene(canvasEl) {
     state.target.camY = sec.camY;
     state.target.bloom = sec.bloom * 0.82;
     state.target.spin = sec.spin;
+    state.targetMotion = {
+      style: sec.motion || 'fan',
+      amp: sec.motionAmp ?? 0.06,
+      speed: sec.motionSpeed ?? 0.5,
+      pitch: sec.motionPitch ?? 0.03,
+    };
+    state.cityTarget = sec.city ?? 0;
     // the zoom kick keeps the section change feeling like a camera move,
     // never a hard cut, while the lane spacing eases into its new width
     if (changed) state.zoomKick = Math.min(1.4, state.zoomKick + 0.85);
     const sets = { 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7] };
     state.active = new Set(sets[sec.keys] || sets[8]);
+    state.live = new Set(state.active);
     for (let i = 0; i < 8; i++) {
       const live = state.active.has(i);
       lanes[i].active = live ? 1 : 0;
@@ -623,33 +766,76 @@ export function createScene(canvasEl) {
     hitLineMat.color.set(sec.accent);
   }
 
+  // Lanes with a note arriving soon are live even before their section starts,
+  // so the player never has to wait for a hidden lane to un-hide mid-approach.
+  function setPreviewLanes(lanesSet) {
+    const next = new Set(state.active);
+    for (const lane of lanesSet) next.add(lane);
+    let changed = next.size !== state.live.size;
+    if (!changed) for (const lane of next) if (!state.live.has(lane)) { changed = true; break; }
+    if (!changed) return;
+    state.live = next;
+    for (const lane of lanesSet) {
+      if (!state.active.has(lane)) {
+        lanes[lane].flash = Math.max(lanes[lane].flash, 0.34);
+        lanes[lane].ghostFx = null;
+      }
+    }
+  }
+
+  function setCity(level) {
+    state.cityTarget = Math.max(0, Math.min(1, level));
+  }
+
   function laneX(i) { return lanes[i].baseX; }
   function laneZ(i) { return ARC * lanes[i].baseX * lanes[i].baseX; }
 
   function worldPoint(lane, y) {
-    const v = new THREE.Vector3(laneX(lane), y, laneZ(lane) + 0.2);
-    return laneRoot.localToWorld(v);
+    return lanes[lane].group.localToWorld(new THREE.Vector3(0, y, 0.2));
   }
 
   const screenV = new THREE.Vector3();
-  function laneScreenPoints() {
+  const screenV2 = new THREE.Vector3();
+  function updateLaneScreen() {
     camera.updateMatrixWorld();
-    stage.updateMatrixWorld(true);
-    const out = [];
+    stage.updateWorldMatrix(true, false);
     for (let i = 0; i < 8; i++) {
-      screenV.set(laneX(i), 0.04, laneZ(i) + 0.22);
-      laneRoot.localToWorld(screenV);
-      screenV.project(camera);
-      out.push({
-        x: (screenV.x * 0.5 + 0.5) * innerWidth,
-        y: (-screenV.y * 0.5 + 0.5) * innerHeight,
-      });
+      const l = lanes[i];
+      l.group.updateWorldMatrix(false, false);
+      const m = l.group.matrixWorld;
+      screenV.set(0, 0.04, 0.22).applyMatrix4(m).project(camera);
+      screenV2.set(0, 11.4, 0.22).applyMatrix4(m).project(camera);
+      const x = (screenV.x * 0.5 + 0.5) * innerWidth;
+      const y = (-screenV.y * 0.5 + 0.5) * innerHeight;
+      const topX = (screenV2.x * 0.5 + 0.5) * innerWidth;
+      const topY = (-screenV2.y * 0.5 + 0.5) * innerHeight;
+      l.screenAngle = Math.atan2(topX - x, y - topY);
+      l.screen = { x, y, topX, topY, angle: l.screenAngle };
     }
-    return out;
+  }
+
+  function laneScreenGeometry(i) {
+    if (!lanes[i].screen) updateLaneScreen();
+    return lanes[i].screen;
+  }
+
+  function laneScreenPoints() {
+    updateLaneScreen();
+    return lanes.map((l) => l.screen);
   }
 
   function laneScreenXs() {
     return laneScreenPoints().map((p) => p.x);
+  }
+
+  function laneScreenAngle(i) {
+    if (!lanes[i].screen) updateLaneScreen();
+    return lanes[i].screenAngle;
+  }
+
+  function setTempo(bpm, offset = 0) {
+    state.bpm = bpm || 100;
+    state.beatOffset = offset;
   }
 
   function pressFx(lane) {
@@ -677,6 +863,68 @@ export function createScene(canvasEl) {
       l.ghost.material.opacity = 0;
     }
   }
+
+  function echoFx(lane, dir = 1, power = 1) {
+    const l = lanes[lane];
+    if (!l) return;
+    const pos = worldPoint(lane, 0.1 + Math.random() * 0.12);
+    const n = 3;
+    for (let k = 0; k < n; k++) {
+      const e = echoes[echoCursor = (echoCursor + 1) % echoes.length];
+      e.sprite.position.copy(pos);
+      e.sprite.position.y += k * 0.11;
+      e.sprite.position.z += k * 0.05;
+      e.sprite.material.color.copy(l.targetColor).lerp(white, 0.12 + k * 0.08);
+      e.sprite.material.rotation = Math.random() * Math.PI * 2;
+      e.sprite.scale.set(0.45, 0.45, 1);
+      e.life = e.max = 1.15 + k * 0.24;
+      e.delay = k * 0.075;
+      e.vx = dir * (2.4 + power * 1.7) * (1 - k * 0.13) + (Math.random() - 0.5) * 0.5;
+      e.vy = 0.45 + power * 0.35 + Math.random() * 0.25;
+      e.base = 0.38 + power * 0.38;
+      e.alpha = (0.62 - k * 0.13) * Math.min(1, power);
+      e.spin = (Math.random() - 0.5) * 1.2;
+      e.sprite.visible = false;
+    }
+  }
+
+  function pulseFx(power = 1) {
+    state.energyPulse = Math.min(1.5, state.energyPulse + 0.35 * power);
+    state.shake = Math.min(0.18, state.shake + 0.008 * power);
+  }
+
+  function burstFx(lane, power = 1) {
+    let pos;
+    if (lane === undefined || lane === null) {
+      pos = stage.localToWorld(new THREE.Vector3(0, 0.3, 0.25));
+      spawnBurst(pos, 0x9ff5ff, Math.round(22 * power), 5.2);
+      spawnShock(pos, 0x9ff5ff, 4.2);
+    } else {
+      pos = worldPoint(lane, 0.08);
+      spawnBurst(pos, lanes[lane].targetColor, Math.round(14 + 10 * power), 3.2 + power);
+      spawnShock(pos, lanes[lane].targetColor.getHex(), 2.4 + power);
+    }
+    state.shake = Math.min(0.2, state.shake + 0.02 * power);
+  }
+
+  function vibeFx(power = 1) {
+    pulseFx(power);
+    state.zoomKick = Math.min(1.4, state.zoomKick + 0.22 * power);
+    burstFx(null, 0.7 + power * 0.7);
+    for (let i = 0; i < 8; i++) {
+      if (!state.active.has(i)) echoFx(i, i < 3.5 ? -1 : 1, 0.7 + power * 0.6);
+    }
+  }
+
+  function motionEvent(style, amp, speed, pitch) {
+    state.targetMotion = {
+      style: style || 'fan',
+      amp: amp ?? 0.08,
+      speed: speed ?? 0.6,
+      pitch: pitch ?? 0.04,
+    };
+  }
+
   function hitFx(lane, quality) {
     const l = lanes[lane];
     l.flash = 1;
@@ -719,10 +967,21 @@ export function createScene(canvasEl) {
     v.ring += (tg.ring - v.ring) * (1 - Math.exp(-dt * 3.1));
     bloom.strength += (tg.bloom - bloom.strength) * k;
     state.zoomKick *= Math.exp(-dt * 2.6);
+    state.energyPulse *= Math.exp(-dt * 3.2);
 
-    const beatPhase = ((t - 0.535) / 0.6 + 8) % 1;
+    const period = 60 / state.bpm;
+    const beatPhase = (((t - state.beatOffset) / period) % 1 + 1) % 1;
     const pulse = Math.exp(-beatPhase * 5.2);
     state.pulse = pulse;
+
+    const m = state.motion, mt = state.targetMotion;
+    const mk = 1 - Math.exp(-dt * 2.2);
+    m.amp += (mt.amp - m.amp) * mk;
+    m.speed += (mt.speed - m.speed) * mk;
+    m.pitch += (mt.pitch - m.pitch) * mk;
+    m.style = mt.style;
+    const clickPulse = state.energyPulse;
+    bloom.strength += clickPulse * 0.32;
 
     // stage motion
     stage.position.y = v.y + Math.sin(t * 0.65) * 0.035 + pulse * 0.03;
@@ -739,7 +998,36 @@ export function createScene(canvasEl) {
       l.group.position.z = ARC * x * x;
       state.laneXNow[i] = x;
 
-      const live = state.active.has(i);
+      // Lanes fan, slope, wave, and tilt with the section. Notes are parented
+      // to the lane frame, so their fall path follows the same diagonal.
+      const rel = i - 3.5;
+      let angle = 0;
+      switch (m.style) {
+        case 'fan': angle = -rel * m.amp; break;
+        case 'slope': angle = m.amp; break;
+        case 'tiltL': angle = m.amp * 1.15; break;
+        case 'tiltR': angle = -m.amp * 1.15; break;
+        case 'zigzag': angle = (i % 2 ? 1 : -1) * m.amp * 0.95; break;
+        case 'wave': angle = Math.sin(t * m.speed + i * 0.72) * m.amp - rel * m.amp * 0.22; break;
+        case 'orbit': angle = Math.sin(t * m.speed * 0.72 + rel * 0.38) * m.amp * 0.78 - rel * m.amp * 0.3; break;
+        default: angle = -rel * m.amp;
+      }
+      angle += Math.sin(t * 1.15 + i * 0.55) * m.amp * 0.12 * (0.4 + state.energy);
+      angle += pulse * 0.006 * Math.cos(i * 0.9 + 0.4);
+      const targetPitch = Math.sin(t * 0.55 + i * 0.7) * m.pitch
+        + pulse * m.pitch * 0.32 * Math.sin(i * 0.8 + 0.7)
+        + clickPulse * 0.006;
+      const lk = 1 - Math.exp(-dt * 3.4);
+      l.angle += (angle - l.angle) * lk;
+      l.pitch += (targetPitch - l.pitch) * lk;
+      state.laneAngle[i] = l.angle;
+      state.lanePitch[i] = l.pitch;
+      l.group.rotation.z = l.angle;
+      l.group.rotation.x = l.pitch;
+      l.line.scale.y = 12.4 * Math.cos(l.pitch);
+      l.beam.scale.y = 12.6 * Math.cos(l.pitch);
+
+      const live = state.live.has(i);
       let ghostAmp = 0;
       let bounceAmp = 0;
       if (l.ghostFx) {
@@ -788,8 +1076,14 @@ export function createScene(canvasEl) {
       l.line.material.color.copy(l.targetColor).lerp(white, 0.14 + l.flash * 0.32);
       l.beam.material.color.copy(l.targetColor);
     }
+    updateLaneScreen();
+    for (let i = 0; i < 8; i++) {
+      const l = lanes[i];
+      l.line.material.rotation = -l.screenAngle;
+      l.beam.material.rotation = -l.screenAngle;
+    }
     hitLine.scale.x = (v.spacing * (state.keyCount - 1) + v.ring * 1.5) * v.spread;
-    hitLine.material.opacity = 0.45 + pulse * 0.3 + state.energy * 0.15;
+    hitLine.material.opacity = 0.45 + pulse * 0.3 + state.energy * 0.15 + clickPulse * 0.16;
 
     // camera
     const camX = state.mouse.x * 0.55;
@@ -813,6 +1107,17 @@ export function createScene(canvasEl) {
     for (let i = 0; i < bgRings.length; i++) {
       bgRings[i].rotation.z += dt * (0.02 + i * 0.012);
       bgRings[i].rotation.y += dt * 0.008;
+    }
+    state.city += (state.cityTarget - state.city) * (1 - Math.exp(-dt * 1.6));
+    cityGroup.visible = state.city > 0.012;
+    if (cityGroup.visible) {
+      cityGroup.position.x = state.mouse.x * 1.4;
+      for (let i = 0; i < cityLayers.length; i++) {
+        const layer = cityLayers[i];
+        layer.map.offset.x += dt * layer.speed * (0.7 + state.energy * 1.6 + pulse * 0.8);
+        layer.mesh.position.y = layer.base + Math.sin(t * 0.17 + i * 1.7) * 0.18;
+        layer.mat.opacity = state.city * (i ? 0.42 : 0.3);
+      }
     }
     for (const s of shards) {
       s.rotation.x += s.userData.spin.x * dt;
@@ -861,6 +1166,30 @@ export function createScene(canvasEl) {
       if (s.life <= 0) s.sprite.visible = false;
     }
 
+    // beat echoes
+    for (const e of echoes) {
+      if (e.delay > 0) {
+        e.delay -= dt;
+        if (e.delay > 0) continue;
+      }
+      if (e.life <= 0) continue;
+      e.life -= dt;
+      if (e.life <= 0) {
+        e.sprite.visible = false;
+        continue;
+      }
+      const p = 1 - e.life / e.max;
+      e.vx *= Math.exp(-dt * 2.5);
+      e.vy *= Math.exp(-dt * 1.9);
+      e.sprite.position.x += e.vx * dt;
+      e.sprite.position.y += e.vy * dt;
+      e.sprite.material.rotation += e.spin * dt;
+      const sc = e.base * (0.7 + p * 1.15);
+      e.sprite.scale.set(sc, sc, 1);
+      e.sprite.material.opacity = Math.pow(1 - p, 1.55) * e.alpha;
+      e.sprite.visible = true;
+    }
+
   }
 
   function render() {
@@ -874,8 +1203,10 @@ export function createScene(canvasEl) {
   return {
     scene, camera, stage, noteRoot, state,
     makeNote, setSection, animate, render, laneX, laneZ, worldPoint,
-    laneScreenXs, laneScreenPoints,
-    pressFx, hitFx, missFx, ghostFx, clearGhosts, layout, dispose,
+    laneScreenXs, laneScreenPoints, laneScreenGeometry, laneScreenAngle,
+    setPreviewLanes, setCity, setTempo,
+    pressFx, hitFx, missFx, ghostFx, echoFx, pulseFx, burstFx, vibeFx, motionEvent,
+    clearGhosts, layout, dispose,
     get noteSpeed() { return state.noteSpeed; },
     set noteSpeed(v) { state.noteSpeed = v; },
     get noteScale() { return Math.max(1, Math.min(1.3, state.view.ring / 1.65)); },
