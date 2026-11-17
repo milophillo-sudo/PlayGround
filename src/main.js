@@ -14,6 +14,7 @@ const WIN = { perfect: 0.045, great: 0.09, good: 0.135, bad: 0.185 };
 const SCORE = { perfect: 3000, great: 2000, good: 1000, bad: 300 };
 const WEIGHT = { perfect: 1, great: 0.85, good: 0.55, bad: 0.25, miss: 0 };
 const END_TIME = CHART.song.chartEnd;
+const BEST_KEY = 'cryout-best-v1';
 
 // ---------------------------------------------------------------- dom
 const $ = (id) => document.getElementById(id);
@@ -28,6 +29,8 @@ const dom = {
   toast: $('toast'), rank: $('rank'), finalScore: $('finalScore'), finalAcc: $('finalAcc'),
   cPerfect: $('cPerfect'), cGreat: $('cGreat'), cGood: $('cGood'), cBad: $('cBad'),
   cMiss: $('cMiss'), fMaxCombo: $('fMaxCombo'), fcBadge: $('fcBadge'), resultTag: $('resultTag'),
+  bestScoreLabel: $('bestScoreLabel'), bestBadge: $('bestBadge'), bestNote: $('bestNote'),
+  bestLine: $('bestLine'),
 };
 
 // ---------------------------------------------------------------- state
@@ -46,6 +49,28 @@ const stats = {
 const held = new Array(8).fill(false);
 const holdNote = new Array(8).fill(null);
 let toastTimer = 0;
+
+// ---------------------------------------------------------------- personal best
+function readBest() {
+  try {
+    const raw = localStorage.getItem(BEST_KEY);
+    if (!raw) return null;
+    const best = JSON.parse(raw);
+    if (!best || typeof best.score !== 'number' || typeof best.acc !== 'number') return null;
+    return best;
+  } catch { return null; }
+}
+
+let personalBest = readBest();
+
+function renderBest() {
+  const text = personalBest
+    ? `${String(personalBest.score).padStart(7, '0')} · ${personalBest.rank || '—'}`
+    : '—';
+  if (dom.bestScoreLabel) dom.bestScoreLabel.textContent = text;
+  if (dom.bestLine) dom.bestLine.innerHTML = `PERSONAL BEST <b>${text}</b>`;
+}
+renderBest();
 
 // ---------------------------------------------------------------- build
 scene.setSection(CHART.sections[0]);
@@ -412,6 +437,21 @@ function finishGame() {
   if (stats.judged === 0) rank = 'F';
 
   const full = stats.miss === 0 && stats.bad === 0 && stats.judged > 0;
+
+  const runScore = stats.score;
+  const isBest = !personalBest
+    || runScore > personalBest.score
+    || (runScore === personalBest.score && acc > personalBest.acc);
+  if (isBest) {
+    personalBest = { score: runScore, acc, rank, maxCombo: stats.maxCombo, full, at: Date.now() };
+    try { localStorage.setItem(BEST_KEY, JSON.stringify(personalBest)); } catch { /* storage unavailable */ }
+  }
+  renderBest();
+  dom.bestBadge.classList.toggle('on', isBest);
+  dom.bestNote.innerHTML = personalBest
+    ? `BEST <b>${String(personalBest.score).padStart(7, '0')}</b> · ${personalBest.rank || '—'} · ${personalBest.acc.toFixed(2)}%`
+    : '';
+
   dom.rank.textContent = rank;
   dom.finalScore.textContent = String(stats.score).padStart(7, '0');
   dom.finalAcc.textContent = acc.toFixed(2) + '%';
@@ -522,6 +562,10 @@ $('menuBtn').addEventListener('click', quitToMenu);
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && gameState === 'playing') pauseGame();
 });
+addEventListener('blur', () => {
+  if (gameState === 'playing') pauseGame();
+});
+dom.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ---------------------------------------------------------------- boot/load
 async function loadAudio() {
@@ -584,6 +628,7 @@ window.__cryout = {
   audio, stats, scene, chart: CHART, pressLane, releaseLane,
   get notes() { return noteObjects; },
   get state() { return gameState; },
+  get best() { return personalBest; },
 };
 
 requestAnimationFrame(frame);

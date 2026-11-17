@@ -26,6 +26,8 @@ A browser rhythm game built around a flat, bold 2D hit-circle language placed in
 - **Full chart:** 331 notes and 6 holds generated from beat/onset analysis of the supplied `Cryout.mp3` (100 BPM grid), running from the first phrase to the outro.
 - **Controls:** `A S D F J K L ;`, numpad, or the eight touch pads. Hold notes must be held until the tail passes the ring. `Esc` pauses.
 - **Feedback:** perfect/great/good/bad/miss windows, combo, score, accuracy, sync meter, hit bursts, shockwaves, rank screen, retry.
+- **Personal best:** score, accuracy, rank, max combo, and full-combo status are saved in `localStorage` and surfaced on the start and result screens with a NEW BEST badge.
+- **Pause safely:** `Esc` or the pause button freezes both the transport and the chart; switching tabs/windows pauses automatically.
 - **Responsive:** landscape and portrait layouts, safe-area padding, multi-touch pointer capture, no page scrolling during play.
 
 ### Development

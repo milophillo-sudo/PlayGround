@@ -76,6 +76,7 @@
             <i>→</i>
           </button>
           <div class="loadbar"><b id="loadFill"></b></div>
+          <p class="best-line" id="bestLine">PERSONAL BEST <b>—</b></p>
           <p class="hint">A S D F · J K L ; — hit keys or touch pads. Headphones recommended.</p>
         </div>
 
@@ -92,6 +93,7 @@
               <li><span>FIELD</span><b>DYNAMIC / 360°</b></li>
               <li><span>KEYS</span><b>4 · 6 · 8</b></li>
               <li><span>JUDGE</span><b>±185 MS</b></li>
+              <li><span>PERSONAL BEST</span><b id="bestScoreLabel">—</b></li>
             </ul>
           </div>
           <div class="credit">CHART SYNTHESIZED FROM THE AUDIO<br>BUILT WITH THREE.JS / WEBGL</div>
@@ -123,7 +125,10 @@
             <h2>RESULT</h2>
             <p class="modal-sub" id="resultTag">CLEARED</p>
           </div>
-          <div id="rank">S</div>
+          <div class="rank-wrap">
+            <div id="rank">S</div>
+            <div id="bestBadge" class="best-badge">NEW BEST</div>
+          </div>
         </div>
         <div class="result-stats">
           <div class="bigstat"><span>SCORE</span><b id="finalScore">0</b></div>
@@ -136,6 +141,7 @@
           <div class="wide"><span>MAX COMBO</span><b id="fMaxCombo">0</b></div>
         </div>
         <div class="result-foot">
+          <div class="best-note" id="bestNote"></div>
           <div id="fcBadge" class="fc">FULL COMBO</div>
           <div class="btnrow">
             <button id="retryBtn" class="cta small">RETRY <i>↻</i></button>

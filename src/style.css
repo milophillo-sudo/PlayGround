@@ -273,6 +273,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 .cta.small{min-width:180px;padding:13px 18px}
 .loadbar{height:2px;width:min(300px,100%);background:rgba(140,190,255,.14);margin-top:12px;overflow:hidden}
 .loadbar b{display:block;height:100%;width:0%;background:var(--cyan);box-shadow:0 0 12px var(--cyan);transition:width .2s}
+.best-line{display:none;margin:10px 0 0;font-family:var(--mono);font-size:8px;letter-spacing:.18em;color:var(--muted)}
+.best-line b{color:#dff6ff;font-weight:500;letter-spacing:.1em}
 .hint{margin:16px 0 0;font-family:var(--mono);font-size:9px;line-height:1.7;letter-spacing:.08em;color:#687792}
 
 .start-side{display:flex;flex-direction:column;gap:14px}
@@ -322,11 +324,21 @@ kbd{
 .ghost:hover{border-color:var(--cyan);color:#eaffff;background:rgba(94,231,255,.05)}
 
 .result-head{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+.rank-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
 #rank{
   font-size:clamp(90px,15vw,170px);line-height:.72;font-weight:900;letter-spacing:-.07em;
   color:#fff;text-shadow:0 0 40px rgba(94,231,255,.6),0 0 110px rgba(255,95,210,.35);
   font-style:italic;
 }
+.best-badge{
+  display:none;font-family:var(--mono);font-size:8px;letter-spacing:.24em;
+  color:#04040c;background:var(--cyan);padding:5px 10px;
+  box-shadow:0 0 26px rgba(94,231,255,.45);
+}
+.best-badge.on{display:block;animation:bestPop .5s cubic-bezier(.2,.8,.2,1) both}
+@keyframes bestPop{0%{opacity:0;transform:translateY(6px) scale(.92)}100%{opacity:1;transform:none}}
+.best-note{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--muted)}
+.best-note b{color:#dff6ff;font-weight:500}
 .result-stats{
   display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);
   border:1px solid var(--line);margin:26px 0 24px;
@@ -416,6 +428,7 @@ kbd{
   .result-foot .btnrow{display:grid;grid-template-columns:1fr 1fr;width:100%}
   .result-foot .btnrow .cta,.result-foot .btnrow .ghost{width:100%;min-width:0}
   #resultScreen.show,#pauseScreen.show{align-items:center;padding-top:18px}
+  .best-line{display:block}
   .modal .btnrow{display:grid;grid-template-columns:1fr 1fr;width:100%}
   .modal .btnrow .cta{grid-column:span 2;width:100%}
   .modal .btnrow .ghost{width:100%}
@@ -448,5 +461,6 @@ kbd{
   .specs b{font-size:11px}
   .cta{width:100%;min-width:0;padding:11px 16px}
   .loadbar{margin-top:8px}
+  .best-line{display:block}
   .start-copy .hint{display:block;margin-top:9px;font-size:8px;letter-spacing:.05em;line-height:1.4}
 }

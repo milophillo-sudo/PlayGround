@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#04040c" />
   <title>CRYOUT — Dynamic 3D Rhythm</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
-  <script type="module" crossorigin src="./assets/index-C6eVa8qq.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Dtt6BqcU.css">
+  <script type="module" crossorigin src="./assets/index-CEeCwRxq.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-PBplCYtG.css">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -77,6 +77,7 @@
             <i>→</i>
           </button>
           <div class="loadbar"><b id="loadFill"></b></div>
+          <p class="best-line" id="bestLine">PERSONAL BEST <b>—</b></p>
           <p class="hint">A S D F · J K L ; — hit keys or touch pads. Headphones recommended.</p>
         </div>
 
@@ -93,6 +94,7 @@
               <li><span>FIELD</span><b>DYNAMIC / 360°</b></li>
               <li><span>KEYS</span><b>4 · 6 · 8</b></li>
               <li><span>JUDGE</span><b>±185 MS</b></li>
+              <li><span>PERSONAL BEST</span><b id="bestScoreLabel">—</b></li>
             </ul>
           </div>
           <div class="credit">CHART SYNTHESIZED FROM THE AUDIO<br>BUILT WITH THREE.JS / WEBGL</div>
@@ -124,7 +126,10 @@
             <h2>RESULT</h2>
             <p class="modal-sub" id="resultTag">CLEARED</p>
           </div>
-          <div id="rank">S</div>
+          <div class="rank-wrap">
+            <div id="rank">S</div>
+            <div id="bestBadge" class="best-badge">NEW BEST</div>
+          </div>
         </div>
         <div class="result-stats">
           <div class="bigstat"><span>SCORE</span><b id="finalScore">0</b></div>
@@ -137,6 +142,7 @@
           <div class="wide"><span>MAX COMBO</span><b id="fMaxCombo">0</b></div>
         </div>
         <div class="result-foot">
+          <div class="best-note" id="bestNote"></div>
           <div id="fcBadge" class="fc">FULL COMBO</div>
           <div class="btnrow">
             <button id="retryBtn" class="cta small">RETRY <i>↻</i></button>
