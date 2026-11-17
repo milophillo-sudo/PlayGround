@@ -1621,13 +1621,22 @@ export class Game {
       this.camera.lookAt(this.cameraLook);
       this.caption('MACE', 'Enough.', 1.4);
       await this.wait(0.7);
-      // the first shell tears into the jammed iron door
-      if (this.interior) this.spawnBurst(new THREE.Vector3(11.2, 1.25, -19.15), { color: 'rgba(255,235,180,1)', edge: 'rgba(255,140,40,0)', size: 1.8, life: 200 });
+      // cut to the jammed door for the first shell
+      if (this.interior) {
+        this.camera.position.set(8.3, 1.75, -16.6);
+        this.cameraLook.set(11.2, 1.0, -19.2);
+        this.camera.lookAt(this.cameraLook);
+        this.spawnBurst(new THREE.Vector3(11.2, 1.25, -19.15), { color: 'rgba(255,235,180,1)', edge: 'rgba(255,140,40,0)', size: 1.8, life: 200 });
+      }
       audio.shot();
       this.addShake(0.34);
       this.cameraShake = 0.22;
       this.caption('', 'The blast hit the iron door. The jack spun loose.', 1.9);
       await this.wait(1.0);
+      // back to Mace and Tim
+      this.camera.position.set(p.x + rx * 2.2 + fx * 0.4, 1.68, p.z + rz * 2.2 + fz * 0.4);
+      this.cameraLook.set(p.x, 1.25, p.z);
+      this.camera.lookAt(this.cameraLook);
       this.caption('TIM', 'I - I -', 1.6);
       await this.wait(1.0);
       if (this.mace) this.spawnBurst(this.mace.group.position.clone().add(new THREE.Vector3(-fx * 0.3, 1.42, -fz * 0.3)), { size: 1.7, life: 180 });
@@ -1733,7 +1742,6 @@ export class Game {
     if (this.mace) this.mace.poseLock = false;
     if (this.jake) this.jake.poseLock = false;
     if (retry === 'escape') {
-      this.escapeAttempts++;
       this.escapeSequence();
     } else {
       this.chaseSequence();
@@ -2237,10 +2245,10 @@ export class Game {
       document.getElementById('app')?.classList.add('hurt');
       setTimeout(() => document.getElementById('app')?.classList.remove('hurt'), 600);
       this.addShake(0.18);
-      this.caption('', 'The blade caught his arm. He kicked anyway.', 2.6);
-    } else {
-      this.caption('TIM', 'Get off me!', 1.8);
+      this.playerDeath('stab', 'chase');
+      return;
     }
+    this.caption('TIM', 'Get off me!', 1.8);
     this.tim.poseLock = true;
     this.tim.parts.legR.hip.rotation.x = -1.5;
     this.tim.parts.legR.knee.rotation.x = 0.2;
@@ -2313,7 +2321,6 @@ export class Game {
     this.chaseHoleCrossed = false;
     this.chaseCrawling = false;
     this.chaseEnding = false;
-    this.chaseHitCooldown = 0;
     this.crouch = false;
     this.crouchAmt = 0;
     this.tim.setCrouch(0);
