@@ -385,9 +385,9 @@ export function introShots(cine) {
   return [
     // 1 — establishing
     {
-      dur: 7.2, fov: 43, fovTo: 51, handheld: 0.018,
-      from: v(74, 9.2, 17), to: v(64.5, 4.2, 9.5),
-      lookFrom: v(58, 5.2, -2), lookTo: v(58.2, 3.8, 0.4),
+      dur: 7.2, fov: 39, fovTo: 47, handheld: 0.018,
+      from: v(96, 3.3, 10.5), to: v(75, 2.7, 4.6),
+      lookFrom: v(58.6, 3.9, 0), lookTo: v(58.5, 3.4, 0),
       roll: -0.012,
       onStart: (c) => {
         c.game.camera.far = 260; c.game.camera.updateProjectionMatrix();

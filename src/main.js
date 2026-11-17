@@ -4,6 +4,8 @@ import { audio } from './audio.js';
 import { UI, sleep } from './ui.js';
 import { Bot, BOT_DEFS, DOWN_TIME } from './bots.js';
 import { Killer } from './killer.js';
+import { TownTitle } from './title.js';
+import { VisibilityCuller } from './culling.js';
 import {
   Cinematic, introShots, jumpscareShots, jakeRevealShots, policeShots
 } from './cinematics.js';
@@ -88,6 +90,13 @@ class Game {
     this.world = new World(this.scene, audio, this.renderer);
     this.world.setupLights();
 
+    this.title = new TownTitle();
+    this.title.resize(window.innerWidth, window.innerHeight);
+
+    // static world occlusion + frustum culling pass
+    this.culler = new VisibilityCuller(this);
+    this.culler.collect();
+
     // flashlight
     this.flash = new THREE.SpotLight(0xfff0cc, 0, 26, Math.PI / 6.5, 0.45, 1.4);
     this.flash.position.set(0.18, -0.1, 0);
@@ -102,7 +111,7 @@ class Game {
     this.camera.add(this.flashGlow);
 
     this.player = {
-      isPlayer: true, name: 'YOU', pos: new THREE.Vector3(-8.1, 0, 5.0), yaw: 0,
+      isPlayer: true, name: 'YOU', pos: new THREE.Vector3(-6.6, 0, 4.4), yaw: Math.PI,
       hp: 100, stamina: 100, battery: 100, crouch: false, sprint: false,
       torchOn: false, downed: false, dead: false, escaped: false, hidden: false,
       hideSpot: null, downTimer: 0, keys: new Set(), crowbar: false, notes: 0,
@@ -145,6 +154,7 @@ class Game {
   onResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
+    this.title?.resize(window.innerWidth, window.innerHeight);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
@@ -294,8 +304,8 @@ class Game {
     this.world.setLighting('lockdown');
     this.world.setBodiesVisible(false);
     this.killer.spawn(34, 0);
-    this.player.pos.set(-8.1, 0, 5.0);
-    this.player.yaw = 0;
+    this.player.pos.set(-6.6, 0, 4.4);
+    this.player.yaw = Math.PI;
     this.camYaw = Math.PI;
     this.pitch = 0;
     this.player.hp = 100;
@@ -422,13 +432,14 @@ Object.assign(Game.prototype, {
     this.time += dt;
 
     if (this.state === 'title') {
-      this._titleAngle += dt * 0.035;
-      this.camera.position.set(66 + Math.sin(this._titleAngle) * 3.5, 5.4 + Math.sin(this._titleAngle * 0.7) * 0.25, 15 + Math.cos(this._titleAngle) * 2.2);
-      this.camera.lookAt(58, 4.2, 0);
-      this.world.update(dt);
-    } else if (this.state === 'cutscene') {
+      this.title.update(dt);
+      this.title.render(this.renderer);
+      return;
+    }
+    if (this.state === 'cutscene') {
       this.cinematic.update(dt);
       this.world.update(dt);
+      this.culler.update(dt);
       this.updateEffects(dt);
     } else if (this.state === 'paused' || this.state === 'win') {
       this.world.update(dt * 0.15);
@@ -437,6 +448,7 @@ Object.assign(Game.prototype, {
     } else {
       this.world.update(dt);
       this.updateGame(dt);
+      this.culler.update(dt);
     }
     this.renderer.render(this.scene, this.camera);
   },
@@ -1022,6 +1034,7 @@ Object.assign(Game.prototype, {
     this.setInputActive(true);
     this.camYaw = (bot.yaw || 0) + Math.PI;
     this.pitch = 0;
+    this.culler?.entries.forEach(e => { e.blocked = 0; });
     UI.setDown(false);
     UI.showHud(true);
     UI.showPov(`${bot.name} · ${reason}`);

@@ -445,7 +445,7 @@ export class World {
     // wing windows
     addWin(-57.86, -12, 2.6, Math.PI / 2);
     addWin(-57.86, -20, 2.6, Math.PI / 2);
-    addWin(57.86, -18, 2.2, -Math.PI / 2);
+    addWin(57.7, -18, 2.2, -Math.PI / 2);
   }
 
   buildDoors() {
@@ -589,6 +589,7 @@ export class World {
     }
     const line = box(0.18, 0.1, 4.3, new THREE.MeshStandardMaterial({ color: 0x3c2a18, roughness: 0.9 }), SCHOOL_E - 0.16, 1.65, 0);
     gate.add(line);
+    gate.userData.cullSkip = true;
     this.scene.add(gate);
     this.exit.group = gate;
     this.exit.shutter = shutter;
@@ -623,6 +624,24 @@ export class World {
     // school facade exterior (visual)
     const brick = new THREE.MeshStandardMaterial({ map: T.brick(), roughness: 0.9 });
     g.add(box(0.6, 7.5, 33, brick, 58.4, 3.7, -13));
+    // flat roof so the school reads as a whole block from the lot
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x262b30, roughness: 0.96 });
+    g.add(box(120, 0.5, 64, roofMat, 0, 7.62, -13));
+    g.add(box(121, 0.16, 65, new THREE.MeshStandardMaterial({ color: 0x333a40, roughness: 0.9 }), 0, 7.92, -13));
+    // lit classroom windows along the east face
+    const winGlass = new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffc27a, emissiveIntensity: 1.5, roughness: 0.4 });
+    const winFrame = new THREE.MeshStandardMaterial({ color: 0x20262a, roughness: 0.7, metalness: 0.2 });
+    for (const z of [-25, -20, -15.5, -6.5, 5.6]) {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.9), winGlass);
+      win.position.set(58.72, 4.6, z);
+      win.rotation.y = Math.PI / 2;
+      g.add(win);
+      g.add(box(0.1, 2.1, 0.1, winFrame, 58.7, 4.6, z - 1.15));
+      g.add(box(0.1, 2.1, 0.1, winFrame, 58.7, 4.6, z + 1.15));
+      g.add(box(0.1, 0.1, 2.4, winFrame, 58.7, 5.62, z));
+      g.add(box(0.1, 0.1, 2.4, winFrame, 58.7, 3.58, z));
+      g.add(box(0.1, 1.9, 0.06, winFrame, 58.71, 4.6, z));
+    }
     const canopy = box(3.2, 0.22, 7, new THREE.MeshStandardMaterial({ color: 0x2f3739, roughness: 0.55, metalness: 0.3 }), 60.2, 3.5, 0);
     g.add(canopy);
     for (const z of [-2.8, 2.8]) g.add(box(0.18, 3.4, 0.18, new THREE.MeshStandardMaterial({ color: 0x2a3032, metalness: 0.6, roughness: 0.4 }), 61.7, 1.7, z));
@@ -870,6 +889,7 @@ export class World {
       this.hemi.intensity = 1.15; this.hemi.color.set(0xdfe8dd);
       this.ambient.intensity = 0.55;
       this.moon.intensity = 1.2;
+      this.scene.background = new THREE.Color(0x9fb3c2);
       this.scene.fog.color.set(0x9aa89a);
       this.scene.fog.density = 0.006;
       this.setFixturePower(true, 0.9);
@@ -878,6 +898,7 @@ export class World {
       this.hemi.intensity = 0.42; this.hemi.color.set(0x7f9cb8);
       this.ambient.intensity = 0.27;
       this.moon.intensity = 0.72;
+      this.scene.background = new THREE.Color(0x05080d);
       this.scene.fog.color.set(0x060a10);
       this.scene.fog.density = 0.032;
       this.setFixturePower(false, 0);
@@ -886,6 +907,7 @@ export class World {
       this.hemi.intensity = 0.4; this.hemi.color.set(0xa8bcc4);
       this.ambient.intensity = 0.22;
       this.moon.intensity = 0.45;
+      this.scene.background = new THREE.Color(0x070b10);
       this.scene.fog.color.set(0x080d12);
       this.scene.fog.density = 0.028;
       this.setFixturePower(true, 0.55);
@@ -893,6 +915,7 @@ export class World {
     } else if (state === 'dark') {
       this.hemi.intensity = 0.12; this.ambient.intensity = 0.06;
       this.moon.intensity = 0.25;
+      this.scene.background = new THREE.Color(0x03060a);
       this.scene.fog.color.set(0x03060a);
       this.scene.fog.density = 0.05;
       this.setFixturePower(false, 0);
@@ -901,6 +924,7 @@ export class World {
       this.hemi.intensity = 0.45; this.hemi.color.set(0x6c88a8);
       this.ambient.intensity = 0.2;
       this.moon.intensity = 1.0; this.moon.position.set(-30, 50, -30);
+      this.scene.background = new THREE.Color(0x0a1424);
       this.scene.fog.color.set(0x060a14);
       this.scene.fog.density = 0.018;
       this.setFixturePower(false, 0);
