@@ -353,6 +353,37 @@ export const T = {
     return tex(c, 1, 1);
   }),
 
+  facadeWindow: () => cached('facadeWindow', () => {
+    const [c, g] = canvas(256, 256);
+    // interior warm glow, cold night reflection
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#243242'); grad.addColorStop(0.55, '#1a2532'); grad.addColorStop(1, '#0e151d');
+    g.fillStyle = grad; g.fillRect(0, 0, 256, 256);
+    const warm = g.createRadialGradient(128, 210, 10, 128, 210, 170);
+    warm.addColorStop(0, 'rgba(255,206,132,.72)'); warm.addColorStop(0.55, 'rgba(210,150,80,.23)'); warm.addColorStop(1, 'rgba(120,90,60,0)');
+    g.fillStyle = warm; g.fillRect(0, 0, 256, 256);
+    // cheap classroom silhouettes: desks and a board
+    g.fillStyle = 'rgba(28,45,38,.72)'; g.fillRect(38, 72, 180, 52);
+    g.fillStyle = 'rgba(210,225,205,.08)'; g.fillRect(44, 78, 168, 40);
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle = 'rgba(12,18,20,.72)';
+      g.fillRect(28 + i * 76, 162, 54, 14);
+      g.fillRect(36 + i * 76, 176, 8, 26);
+      g.fillRect(70 + i * 76, 176, 8, 26);
+    }
+    // glass highlight
+    g.globalAlpha = 0.16; g.fillStyle = '#dcecff';
+    g.beginPath(); g.moveTo(0, 110); g.lineTo(90, 0); g.lineTo(150, 0); g.lineTo(0, 190); g.fill();
+    g.globalAlpha = 1;
+    // frame + mullions
+    g.strokeStyle = '#1a1e20'; g.lineWidth = 16; g.strokeRect(8, 8, 240, 240);
+    g.lineWidth = 9;
+    g.beginPath(); g.moveTo(128, 10); g.lineTo(128, 246); g.moveTo(10, 128); g.lineTo(246, 128); g.stroke();
+    g.strokeStyle = 'rgba(180,195,190,.16)'; g.lineWidth = 2;
+    g.strokeRect(16, 16, 224, 224);
+    return tex(c, 1, 1);
+  }),
+
   brick: () => cached('brick', () => {
     const [c, g] = canvas(512, 512);
     g.fillStyle = '#6b5b4b'; g.fillRect(0, 0, 512, 512);

@@ -186,6 +186,10 @@ export function makePerson(opts = {}) {
     head.add(white);
     const pupil = sphere(0.013, M(0x231b16, 0.2), sd * 0.05, 0.05, 0.121, 1, 1, 0.5);
     head.add(pupil);
+    // remember the authored scale: the blink pass multiplies these instead
+    // of replacing them (replacing turned every eye into a 2m spike)
+    white.userData.baseY = white.scale.y;
+    pupil.userData.baseY = pupil.scale.y;
     eyes.push({ white, pupil });
     const brow = box(0.055, 0.011, 0.012, hairM, sd * 0.05, 0.088, 0.112);
     brow.rotation.z = -sd * 0.12;
@@ -193,15 +197,19 @@ export function makePerson(opts = {}) {
   });
   // mouth (animated)
   const mouth = box(0.066, 0.014, 0.012, M(0x5c2a2b, 0.55), 0, -0.032, 0.113);
+  mouth.userData.baseX = mouth.scale.x;
+  mouth.userData.baseY = mouth.scale.y;
   head.add(mouth);
   const lips = box(0.075, 0.006, 0.013, M(0x8f4a48, 0.6), 0, -0.04, 0.114);
   head.add(lips);
   // hair
   const hairG = new THREE.Group();
   head.add(hairG);
-  const capHair = new THREE.Mesh(new THREE.SphereGeometry(0.133, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), hairM);
-  capHair.scale.set(1.0, 1.12, 1.02);
-  capHair.position.set(0, 0.045, -0.004);
+  // The dome used to sweep below the eye line, which painted a black band
+  // across every character's face. Stop it above the brows.
+  const capHair = new THREE.Mesh(new THREE.SphereGeometry(0.133, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.42), hairM);
+  capHair.scale.set(1.0, 1.1, 1.02);
+  capHair.position.set(0, 0.058, -0.008);
   hairG.add(capHair);
   if (hairStyle === 'long') {
     const back = box(0.22, 0.34, 0.1, hairM, 0, -0.09, -0.09);
@@ -244,7 +252,7 @@ export function makePerson(opts = {}) {
     const crown = new THREE.Mesh(new THREE.SphereGeometry(0.138, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), capM);
     crown.position.set(0, 0.075, 0);
     head.add(crown);
-    const brim = box(0.2, 0.02, 0.13, capM, 0, 0.06, 0.14);
+    const brim = box(0.2, 0.02, 0.11, capM, 0, 0.083, 0.135);
     head.add(brim);
   }
 
@@ -309,8 +317,9 @@ export function makePerson(opts = {}) {
 
   if (name) {
     const lbl = makeLabel(name, { color: '#e7f5ea', bg: 'rgba(3,8,6,.62)', size: 512, h: 96, font: 'bold 38px Courier New' });
-    lbl.position.set(0, 2.05, 0);
-    lbl.scale.set(1.05, 0.26, 1);
+    lbl.position.set(0, 1.96, 0);
+    lbl.scale.set(0.72, 0.18, 1);
+    lbl.userData.isName = true;
     root.add(lbl);
     root.userData.nameSprite = lbl;
   }
@@ -391,12 +400,13 @@ export function animatePerson(model, dt, opts = {}) {
   // talk animation: mouth + nod + eyebrows
   if (a.talk > 0.01) {
     const open = (Math.sin(a.phase * 17) * 0.5 + 0.5) * 0.9 + 0.1;
-    p.mouth.scale.y = 0.3 + open * a.talk * 2.4;
-    p.mouth.scale.x = 1 + a.talk * 0.12;
+    p.mouth.scale.y = p.mouth.userData.baseY * (1 + open * a.talk * 3.2);
+    p.mouth.scale.x = p.mouth.userData.baseX * (1 + a.talk * 0.14);
     p.headPivot.rotation.x = Math.sin(a.phase * 5) * 0.025 * a.talk;
     p.headPivot.rotation.y = Math.sin(a.phase * 1.6) * 0.05 * a.talk;
   } else {
-    p.mouth.scale.y = 0.3 + a.talk * 2;
+    p.mouth.scale.y = p.mouth.userData.baseY;
+    p.mouth.scale.x = p.mouth.userData.baseX;
     p.headPivot.rotation.x *= 0.9;
     p.headPivot.rotation.y *= 0.9;
   }
@@ -413,8 +423,8 @@ export function animatePerson(model, dt, opts = {}) {
   // blink
   const blinkScale = a.blink > 0 ? 0.12 : 1;
   for (const e of p.eyes) {
-    e.white.scale.y = 0.9 * blinkScale;
-    e.pupil.scale.y = 1 * blinkScale;
+    e.white.scale.y = e.white.userData.baseY * blinkScale;
+    e.pupil.scale.y = e.pupil.userData.baseY * blinkScale;
   }
   // panic arms up
   if (panicAmt > 0.1) {

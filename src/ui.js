@@ -275,8 +275,9 @@ export const UI = {
   cineSkip(on) { this.el['cine-skip'].classList.toggle('show', on); },
 
   cineGrade(rows, opts = {}) {
+    clearTimeout(this._cgHide);
     this.el.cgName.innerHTML = `STUDENT: <b>${opts.name || 'JAKE'}</b>`;
-    this.el.cgRows.innerHTML = rows.map(r => `<div class="cg-row"><span class="subject">${r[0]}</span><span class="grade ${r[3] || ''}">${r[1]}</span></div>`).join('');
+    this.el.cgRows.innerHTML = rows.map(r => `<div class="cg-row"><span class="subject">${r[0]}</span>${r[4] ? `<span class="note">${r[4]}</span>` : ''}<span class="grade ${r[3] || ''}">${r[1]}</span></div>`).join('');
     this.el.cgStamp.textContent = opts.stamp || 'Z+';
     this.el.gradeEl.classList.remove('hidden', 'wrong');
     this.el.gradeEl.classList.add('show');
@@ -287,7 +288,11 @@ export const UI = {
     if (rows[i]) rows[i].classList.add('on');
   },
   cineStamp() { this.el.cgStamp.classList.add('on'); },
-  cineGradeHide() { this.el.gradeEl.classList.remove('show'); setTimeout(() => this.el.gradeEl.classList.add('hidden'), 420); },
+  cineGradeHide() {
+    this.el.gradeEl.classList.remove('show');
+    clearTimeout(this._cgHide);
+    this._cgHide = setTimeout(() => this.el.gradeEl.classList.add('hidden'), 420);
+  },
 
   win(grade, stats, line) {
     this.el['win-grade'].textContent = grade;

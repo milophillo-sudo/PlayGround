@@ -105,6 +105,7 @@ export class Bot {
     this.danger.add(this.dangerLabel);
     this.eyeHeight = 1.55;
     this.stepPhase = 0;
+    this._nearCam = false;
   }
 
   get alive() { return !this.dead; }
@@ -130,9 +131,38 @@ export class Bot {
   pathTo(x, z, force = false) {
     if (!force && this.targetPos && Math.abs(this.targetPos.x - x) < 1.2 && Math.abs(this.targetPos.z - z) < 1.2 && this.path.length) return;
     this.targetPos = { x, z };
-    this.path = this.game.world.findPath(this.pos.x, this.pos.z, x, z) || [];
+    let path = this.game.world.findPath(this.pos.x, this.pos.z, x, z);
+    // If the goal is behind a door we have a key for, walk to that door
+    // first instead of grinding against the wall forever. Clearing the
+    // door re-runs normal pathing on the next tick.
+    if (!path || !path.length) path = this.pathViaKeyDoor();
+    this.path = path || [];
     this.pathIndex = 0;
     this.pathTimer = 1.6 + Math.random() * 0.8;
+  }
+
+  pathViaKeyDoor() {
+    const w = this.game.world;
+    let best = null, bd = Infinity;
+    for (const d of w.doors) {
+      if (!d.locked || !this.game.hasKey(d.keyId)) continue;
+      const cx = (d.collider.x1 + d.collider.x2) / 2;
+      const cz = (d.collider.z1 + d.collider.z2) / 2;
+      const dist = (cx - this.pos.x) ** 2 + (cz - this.pos.z) ** 2;
+      if (dist < bd) { bd = dist; best = d; }
+    }
+    if (!best) return null;
+    const cx = (best.collider.x1 + best.collider.x2) / 2;
+    const side = this.pos.z < best.wallZ ? -1 : 1;
+    for (const s of [side, -side]) {
+      const tz = best.wallZ + s * 1.45;
+      const p = w.findPath(this.pos.x, this.pos.z, cx, tz);
+      if (p && p.length) {
+        this.doorTarget = best;
+        return p;
+      }
+    }
+    return null;
   }
 
   stop() {
@@ -200,6 +230,7 @@ export class Bot {
 
   update(dt) {
     if (this.dead) {
+      if (this._nearCam) { this._nearCam = false; this.model.visible = true; }
       this.animate(dt);
       return;
     }
@@ -207,11 +238,13 @@ export class Bot {
     this.talk = Math.max(0, this.talk - dt * 1.2);
     if (this.talkTimer > 0) this.talkTimer -= dt;
     if (this.controlled) {
+      this._nearCam = false;
       this.animate(dt);
       this.updateDanger();
       return;
     }
     if (this.downed) {
+      if (this._nearCam) { this._nearCam = false; this.model.visible = true; }
       this.downTimer -= dt;
       if (this.downTimer <= 0) this.die();
       this.animate(dt);
@@ -219,7 +252,7 @@ export class Bot {
       this.checkRescuers(dt);
       return;
     }
-    if (this.escaped) { this.model.visible = false; this.danger.visible = false; return; }
+    if (this.escaped) { this._nearCam = false; this.model.visible = false; this.danger.visible = false; return; }
 
     const w = this.game.world;
     const killer = this.game.killer;
@@ -372,7 +405,36 @@ export class Bot {
       if (this.stuckTimer > 1.2) { this.path = []; this.pathTimer = 0; this.stuckTimer = 0; }
     }
     this.lastPos.set(this.pos.x, 0, this.pos.z);
+    this.keepOutOfCamera(dt);
     this.animate(dt);
+  }
+
+  // A companion standing on the player's face fills the screen with
+  // elbows. Shove them gently out of a small bubble and hide the model
+  // for the instant they are actually clipping the near plane.
+  keepOutOfCamera(dt) {
+    const playing = this.game.state === 'play' &&
+      !this.controlled && !this.downed && !this.dead && !this.escaped;
+    if (!playing) {
+      if (this._nearCam) { this._nearCam = false; this.model.visible = !this.escaped; }
+      return;
+    }
+    const ap = this.game.getActivePos();
+    let dx = this.pos.x - ap.x, dz = this.pos.z - ap.z;
+    let d = Math.hypot(dx, dz);
+    if (d < 1.35) {
+      if (d < 0.001) { dx = Math.sin(this.yaw); dz = Math.cos(this.yaw); d = 1; }
+      const push = Math.min(1.35 - d, dt * 2.6);
+      this.pos.x += (dx / d) * push;
+      this.pos.z += (dz / d) * push;
+      this.game.world.resolveCircle(this.pos, 0.31);
+      d += push;
+    }
+    const hide = d < 0.82;
+    if (hide !== this._nearCam) {
+      this._nearCam = hide;
+      this.model.visible = !hide;
+    }
   }
 
   updateDanger() {
@@ -452,8 +514,11 @@ export class Bot {
       if (!door.locked) continue;
       const cx = (door.collider.x1 + door.collider.x2) / 2;
       const cz = (door.collider.z1 + door.collider.z2) / 2;
-      if (Math.hypot(cx - this.pos.x, cz - this.pos.z) < 2.1 && this.game.hasKey(door.keyId)) {
+      if (Math.hypot(cx - this.pos.x, cz - this.pos.z) < 2.9 && this.game.hasKey(door.keyId)) {
         door.unlock();
+        this.doorTarget = null;
+        this.path = [];
+        this.pathTimer = 0;
         this.game.onDoorOpened(door, this);
         this.say('door', true);
         this.game.toast(`${this.name} unlocked Door ${door.label}`);
@@ -543,6 +608,19 @@ export class Bot {
       mode, speed: this.speed, talk: this.talk, panic,
       lookAt: this.game.getActivePos ? { x: this.game.getActivePos().x, z: this.game.getActivePos().z } : null
     });
+    // Keep the name tags readable but never let them swallow the screen
+    // when a classmate walks right into the flashlight.
+    const spr = this.model.userData.nameSprite;
+    if (spr) {
+      const cam = this.game.camera.position;
+      const d = Math.hypot(this.pos.x - cam.x, this.pos.z - cam.z);
+      const show = !this.controlled && !this.dead && !this.downed && d > 1.9 && d < 17;
+      spr.visible = show;
+      if (show) {
+        const k = Math.max(0.34, Math.min(0.72, d * 0.055));
+        spr.scale.set(k, k * 0.25, 1);
+      }
+    }
   }
 }
 

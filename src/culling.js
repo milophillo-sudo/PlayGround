@@ -40,7 +40,7 @@ export class VisibilityCuller {
     this.allProps = [];
 
     this.timer = 0;
-    this.interval = 0.22;
+    this.interval = 0.12;
     this.enabled = true;
     this.ready = false;
     this.stats = { props: 0, visible: 0, hiddenArea: 0, hiddenFrustum: 0, areas: 0, areasVisible: 0 };
@@ -272,6 +272,10 @@ export class VisibilityCuller {
     this.lastCamArea = camAreaNow;
 
     cam.updateMatrixWorld();
+    // The renderer refreshes matrixWorldInverse, but this pass runs
+    // before it — and after a POV switch or camera cut that matrix is
+    // still from the old view, which would cull the wrong geometry.
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
     this.proj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.proj);
 
@@ -365,5 +369,16 @@ export class VisibilityCuller {
     this.stats.archHidden = this.arch.reduce((n, e) => n + (e.hidden ? 1 : 0), 0);
     this.stats.areasVisible = seen.length;
     this.stats.areaCount = areaCount;
+
+    // The whole forecourt lives in one scene child, so the per-child
+    // architecture pass cannot cull it. Drive it from the area graph
+    // instead: indoors with the exit shut, the street does not exist.
+    const outdoorGroup = this.game.world.outdoorGroup;
+    if (outdoorGroup) {
+      const outdoorArea = this.areas.find(a => a.id === 'outdoor');
+      const outside = !camArea || camArea.kind === 'outdoor' ||
+        (outdoorArea && outdoorArea.visible);
+      outdoorGroup.visible = !!outside;
+    }
   }
 }

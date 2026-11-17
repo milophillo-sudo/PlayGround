@@ -67,12 +67,18 @@ class Game {
     this.keysPressed = {};
     this.pendingSwitch = 0;
     this.stats = { notes: 0, started: 0, escaped: 0, finished: false };
+    // adaptive resolution: keep the graphics, spend fewer pixels on weak GPUs
+    this.baseDpr = 1;
+    this.renderDpr = 1;
+    this._perfAcc = 0;
+    this._perfN = 0;
   }
 
   init() {
     UI.init();
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    this.baseDpr = this.renderDpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    this.renderer.setPixelRatio(this.baseDpr);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -88,6 +94,8 @@ class Game {
 
     this.clock = new THREE.Clock();
     this.world = new World(this.scene, audio, this.renderer);
+    this.world.viewCamera = this.camera;
+    this.world.updateLightPool(true);
     this.world.setupLights();
 
     this.title = new TownTitle();
@@ -111,7 +119,7 @@ class Game {
     this.camera.add(this.flashGlow);
 
     this.player = {
-      isPlayer: true, name: 'YOU', pos: new THREE.Vector3(-6.6, 0, 4.4), yaw: Math.PI,
+      isPlayer: true, name: 'YOU', pos: new THREE.Vector3(-8.0, 0, 4.9), yaw: Math.PI,
       hp: 100, stamina: 100, battery: 100, crouch: false, sprint: false,
       torchOn: false, downed: false, dead: false, escaped: false, hidden: false,
       hideSpot: null, downTimer: 0, keys: new Set(), crowbar: false, notes: 0,
@@ -164,7 +172,7 @@ class Game {
       const k = e.key.toLowerCase();
       this.keysPressed[k] = true;
       if (k === 'shift') this.sprintHeld = true;
-      if (k === 'control') this.crouchHeld = true;
+      if (k === 'control' || k === 'c') this.crouchHeld = true;
       if (k === 'f' && !e.repeat) this.toggleTorch();
       if (k === 'e' && !e.repeat) this.onInteractPress();
       if (k === 'm' && !e.repeat) {
@@ -179,13 +187,13 @@ class Game {
         e.preventDefault();
         this.cinematic.skip();
       }
-      if (['w', 'a', 's', 'd', ' ', 'shift', 'control', 'e', 'f'].includes(k)) e.preventDefault?.();
+      if (['w', 'a', 's', 'd', ' ', 'shift', 'control', 'c', 'e', 'f'].includes(k)) e.preventDefault?.();
     };
     const up = (e) => {
       const k = e.key.toLowerCase();
       this.keysPressed[k] = false;
       if (k === 'shift') this.sprintHeld = false;
-      if (k === 'control') this.crouchHeld = false;
+      if (k === 'control' || k === 'c') this.crouchHeld = false;
       if (k === 'e') { this.rescueHold = 0; this.rescueTarget = null; }
     };
     window.addEventListener('keydown', down);
@@ -199,14 +207,21 @@ class Game {
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== this.canvas) return;
       if (this.state !== 'play' || this.noteOpen || this.paused) return;
+      // Browsers deliver one bogus mousemove (often hundreds of pixels) the
+      // moment pointer lock engages. Swallow it, or the camera snaps to the
+      // ceiling as soon as the cutscene hands over control.
+      if (this._plockFresh) { this._plockFresh = false; return; }
       const s = 0.00215;
-      this.camYaw -= e.movementX * s;
-      this.pitch -= e.movementY * s * 0.92;
+      const mx = Math.max(-180, Math.min(180, e.movementX || 0));
+      const my = Math.max(-180, Math.min(180, e.movementY || 0));
+      this.camYaw -= mx * s;
+      this.pitch -= my * s * 0.92;
       this.pitch = clamp(this.pitch, -1.35, 1.35);
     });
     document.addEventListener('pointerlockchange', () => {
-      if (document.pointerLockElement === this.canvas && this.state === 'play') {
-        UI.prompt(null);
+      if (document.pointerLockElement === this.canvas) {
+        this._plockFresh = true;
+        if (this.state === 'play') UI.prompt(null);
       }
     });
 
@@ -304,10 +319,13 @@ class Game {
     this.world.setLighting('lockdown');
     this.world.setBodiesVisible(false);
     this.killer.spawn(34, 0);
-    this.player.pos.set(-6.6, 0, 4.4);
-    this.player.yaw = Math.PI;
-    this.camYaw = Math.PI;
-    this.pitch = 0;
+    // Face west down the corridor: Room 101 and its key sit ahead-left,
+    // and the hall reads as one long shot instead of a door filling the
+    // screen. x = -5 leaves room to see the objective glow and the group.
+    this.player.pos.set(-5.0, 0, -1.2);
+    this.player.yaw = Math.PI / 2;
+    this.camYaw = Math.PI / 2;
+    this.pitch = -0.02;
     this.player.hp = 100;
     this.player.stamina = 100;
     this.player.battery = 100;
@@ -318,8 +336,10 @@ class Game {
     this.bots.forEach((b, i) => {
       b.controlled = false;
       b.model.visible = true;
-      b.pos.set([-12.8, -3.4, -12.8][i % 3], 0, [5.3, 5.3, 9.3][i % 3]);
-      b.yaw = 0;
+      // Spread the group down the hall. Spawning them on top of the player
+      // put elbows and backpacks through the first-person camera.
+      b.pos.set([-13.2, -15.4, -11.2][i % 3], 0, [0.9, -1.3, -0.2][i % 3]);
+      b.yaw = -Math.PI / 2;
       b.hp = 100;
       b.stamina = 100;
       b.downed = false;
@@ -426,10 +446,32 @@ export { Game };
 
 Object.assign(Game.prototype, {
   // ── main loop ───────────────────────────────────────────────
+  trackPerf(rawDt) {
+    if (!rawDt || rawDt < 0.0001) return;
+    this._perfAcc += rawDt;
+    this._perfN++;
+    if (this._perfAcc < 1.6) return;
+    const fps = this._perfN / this._perfAcc;
+    this._perfAcc = 0;
+    this._perfN = 0;
+    const base = this.baseDpr || 1;
+    if (fps < 44 && this.renderDpr > 0.86) {
+      this.renderDpr = Math.max(0.85, this.renderDpr - 0.15);
+      this.renderer.setPixelRatio(this.renderDpr);
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    } else if (fps > 57 && this.renderDpr < base) {
+      this.renderDpr = Math.min(base, this.renderDpr + 0.1);
+      this.renderer.setPixelRatio(this.renderDpr);
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+  },
+
   animate() {
     requestAnimationFrame(() => this.animate());
-    const dt = Math.min(0.05, this.clock.getDelta());
+    const raw = this.clock.getDelta();
+    const dt = Math.min(0.05, raw);
     this.time += dt;
+    this.trackPerf(raw);
 
     if (this.state === 'title') {
       this.title.update(dt);
@@ -503,7 +545,7 @@ Object.assign(Game.prototype, {
     const len = Math.hypot(f, s);
     if (len > 1) { f /= len; s /= len; }
     const moving = len > 0.06;
-    const crouch = this.crouchHeld || e.crouch;
+    const crouch = this.crouchHeld;
     const wantSprint = this.sprintHeld && moving && !crouch && e.stamina > 1;
     const sprint = wantSprint;
     e.crouch = crouch;
@@ -529,6 +571,7 @@ Object.assign(Game.prototype, {
       if (e.stepPhase > Math.PI) {
         e.stepPhase = 0;
         audio.footstep(sprint, crouch);
+        this._stepDip = 1;
         this.noise(e.pos.x, e.pos.z, sprint ? 13 : crouch ? 3.5 : 6.5);
       }
     } else {
@@ -552,32 +595,57 @@ Object.assign(Game.prototype, {
   updateCamera(dt) {
     const e = this.getControl() || this.player;
     const down = this.state === 'down' || e.downed;
-    let eye = e.crouch ? 1.08 : 1.64;
-    if (e.hidden) eye = 1.35;
-    if (down) eye = 0.46;
+    let targetEye = e.crouch ? 1.08 : 1.64;
+    if (e.hidden) targetEye = 1.35;
+    if (down) targetEye = 0.46;
+    // Smooth the crouch/stand transition instead of snapping the camera.
+    this._eye = this._eye == null ? targetEye : this._eye + (targetEye - this._eye) * Math.min(1, dt * 9);
+    const eye = this._eye;
+
     const speedBob = e.speed || 0;
-    this._bob = (this._bob || 0) + dt * speedBob * 1.9;
-    const bob = speedBob > 0.2 ? Math.sin(this._bob) * 0.035 * (e.sprint ? 1.6 : 1) : Math.sin(this.time * 1.6) * 0.006;
-    let sx = 0, sy = 0;
+    this._bob = (this._bob || 0) + dt * (speedBob * 3.1 + 0.5);
+    const moving = speedBob > 0.2;
+    const amp = moving ? (e.sprint ? 0.05 : 0.032) * (e.crouch ? 0.55 : 1) : 0.006;
+    const bob = moving
+      ? Math.sin(this._bob) * amp
+      : Math.sin(this.time * 1.6) * 0.006;
+    // small lateral weight shift, plus a recoil dip on each footfall
+    const sway = moving ? Math.sin(this._bob * 0.5) * 0.018 * (e.sprint ? 1.4 : 1) : 0;
+    this._stepDip = Math.max(0, (this._stepDip || 0) - dt * 3.5);
+    const dip = -Math.sin(this._stepDip * Math.PI) * 0.018;
+
+    let sx = sway, sy = bob + dip;
     if (this.shakeTimer > 0) {
       this.shakeTimer -= dt;
-      sx = Math.sin(this.time * 53) * this.shakeLevel * 0.12;
-      sy = Math.cos(this.time * 61) * this.shakeLevel * 0.12;
+      sx += Math.sin(this.time * 53) * this.shakeLevel * 0.12;
+      sy += Math.cos(this.time * 61) * this.shakeLevel * 0.12;
       this.shakeLevel = Math.max(0, this.shakeLevel - dt * 1.4);
     }
     const p = e.pos;
-    this.camera.position.set(p.x + sx, eye + bob + sy, p.z + sx * 0.7);
+    this.camera.position.set(p.x + sx, eye + sy + (down ? 0 : 0), p.z + sx * 0.7);
+
+    // lean into turns and strafes, but keep the horizon readable
+    let dyaw = this.camYaw - (this._prevCamYaw == null ? this.camYaw : this._prevCamYaw);
+    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    this._prevCamYaw = this.camYaw;
+    const rollTarget = Math.max(-1, Math.min(1, dyaw / Math.max(dt, 0.001) * 0.05)) * -0.05;
+    this._roll = (this._roll || 0) + (rollTarget - (this._roll || 0)) * Math.min(1, dt * 7);
+
     this.camera.rotation.order = 'YXZ';
     if (down) {
       this.camera.rotation.x = -0.22 + this.pitch * 0.25;
       this.camera.rotation.y = this.camYaw + Math.sin(this.time * 0.35) * 0.12;
       this.camera.rotation.z = 0.63 + Math.sin(this.time * 0.6) * 0.02;
     } else {
-      this.camera.rotation.x = this.pitch + sy * 0.18;
-      this.camera.rotation.y = this.camYaw + sx * 0.1;
-      this.camera.rotation.z = sx * 0.4 + (e.hidden ? 0.02 : 0);
+      this.camera.rotation.x = this.pitch + sy * 0.14 + (e.sprint ? -0.02 : 0);
+      this.camera.rotation.y = this.camYaw + sx * 0.12;
+      this.camera.rotation.z = sx * 0.35 + this._roll + (e.hidden ? 0.02 : 0);
     }
-    this.camera.fov = e.sprint ? 78 : 74;
+
+    const targetFov = down ? 70 : e.sprint ? 79 : e.crouch ? 72 : 74;
+    this._fov = this._fov == null ? targetFov : this._fov + (targetFov - this._fov) * Math.min(1, dt * 6);
+    this.camera.fov = this._fov;
     this.camera.updateProjectionMatrix();
     this.flash.intensity = (e.torchOn || this.player.torchOn) && this.player.battery > 0 ? 7.2 : 0;
     this.flashGlow.intensity = this.flash.intensity > 0 ? 0.35 : 0;

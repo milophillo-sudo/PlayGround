@@ -161,32 +161,32 @@ function commonRoom(world, room) {
   add(world, makeFireExtinguisher(), x1 + 0.5, 0.02, z1 + 0.5);
   add(world, makeTrash(), x2 - 0.7, 0, z1 + 0.7);
   add(world, makePlant(), x2 - 0.7, 0, z2 - 0.8);
-  // posters on side walls
-  poster(world, Math.floor(Math.random() * 10), x1 + 0.02, 1.9, (z1 + z2) / 2 + 2, Math.PI / 2);
-  poster(world, Math.floor(Math.random() * 10), x2 - 0.02, 1.75, (z1 + z2) / 2 - 1, -Math.PI / 2);
+  // posters on side walls (offset past the 0.24m wall skin)
+  poster(world, Math.floor(Math.random() * 10), x1 + 0.14, 1.9, (z1 + z2) / 2 + 2, Math.PI / 2);
+  poster(world, Math.floor(Math.random() * 10), x2 - 0.14, 1.75, (z1 + z2) / 2 - 1, -Math.PI / 2);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 3, 4);
 }
 
 function decorateClass101(world, r) {
   const { x1, x2, z1, z2 } = r;
   commonRoom(world, r);
-  // blackboard on south wall
+  // blackboard on south wall (in front of the 0.24m wall skin)
   const board = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 1.9), new THREE.MeshStandardMaterial({ map: T.blackboard(0), roughness: 0.95 }));
-  add(world, board, (x1 + x2) / 2, 1.8, z2 - 0.06, Math.PI);
-  add(world, box(7.4, 0.08, 0.14, C(0x4a3a28, 0.8), (x1 + x2) / 2, 0.82, z2 - 0.1));
-  add(world, box(7.4, 0.08, 0.14, C(0x4a3a28, 0.8), (x1 + x2) / 2, 2.78, z2 - 0.1));
-  for (let i = 0; i < 3; i++) add(world, box(0.06, 0.06, 0.06, C(0xe2dcc8, 0.9), x1 + 3 + i * 0.25, 0.87, z2 - 0.16));
+  add(world, board, (x1 + x2) / 2, 1.8, z2 - 0.18, Math.PI);
+  add(world, box(7.4, 0.08, 0.14, C(0x4a3a28, 0.8), (x1 + x2) / 2, 0.82, z2 - 0.22));
+  add(world, box(7.4, 0.08, 0.14, C(0x4a3a28, 0.8), (x1 + x2) / 2, 2.78, z2 - 0.22));
+  for (let i = 0; i < 3; i++) add(world, box(0.06, 0.06, 0.06, C(0xe2dcc8, 0.9), x1 + 3 + i * 0.25, 0.87, z2 - 0.26));
   // teacher desk
   const td = makeTeacherDesk(); add(world, td, (x1 + x2) / 2, 0, z2 - 2.4, Math.PI);
   collide(world, (x1 + x2) / 2, z2 - 2.4, 1.9, 0.9);
-  // desks rows facing board
-  deskGrid(world, [x1 + 2.4, x1 + 5.0, x2 - 2.4], [z1 + 3.8, z1 + 6.2, z1 + 8.6], Math.PI);
+  // desks rows facing the board (+z)
+  deskGrid(world, [x1 + 2.4, x1 + 5.0, x2 - 2.4], [z1 + 3.8, z1 + 6.2, z1 + 8.6], 0);
   // player's and Jake's desks near the back
-  const pd = makeDesk(); add(world, pd, -8.1, 0, z1 + 2.0, Math.PI);
-  const pc = makeChair(); add(world, pc, -8.1, 0, z1 + 1.3, Math.PI);
+  const pd = makeDesk(); add(world, pd, -8.1, 0, z1 + 2.0, 0);
+  const pc = makeChair(); add(world, pc, -8.1, 0, z1 + 1.3, 0);
   collide(world, -8.1, z1 + 2.0, 1.2, 1.2);
-  const jd = makeDesk(); add(world, jd, -5.7, 0, z1 + 2.0, Math.PI);
-  const jc = makeChair(); add(world, jc, -5.7, 0, z1 + 1.3, Math.PI);
+  const jd = makeDesk(); add(world, jd, -5.7, 0, z1 + 2.0, 0);
+  const jc = makeChair(); add(world, jc, -5.7, 0, z1 + 1.3, 0);
   collide(world, -5.7, z1 + 2.0, 1.2, 1.2);
   // backpack at player's desk
   add(world, box(0.32, 0.42, 0.18, C(0x6b3a3a, 0.9), -8.45, 0.25, z1 + 1.1, 0.3));
@@ -724,9 +724,7 @@ function decorateDarkroom(world, r) {
   }
   add(world, makeCabinet(), x2 - 0.7, 0, z1 + 1.2, -Math.PI / 2);
   // red light
-  const red = new THREE.PointLight(0xff2a2a, 5, 9, 2);
-  red.position.set((x1 + x2) / 2, 2.8, (z1 + z2) / 2);
-  world.scene.add(red);
+  const red = world.addPointSource(0xff2a2a, 5, 9, (x1 + x2) / 2, 2.8, (z1 + z2) / 2);
   const bulb = sphere(0.1, new THREE.MeshBasicMaterial({ color: 0xff3a3a }), (x1 + x2) / 2, 2.9, (z1 + z2) / 2);
   add(world, bulb, bulb.position.x, 2.9, bulb.position.z);
   add(world, makeGlow('#ff3333', 2.0), (x1 + x2) / 2, 2.85, (z1 + z2) / 2);
@@ -925,7 +923,7 @@ export function decorateOutdoor(world) {
   world.addCollider(125.8, 5.4, 130.2, 7.6, { type: 'car' });
   const lightbar = box(1.0, 0.12, 0.28, new THREE.MeshBasicMaterial({ color: 0x3a5bff }), 128, 1.5, 6.5);
   world.scene.add(lightbar);
-  const blue = new THREE.PointLight(0x3a6bff, 6, 12, 2); blue.position.set(128, 1.6, 6.5); world.scene.add(blue);
+  const blue = world.addPointSource(0x3a6bff, 6, 12, 128, 1.6, 6.5);
   world.policeBlue = blue;
   // trees
   for (const [x, z] of [[63, 10.5], [76, -10.5], [96, 10.5], [116, -10.5]]) {

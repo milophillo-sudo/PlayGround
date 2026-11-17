@@ -54,7 +54,9 @@ export class Cinematic {
     this.group.add(model);
     const actor = {
       model, kind: 'person', x, z, yaw, mode: 'idle', speed: 0, talk: 0,
-      talkT: 0, panic: 0, seated: false, gesture: 0, baseX: x, baseZ: z
+      talkT: 0, panic: 0, seated: false, gesture: 0, baseX: x, baseZ: z,
+      quizStyle: null, quizT: 0, quizPhase: Math.random() * 6, quizLook: null,
+      reaction: 0, reactionTimer: 0
     };
     this.actors.push(actor);
     return actor;
@@ -129,15 +131,17 @@ export class Cinematic {
     this.active = true;
     this._ended = false;
     this.name = name;
+    // clear before building: shot builders create actors/lights as a side
+    // effect, and clearing afterwards threw every cinematic performer away
+    this.actors = [];
+    this.lights = [];
+    this.extra = [];
+    while (this.group.children.length) this.group.remove(this.group.children[0]);
     this.shots = buildShots();
     this.index = 0;
     this.shotT = 0;
     this.total = 0;
     this.flags = 0;
-    this.actors = [];
-    this.lights = [];
-    this.extra = [];
-    while (this.group.children.length) this.group.remove(this.group.children[0]);
     this.group.visible = true;
 
     this.game.state = 'cutscene';
@@ -288,12 +292,19 @@ export class Cinematic {
   }
 
   updateActors(dt, shot) {
+    // find whoever is speaking so the class can turn and stare
+    let speaker = null;
+    for (const a of this.actors) {
+      if (a.kind === 'person' && a.talkT > 0) { speaker = a; break; }
+    }
     for (const a of this.actors) {
       if (a.kind === 'person') {
         if (a.talkT > 0) {
           a.talkT -= dt;
           a.talk = Math.max(0, a.talkT > 0 ? 1 : 0);
         } else a.talk = Math.max(0, a.talk - dt * 3);
+        a.quizLook = speaker && speaker !== a ? speaker : null;
+        if (a.reaction > 0) a.reaction = Math.max(0, a.reaction - dt * 0.55);
         animatePerson(a.model, dt, {
           mode: a.mode, speed: a.speed, talk: a.talk, panic: a.panic,
           gesture: a.gesture, crouch: a.seated ? 0.32 : 0
@@ -309,13 +320,183 @@ export class Cinematic {
             p.kneeR.rotation.x = 1.45;
           }
         }
+        if (a.quizStyle) quizPose(a, dt);
         if (a.pose) a.pose(a.model, this.total);
-        if (a.talkT > 0) a.model.position.x = a.baseX + Math.sin(this.total * 2.5) * 0.008;
+        // Do not snap the model back to its spawn point while talking:
+        // several shots walk actors across the set, and the old "talk
+        // bob" reset them to baseX the moment a line fired.
       } else if (a.kind === 'killer') {
         animateKiller(a.model, dt, a.mode, this.total);
         if (a.pose) a.pose(a.model, this.total);
       }
     }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Pop-quiz classroom acting — every seated student gets a job
+// ─────────────────────────────────────────────────────────────
+function quizPose(a, dt) {
+  const p = a.model.userData.parts;
+  if (!p) return;
+  a.quizT = (a.quizT || 0) + dt;
+  const t = a.quizT + (a.quizPhase || 0);
+  const style = a.quizStyle;
+
+  // start from a relaxed seated baseline, then apply the student's bit
+  p.torso.rotation.x = 0.04;
+  p.torso.rotation.z = Math.sin(t * 0.8) * 0.018;
+  p.headPivot.rotation.x = 0;
+  p.headPivot.rotation.y = 0;
+  p.headPivot.rotation.z = 0;
+  p.armL.rotation.z = -0.07;
+  p.armR.rotation.z = 0.07;
+  p.handL.rotation.set(0, 0, 0);
+  p.handR.rotation.set(0, 0, 0);
+
+  const jitter = Math.sin(t * 13.5);
+  const slow = Math.sin(t * 1.7);
+
+  if (style === 'jake') {
+    // Jake: sweating, leg bouncing, pencil tapping, occasional soul exit
+    const r = a.reaction || 0;
+    if (r > 0.55) {
+      // full flinch: recoil, hands up, head back
+      p.torso.rotation.x = -0.22;
+      p.headPivot.rotation.x = -0.28;
+      p.headPivot.rotation.z = Math.sin(t * 24) * 0.08;
+      p.armL.rotation.x = -2.35; p.armR.rotation.x = -2.35;
+      p.armL.rotation.z = -0.75; p.armR.rotation.z = 0.75;
+      p.elbowL.rotation.x = -0.55; p.elbowR.rotation.x = -0.55;
+      p.legL.rotation.x = -1.5; p.legR.rotation.x = -1.5;
+    } else if (r > 0.12) {
+      // the slow slump of a student receiving a Z+
+      p.torso.rotation.x = 0.32;
+      p.headPivot.rotation.x = 0.72;
+      p.headPivot.rotation.z = 0.18;
+      p.armL.rotation.x = -0.35; p.armR.rotation.x = -0.35;
+      p.elbowL.rotation.x = -0.95; p.elbowR.rotation.x = -0.95;
+      p.legL.rotation.x = -1.28; p.legR.rotation.x = -1.28;
+    } else {
+      p.torso.rotation.x = 0.13 + slow * 0.03;
+      p.torso.rotation.z = Math.sin(t * 3.1) * 0.05;
+      p.headPivot.rotation.x = 0.22 + Math.sin(t * 1.3) * 0.08;
+      p.headPivot.rotation.y = Math.sin(t * 2.6) * 0.34 + Math.sin(t * 7.3) * 0.05;
+      p.headPivot.rotation.z = Math.sin(t * 4.1) * 0.04;
+      // right hand tapping a pencil at roughly 180 bpm
+      p.armR.rotation.x = -0.98;
+      p.armR.rotation.z = 0.24 + Math.max(0, jitter) * 0.05;
+      p.elbowR.rotation.x = -0.42;
+      p.handR.rotation.z = jitter * 0.22;
+      // left hand death-gripping the desk
+      p.armL.rotation.x = -0.92;
+      p.armL.rotation.z = -0.2;
+      p.elbowL.rotation.x = -0.36;
+      // bouncing leg, because panic has to go somewhere
+      const bounce = Math.max(0, Math.sin(t * 15.5));
+      p.legL.rotation.x = -1.35 + bounce * 0.16;
+      p.legR.rotation.x = -1.35 - bounce * 0.06;
+      p.kneeL.rotation.x = 1.42 + bounce * 0.12;
+      p.kneeR.rotation.x = 1.42;
+      p.hips.position.y = 0.61 + bounce * 0.008;
+    }
+  } else if (style === 'smug') {
+    // Maya: leaned back, arms crossed, absolutely not stressed
+    p.torso.rotation.x = -0.12;
+    p.headPivot.rotation.x = -0.08;
+    p.headPivot.rotation.z = 0.16 + slow * 0.03;
+    p.armL.rotation.x = -1.15;
+    p.armR.rotation.x = -1.05;
+    p.armL.rotation.z = -0.9;
+    p.armR.rotation.z = 0.9;
+    p.elbowL.rotation.x = -1.45;
+    p.elbowR.rotation.x = -1.38;
+    p.legL.rotation.x = -1.2;
+    p.legR.rotation.x = -1.32;
+    p.legR.rotation.z = 0.08 + Math.sin(t * 2.2) * 0.02;
+  } else if (style === 'sleep') {
+    // Devon: asleep with the confidence of someone who studied
+    const r = a.reaction || 0;
+    const jolt = r > 0.2 ? Math.sin(Math.min(1, r) * Math.PI) : 0;
+    p.torso.rotation.x = 0.22 - jolt * 0.55;
+    p.torso.rotation.z = 0.1;
+    p.headPivot.rotation.x = 0.45 - jolt * 0.75;
+    p.headPivot.rotation.z = 0.42 - jolt * 0.5;
+    p.armL.rotation.x = -0.85;
+    p.armL.rotation.z = -0.35;
+    p.elbowL.rotation.x = -1.2;
+    p.armR.rotation.x = -0.35;
+    p.elbowR.rotation.x = -0.9;
+    p.headPivot.position.y = 0.64 + Math.sin(t * 0.9) * 0.012;
+    p.legL.rotation.x = -1.32;
+    p.legR.rotation.x = -1.34;
+  } else if (style === 'whisper') {
+    // leaning over to gossip during a graded assessment
+    p.torso.rotation.x = 0.12;
+    p.torso.rotation.z = 0.12 + Math.sin(t * 1.1) * 0.04;
+    p.headPivot.rotation.x = 0.1;
+    p.headPivot.rotation.y = 0.62;
+    p.headPivot.rotation.z = 0.1;
+    p.armL.rotation.x = -1.5;
+    p.armL.rotation.z = -0.5;
+    p.elbowL.rotation.x = -1.7;
+    p.handL.rotation.z = 0.4;
+    p.armR.rotation.x = -0.75;
+    p.elbowR.rotation.x = -1.0;
+    p.legL.rotation.x = -1.28;
+    p.legR.rotation.x = -1.28;
+  } else if (style === 'hand') {
+    // the one kid who knows the answer and needs everyone to know
+    p.torso.rotation.x = -0.05 + Math.sin(t * 2.4) * 0.03;
+    p.headPivot.rotation.x = -0.12;
+    p.headPivot.rotation.z = -0.08;
+    p.armL.rotation.x = -2.55 + Math.sin(t * 8.5) * 0.12;
+    p.armL.rotation.z = -0.28;
+    p.elbowL.rotation.x = -0.2;
+    p.handL.rotation.z = Math.sin(t * 9) * 0.3;
+    p.armR.rotation.x = -0.55;
+    p.elbowR.rotation.x = -0.9;
+    p.legL.rotation.x = -1.3;
+    p.legR.rotation.x = -1.3;
+  } else if (style === 'doodle') {
+    // drawing a tiny axe instead of answering question four
+    p.torso.rotation.x = 0.22;
+    p.headPivot.rotation.x = 0.5;
+    p.headPivot.rotation.z = Math.sin(t * 0.9) * 0.08;
+    p.armR.rotation.x = -0.98;
+    p.armR.rotation.z = 0.35;
+    p.elbowR.rotation.x = -0.34;
+    p.handR.rotation.x = -0.2;
+    p.armL.rotation.x = -0.9;
+    p.armL.rotation.z = -0.15;
+    p.elbowL.rotation.x = -0.3;
+    p.legL.rotation.x = -1.3;
+    p.legR.rotation.x = -1.3 - Math.sin(t * 1.4) * 0.03;
+  } else {
+    // write / default: nose down, pencil moving, paper slowly dying
+    const scribble = Math.sin(t * 8.2) + Math.sin(t * 13.7) * 0.35;
+    p.torso.rotation.x = 0.18;
+    p.headPivot.rotation.x = 0.42;
+    p.headPivot.rotation.z = Math.sin(t * 1.2) * 0.05;
+    p.armR.rotation.x = -0.98;
+    p.armR.rotation.z = 0.28;
+    p.elbowR.rotation.x = -0.38;
+    p.handR.rotation.z = scribble * 0.16;
+    p.armL.rotation.x = -0.9;
+    p.armL.rotation.z = -0.16;
+    p.elbowL.rotation.x = -0.32;
+    p.legL.rotation.x = -1.32;
+    p.legR.rotation.x = -1.32;
+  }
+
+  // heads turn to whoever is talking, unless you are asleep or mid-flinch
+  if (a.quizLook && style !== 'sleep' && (a.reaction || 0) < 0.4) {
+    const tx = a.quizLook.model.position.x;
+    const tz = a.quizLook.model.position.z;
+    let rel = Math.atan2(tx - a.model.position.x, tz - a.model.position.z) - a.model.rotation.y;
+    while (rel > Math.PI) rel -= Math.PI * 2;
+    while (rel < -Math.PI) rel += Math.PI * 2;
+    if (style !== 'whisper' && style !== 'hand') p.headPivot.rotation.y = Math.max(-0.85, Math.min(0.85, rel)) * 0.72;
   }
 }
 
@@ -332,39 +513,53 @@ export function introShots(cine) {
     shirt: 0x6a5a42, pants: 0x30343a, hair: 0x8a8478, hairStyle: 'short',
     skin: 0xd9b49b, height: 1.7, tie: 0x7a2c36, glasses: true, female: true
   }, -9.3, 16.1, Math.PI);
+  // Fake a warm classroom practical so the students are not lit only by
+  // the cold global hemisphere.
+  cine.light(0xffd8a2, 10, 15, -8, 3.05, 9.5);
+  cine.light(0xffe6c0, 5, 10, -4.6, 2.6, 12.2);
 
   const jake = cine.person({
     shirt: 0x2a3550, pants: 0x22252d, hair: 0x241a14, hairStyle: 'short',
     skin: 0xc79b7d, height: 1.82, backpack: 0x3d4f64
   }, -4.4, 10.9, 0);
   jake.seated = true;
+  jake.quizStyle = 'jake';
 
   const maya = cine.person({
     shirt: 0x5b3d78, pants: 0x24242c, hair: 0x1f1713, hairStyle: 'pony',
     skin: 0xb98768, height: 1.66, female: true, backpack: 0x7a3b4a
   }, -11.6, 8.5, 0);
   maya.seated = true;
+  maya.quizStyle = 'smug';
 
   const devon = cine.person({
     shirt: 0x3f6b4f, pants: 0x2c3340, hair: 0x402b1d, hairStyle: 'curly',
     skin: 0x8a5b3e, height: 1.72, backpack: 0x3e4f6b, cap: 0x2b3b55
   }, -11.6, 6.1, 0);
   devon.seated = true;
+  devon.quizStyle = 'sleep';
 
   const priya = cine.person({
     shirt: 0x7a343e, pants: 0x262b33, hair: 0x241a14, hairStyle: 'bun',
     skin: 0xa9724f, height: 1.6, female: true, glasses: true
   }, -9.0, 10.9, 0);
   priya.seated = true;
+  priya.quizStyle = 'write';
 
   const extras = [];
+  const extraStyles = ['doodle', 'whisper', 'hand', 'write', 'sleep'];
+  // Fill the five free desks in the 3x3 grid once Jake, Maya, Devon and
+  // Priya have taken theirs — otherwise students end up sitting in aisles.
+  const extraSpots = [[-11.6, 10.9], [-9.0, 6.1], [-9.0, 8.5], [-4.4, 6.1], [-4.4, 8.5]];
   for (let i = 0; i < 5; i++) {
     const a = cine.person({
       shirt: [0x445d46, 0x6b5a3a, 0x4d4660, 0x2f4f52, 0x7a6a58][i],
       pants: 0x2a3040, hair: [0x241a14, 0x3a2618, 0x151210][i % 3],
       skin: [0xe4c3a8, 0x8a5b3e, 0xd9b49b][i % 3], height: 1.58 + i * 0.04
-    }, -10.5 + i * 1.65, 6.1 + (i % 3) * 2.4, 0);
+    }, extraSpots[i][0], extraSpots[i][1], 0);
     a.seated = true;
+    a.quizStyle = extraStyles[i];
+    a.model.rotation.y = (i % 2 ? 0.16 : -0.12);
     extras.push(a);
   }
 
@@ -386,8 +581,8 @@ export function introShots(cine) {
     // 1 — establishing
     {
       dur: 7.2, fov: 39, fovTo: 47, handheld: 0.018,
-      from: v(96, 3.3, 10.5), to: v(75, 2.7, 4.6),
-      lookFrom: v(58.6, 3.9, 0), lookTo: v(58.5, 3.4, 0),
+      from: v(110, 7.2, 30), to: v(90, 4.4, 16),
+      lookFrom: v(58.6, 4.6, 0), lookTo: v(58.5, 3.6, 0),
       roll: -0.012,
       onStart: (c) => {
         c.game.camera.far = 260; c.game.camera.updateProjectionMatrix();
@@ -405,8 +600,8 @@ export function introShots(cine) {
     // 2 — classroom push-in
     {
       dur: 8.4, fov: 58, fovTo: 48, handheld: 0.02, rollDrift: 0.004,
-      from: v(-8.0, 1.62, 4.15), to: v(-8.0, 1.5, 8.9),
-      lookFrom: v(-8.7, 1.4, 18), lookTo: v(-6.0, 1.25, 14.2),
+      from: v(-6.7, 1.72, 3.95), to: v(-6.7, 1.56, 8.6),
+      lookFrom: v(-8.9, 1.5, 18), lookTo: v(-6.2, 1.22, 14.6),
       onStart: (c) => {
         c.game.audio?.startAmbience?.();
         c.game.audio?.setTension(0.06);
@@ -420,16 +615,45 @@ export function introShots(cine) {
       onEnd: () => UI.cineHideCard()
     },
 
+    // 2b — the class reacts, in real time, to question four
+    {
+      dur: 6.4, fov: 47, fovTo: 38, handheld: 0.016, rollDrift: 0.003,
+      from: v(-2.6, 1.78, 14.75), to: v(-11.3, 1.6, 14.35),
+      lookFrom: v(-5.2, 1.16, 8.4), lookTo: v(-9.3, 1.06, 7.8),
+      onStart: (c) => {
+        // the whole row leans in / wakes up for the gossip
+        for (const a of c.actors) if (a.quizStyle) a.reaction = Math.max(a.reaction, 0.18);
+      },
+      cards: [{ at: 0.15, kicker: 'MILLBROOK HIGH — QUESTION 4', title: 'NO PRESSURE', align: 'center', dur: 2.0 }],
+      lines: [
+        { at: 0.4, who: 'PRIYA', text: 'Psst. Number four. Is it the mitochondria?', actor: priya, dur: 2.5 },
+        { at: 3.1, who: 'DEVON', text: 'Zzz... chicken nuggets... extra credit...', actor: devon, dur: 2.4 },
+        { at: 5.55, who: 'MAYA', text: 'Jake, you look like a Q.', actor: maya, dur: 1.8 }
+      ],
+      onUpdate: (c, st) => {
+        // Devon bolts upright when his own snoring gets subtitled
+        if (st > 3.0 && st < 4.2) devon.reaction = Math.max(devon.reaction, 0.8);
+        // the hand-raiser gives up and puts their arm down at the end
+        if (st > 5.6) extras[2].quizStyle = 'write';
+      },
+      onEnd: () => UI.cineHideCard()
+    },
+
     // 3 — report card / Z+
     {
-      dur: 8.6, fov: 32, fovTo: 27, handheld: 0.01,
-      from: v(-2.6, 1.42, 9.7), to: v(-3.35, 1.3, 10.15),
-      lookFrom: v(-4.4, 1.15, 10.9), lookTo: v(-4.55, 1.08, 10.9),
+      dur: 8.6, fov: 36, fovTo: 30, handheld: 0.01,
+      from: v(-2.55, 1.55, 13.45), to: v(-3.15, 1.38, 12.25),
+      lookFrom: v(-4.45, 1.3, 10.9), lookTo: v(-4.52, 1.16, 10.9),
       roll: 0.016,
       onStart: (c) => {
         UI.cineGrade([
-          ['MATH', 'Z', '', 'zed'], ['ENGLISH', 'Z', '', 'zed'], ['SCIENCE', 'Z', '', 'zed'],
-          ['GYM', 'Z+', '', 'zed'], ['HALL CONDUCT', 'Q', '', 'bad']
+          ['MATH', 'Z', '', 'zed', 'Correct answer was 4.'],
+          ['ENGLISH', 'Z', '', 'zed', 'Spelled own name wrong. Twice.'],
+          ['SCIENCE', 'Z', '', 'zed', 'The beaker was already on fire.'],
+          ['GYM', 'Z+', '', 'zed', 'Ran. Screamed. Participated.'],
+          ['LUNCH', 'A+', '', 'good', 'Ate the mystery meat. Became the mystery.'],
+          ['HALL CONDUCT', 'Q', '', 'bad', 'Q is not a grade. Q is a warning.'],
+          ['TEACHER NOTE', '', '', '', '"A for effort. Z for everything else."']
         ], { name: 'JAKE', stamp: 'Z+' });
         c._gradeRows = 0;
         c._stamped = false;
@@ -443,7 +667,7 @@ export function introShots(cine) {
         { at: 6.8, who: 'JAKE', text: 'It has a plus.', actor: jake, dur: 1.6 }
       ],
       onUpdate: (c, st) => {
-        const marks = [1.0, 1.6, 2.2, 2.8, 3.4];
+        const marks = [1.0, 1.6, 2.2, 2.8, 3.4, 4.0, 4.6];
         while (c._gradeRows < marks.length && st >= marks[c._gradeRows]) {
           UI.cineGradeRow(c._gradeRows);
           c.game.audio?.typeBlip(1 + c._gradeRows * 0.12);
@@ -454,12 +678,15 @@ export function introShots(cine) {
           UI.cineStamp();
           c.game.audio?.scare();
           c.game.camera.rotation.z += 0.03;
+          // Jake receives the stamp physically
+          jake.reaction = 1;
         }
         if (!c._wrong && st >= 5.25) {
           c._wrong = true;
           UI.el.gradeEl.classList.add('wrong');
           c.game.audio?.stinger();
         }
+        if (st > 7.0 && jake.reaction < 0.15) jake.reaction = 0.18;
       },
       onEnd: () => UI.cineGradeHide()
     },
@@ -472,6 +699,8 @@ export function introShots(cine) {
       onStart: (c) => {
         teacher.yaw = 0; teacher.model.rotation.y = 0;
         c.game.audio?.scare();
+        // entire class recoils at the concept of a Q
+        for (const a of c.actors) if (a.seated) a.reaction = 1;
       },
       lines: [
         { at: 0.5, who: 'MS. VELLA', text: 'And you. <span class="scare">Q!? WHAT IS Q!?</span>', actor: teacher, dur: 2.2 },
@@ -959,10 +1188,24 @@ export function policeShots(cine, opts = {}) {
       }
     },
     {
-      dur: 5.0, fov: 38, fovTo: 30, handheld: 0.008,
-      from: v(131, 2.0, 5.2), to: v(130.4, 1.55, 3.6),
-      lookFrom: v(133.6, 2.6, 0), lookTo: v(133, 2.2, 0),
+      dur: 5.0, fov: 40, fovTo: 30, handheld: 0.008,
+      // Stand off west of the steps and look east. The old path pushed the
+      // lens into the station glass, filling the screen with flat panels;
+      // this frames the four survivors with the POLICE sign behind them.
+      from: v(114.6, 2.15, 4.7), to: v(115.8, 1.66, 3.1),
+      lookFrom: v(123.4, 2.0, 0.2), lookTo: v(125.4, 1.72, 0.2),
       onStart: (c) => {
+        // The wide shot leaves them mid-lot; the fade to black covers this
+        // restage, so the final beat happens on the station steps.
+        // Spread them across the frame instead of a single-file line, so
+        // all four survivors read beside the grade card.
+        const stage = [[126.2, -0.2], [124.4, 1.3], [122.4, -1.2], [122.6, 2.2]];
+        group.forEach((a, i) => {
+          a.model.position.set(stage[i][0], 0, stage[i][1]);
+          a.model.rotation.y = Math.PI / 2;
+          a.mode = 'idle';
+          a.speed = 0;
+        });
         UI.cineCard('FINAL GRADE', 'SURVIVED', 'center');
         c.game.audio?.win();
       },
@@ -970,6 +1213,16 @@ export function policeShots(cine, opts = {}) {
         { at: 0.7, who: 'JAKE', text: 'Tell them I want extra credit.', actor: jake, dur: 2.2 },
         { at: 3.1, who: 'NARRATOR', text: 'The school is closed indefinitely. The report cards are evidence.', dur: 3.0 }
       ],
+      onUpdate: (c, st, dt) => {
+        // They have arrived: breathe, do not drift out of the frame.
+        for (let i = 0; i < group.length; i++) {
+          const a = group[i];
+          a.model.position.z += Math.sin(c.total * 1.6 + i * 1.9) * dt * 0.02;
+          a.model.rotation.y = Math.PI / 2;
+          a.mode = 'idle';
+          a.speed = 0;
+        }
+      },
       onEnd: (c) => {
         UI.cineHideCard();
         c.game.fadeToBlack();

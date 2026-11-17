@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { T } from './textures.js';
 import {
-  box, cyl, makeLabel, makeSignPlane, makePerson, makeKillerModel,
+  box, cyl, sphere, makeLabel, makeSignPlane, makePerson, makeKillerModel,
   makeLockerBank, makeDesk, makeChair, makeBookshelf, makeTable, makeBench,
   makeVending, makeStall, makeTrash, makeCone, makeBoiler, makeBreaker,
   makeComputerDesk, makeClock, makeSinkCounter, makeMirror, makeCar,
@@ -99,24 +99,29 @@ class Door {
     this.group.position.set(this.hingeX, 0, this.wallZ);
     const doorMat = new THREE.MeshStandardMaterial({ color: 0x5c4a35, roughness: 0.78, metalness: 0.05 });
     const trimMat = new THREE.MeshStandardMaterial({ color: 0x7d725c, roughness: 0.6 });
+    // The leaf pivots on the hinge jamb, not on its own centre. Keep the
+    // visual panel in an inner group offset by half the door width so
+    // rotating `leaf` swings the whole door around hingeX.
     this.leaf = new THREE.Group();
-    this.leaf.position.x = this.width / 2;
+    const leafFace = new THREE.Group();
+    leafFace.position.x = this.width / 2;
     const panel = box(this.width, 2.16, 0.07, doorMat, 0, 1.08, 0);
-    this.leaf.add(panel);
+    leafFace.add(panel);
     // inset panels
     const inMat = new THREE.MeshStandardMaterial({ color: 0x4a3b2c, roughness: 0.85 });
-    this.leaf.add(box(this.width - 0.28, 0.8, 0.02, inMat, 0, 1.5, 0.045));
-    this.leaf.add(box(this.width - 0.28, 0.55, 0.02, inMat, 0, 0.62, 0.045));
-    this.leaf.add(box(this.width - 0.28, 0.8, 0.02, inMat, 0, 1.5, -0.045));
-    this.leaf.add(box(this.width - 0.28, 0.55, 0.02, inMat, 0, 0.62, -0.045));
+    leafFace.add(box(this.width - 0.28, 0.8, 0.02, inMat, 0, 1.5, 0.045));
+    leafFace.add(box(this.width - 0.28, 0.55, 0.02, inMat, 0, 0.62, 0.045));
+    leafFace.add(box(this.width - 0.28, 0.8, 0.02, inMat, 0, 1.5, -0.045));
+    leafFace.add(box(this.width - 0.28, 0.55, 0.02, inMat, 0, 0.62, -0.045));
     // kick plate
-    this.leaf.add(box(this.width - 0.1, 0.22, 0.09, new THREE.MeshStandardMaterial({ color: 0x8b9394, roughness: 0.3, metalness: 0.8 }), 0, 0.16, 0));
+    leafFace.add(box(this.width - 0.1, 0.22, 0.09, new THREE.MeshStandardMaterial({ color: 0x8b9394, roughness: 0.3, metalness: 0.8 }), 0, 0.16, 0));
     // handle
     const brass = new THREE.MeshStandardMaterial({ color: 0xb8a05a, roughness: 0.25, metalness: 0.9 });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), brass);
     knob.position.set(this.width / 2 - 0.16, 1.02, 0.08);
-    this.leaf.add(knob);
-    const knob2 = knob.clone(); knob2.position.z = -0.08; this.leaf.add(knob2);
+    leafFace.add(knob);
+    const knob2 = knob.clone(); knob2.position.z = -0.08; leafFace.add(knob2);
+    this.leaf.add(leafFace);
     this.group.add(this.leaf);
 
     // frame
@@ -207,6 +212,14 @@ export class World {
     this.bodyGroup = new THREE.Group();
     this.propGroup = new THREE.Group();
     this.scene.add(this.hideGroup, this.itemGroup, this.bodyGroup, this.propGroup);
+    // Forward rendering evaluates every point light in the scene for every
+    // lit material. The school has ~20 believable light sources, so we keep
+    // just the nearest handful in the shader and move the pool around.
+    this.lightSources = [];
+    this.lightPool = [];
+    this._nearestLights = [];
+    this._lightPoolTimer = 0;
+    this.viewCamera = null;
     this.time = 0;
     this.exit = { unlocked: false, barricaded: true, open: false, y: 0, collider: null, mesh: null, planks: [] };
     this.powerOn = false;
@@ -216,6 +229,50 @@ export class World {
   }
 
   // ── basic builders ────────────────────────────────────────────
+  addPointSource(color, intensity, distance, x, y, z) {
+    const l = new THREE.PointLight(color, intensity, distance, 2);
+    l.position.set(x, y, z);
+    this.lightSources.push(l);
+    return l;
+  }
+
+  buildLightPool(count = 5) {
+    if (this.lightPool.length) return;
+    for (let i = 0; i < count; i++) {
+      const l = new THREE.PointLight(0xffe9c4, 0, 12, 2);
+      l.position.set(0, -50, 0);
+      this.scene.add(l);
+      this.lightPool.push(l);
+    }
+  }
+
+  updateLightPool(force = false) {
+    if (!this.lightPool.length || !this.viewCamera) return;
+    const cam = this.viewCamera.position;
+    const now = performance.now() * 0.001;
+    if (force || now - (this._lightPoolLast || 0) > 0.12) {
+      this._lightPoolLast = now;
+      const list = [];
+      for (const l of this.lightSources) {
+        if (l.intensity <= 0.001) continue;
+        const dx = l.position.x - cam.x, dy = l.position.y - cam.y, dz = l.position.z - cam.z;
+        list.push({ l, d: dx * dx + dy * dy + dz * dz });
+      }
+      list.sort((a, b) => a.d - b.d);
+      this._nearestLights = list.slice(0, this.lightPool.length).map(e => e.l);
+    }
+    for (let i = 0; i < this.lightPool.length; i++) {
+      const p = this.lightPool[i];
+      const s = this._nearestLights[i];
+      if (!s) { p.intensity = 0; continue; }
+      p.position.copy(s.position);
+      p.color.copy(s.color);
+      p.intensity = s.intensity;
+      p.distance = s.distance;
+      p.decay = s.decay;
+    }
+  }
+
   addCollider(x1, z1, x2, z2, opts = {}) {
     const c = { x1: Math.min(x1, x2), x2: Math.max(x1, x2), z1: Math.min(z1, z2), z2: Math.max(z1, z2), sight: opts.sight !== false, enabled: opts.enabled !== false, type: opts.type || 'furniture' };
     this.colliders.push(c);
@@ -476,9 +533,7 @@ export class World {
     }
     // a handful of real corridor lights (kept low for performance)
     for (const [x, z] of [[-34, 0], [-10, 0], [14, 0], [38, 0], [-22, -27], [14, -27]]) {
-      const l = new THREE.PointLight(0xffe9c4, 2.2, 12, 2);
-      l.position.set(x, 2.9, z);
-      this.scene.add(l);
+      const l = this.addPointSource(0xffe9c4, 2.2, 12, x, 2.9, z);
       this.powerLights = this.powerLights || [];
       this.powerLights.push(l);
     }
@@ -597,14 +652,25 @@ export class World {
     const c = this.addCollider(SCHOOL_E - 0.2, EXIT_Z1, SCHOOL_E + 0.2, EXIT_Z2, { type: 'exit' });
     this.exit.collider = c;
     // outside vestibule lights
-    const lamp = new THREE.PointLight(0x9fd8ff, 4, 11, 2);
-    lamp.position.set(60.5, 3.1, 0);
-    this.scene.add(lamp);
+    const lamp = this.addPointSource(0x9fd8ff, 4, 11, 60.5, 3.1, 0);
     this.outdoorLamp = lamp;
   }
 
   buildOutdoor() {
     const g = new THREE.Group();
+    // A wide base field so the school and car park never sit on a void.
+    // The estate planes below sit a couple of centimetres above it.
+    const fieldMap = T.grass().clone();
+    fieldMap.wrapS = fieldMap.wrapT = THREE.RepeatWrapping;
+    fieldMap.repeat.set(48, 38);
+    fieldMap.needsUpdate = true;
+    const field = new THREE.Mesh(
+      new THREE.PlaneGeometry(520, 420),
+      new THREE.MeshStandardMaterial({ map: fieldMap, color: 0x8a9a7c, roughness: 1 })
+    );
+    field.rotation.x = -Math.PI / 2;
+    field.position.set(70, -0.07, 0);
+    g.add(field);
     // ground
     const asphalt = new THREE.MeshStandardMaterial({ map: T.asphalt(), roughness: 0.95 });
     const lot = new THREE.Mesh(new THREE.PlaneGeometry(78, 26), asphalt);
@@ -621,44 +687,234 @@ export class World {
     // sidewalk
     const walk = new THREE.Mesh(new THREE.PlaneGeometry(78, 2.6), new THREE.MeshStandardMaterial({ color: 0x6f726b, roughness: 0.9 }));
     walk.rotation.x = -Math.PI / 2; walk.position.set(97, 0.0, 2.5); g.add(walk);
-    // school facade exterior (visual)
-    const brick = new THREE.MeshStandardMaterial({ map: T.brick(), roughness: 0.9 });
-    g.add(box(0.6, 7.5, 33, brick, 58.4, 3.7, -13));
-    // flat roof so the school reads as a whole block from the lot
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x262b30, roughness: 0.96 });
-    g.add(box(120, 0.5, 64, roofMat, 0, 7.62, -13));
-    g.add(box(121, 0.16, 65, new THREE.MeshStandardMaterial({ color: 0x333a40, roughness: 0.9 }), 0, 7.92, -13));
-    // lit classroom windows along the east face
-    const winGlass = new THREE.MeshStandardMaterial({ color: 0xffd9a0, emissive: 0xffc27a, emissiveIntensity: 1.5, roughness: 0.4 });
-    const winFrame = new THREE.MeshStandardMaterial({ color: 0x20262a, roughness: 0.7, metalness: 0.2 });
-    for (const z of [-25, -20, -15.5, -6.5, 5.6]) {
-      const win = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.9), winGlass);
-      win.position.set(58.72, 4.6, z);
-      win.rotation.y = Math.PI / 2;
-      g.add(win);
-      g.add(box(0.1, 2.1, 0.1, winFrame, 58.7, 4.6, z - 1.15));
-      g.add(box(0.1, 2.1, 0.1, winFrame, 58.7, 4.6, z + 1.15));
-      g.add(box(0.1, 0.1, 2.4, winFrame, 58.7, 5.62, z));
-      g.add(box(0.1, 0.1, 2.4, winFrame, 58.7, 3.58, z));
-      g.add(box(0.1, 1.9, 0.06, winFrame, 58.71, 4.6, z));
+    // ── school facade ─────────────────────────────────────────
+    // A real front elevation: brick skin, two window rows, pilasters,
+    // cornice, lit entrance canopy and a readable sign. All static, so
+    // it costs almost nothing at runtime.
+    const brickMap = T.brick().clone();
+    brickMap.wrapS = brickMap.wrapT = THREE.RepeatWrapping;
+    brickMap.repeat.set(9, 2.4);
+    brickMap.needsUpdate = true;
+    const brick = new THREE.MeshStandardMaterial({ map: brickMap, roughness: 0.92 });
+    const stone = new THREE.MeshStandardMaterial({ color: 0x6f6758, roughness: 0.85 });
+    const stoneDark = new THREE.MeshStandardMaterial({ color: 0x413e36, roughness: 0.9 });
+    const iron = new THREE.MeshStandardMaterial({ color: 0x22282a, roughness: 0.5, metalness: 0.45 });
+
+    // split the frontage around the exit so the gate stays usable
+    g.add(box(0.55, 7.9, 40.8, brick, 58.32, 3.95, -23.6));
+    g.add(box(0.55, 7.9, 14.8, brick, 58.32, 3.95, 10.6));
+    g.add(box(0.55, 4.3, 6.4, brick, 58.32, 5.85, 0));
+    // base course + cornice tie the whole block together
+    g.add(box(0.72, 0.7, 63, stoneDark, 58.25, 0.35, -13));
+    g.add(box(0.9, 0.42, 63.6, stone, 58.3, 7.82, -13));
+    g.add(box(0.72, 0.16, 63.6, stoneDark, 58.45, 8.02, -13));
+
+    // pilasters break up the long wall
+    for (const z of [-40.5, -33.6, -26.7, -19.8, -12.9, -6.0, 6.2, 12.6, 17.0]) {
+      g.add(box(0.62, 7.2, 0.62, stone, 58.28, 3.6, z));
+      g.add(box(0.78, 0.3, 0.8, stoneDark, 58.26, 7.22, z));
     }
-    const canopy = box(3.2, 0.22, 7, new THREE.MeshStandardMaterial({ color: 0x2f3739, roughness: 0.55, metalness: 0.3 }), 60.2, 3.5, 0);
+
+    // two rows of instanced classroom windows (one draw call each)
+    const winGeo = new THREE.PlaneGeometry(2.3, 1.62);
+    const winMat = new THREE.MeshBasicMaterial({ map: T.facadeWindow() });
+    const dummy = new THREE.Object3D();
+    const rows = [
+      { y: 2.25, zs: [-40.3, -35.4, -30.5, -25.6, -20.7, -15.8, -10.9, -6.2, -4.1, 5.6, 9.4, 13.2, 16.7] },
+      { y: 5.62, zs: [-38.8, -33.7, -28.6, -23.5, -18.4, -13.3, -8.2, -4.0, 7.1, 11.4, 15.7] }
+    ];
+    for (const row of rows) {
+      const inst = new THREE.InstancedMesh(winGeo, winMat, row.zs.length);
+      row.zs.forEach((z, i) => {
+        dummy.position.set(58.62, row.y, z);
+        dummy.rotation.set(0, Math.PI / 2, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        inst.setMatrixAt(i, dummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      g.add(inst);
+    }
+    // continuous stone sills
+    g.add(box(0.34, 0.2, 63, stone, 58.6, 1.38, -13));
+    g.add(box(0.34, 0.2, 63, stone, 58.6, 4.77, -13));
+
+    // ── north / south elevations ──────────────────────────────
+    // Without these skins the single-storey room walls sat under a
+    // full-height roof, so the school looked like a floating slab from
+    // the forecourt. Clad both end elevations in brick and give them a
+    // second window row so the massing reads as one building.
+    for (const [z, face] of [[18.2, 0], [-44.2, Math.PI]]) {
+      const s = Math.sign(z);
+      g.add(box(92.4, 7.9, 0.5, brick, 0, 3.95, z));
+      g.add(box(12.9, 7.9, 0.5, brick, 52.2, 3.95, z));
+      g.add(box(92.6, 0.7, 0.72, stoneDark, 0, 0.35, z + s * 0.1));
+      g.add(box(93.0, 0.42, 0.9, stone, 0, 7.82, z + s * 0.12));
+      g.add(box(92.6, 0.16, 0.72, stoneDark, 0, 8.02, z + s * 0.25));
+      const winZ = z + s * 0.28;
+      for (const row of [2.35, 5.65]) {
+        for (const x of [-40, -30, -20, -9, 2, 13, 24, 35]) {
+          const w = new THREE.Mesh(winGeo, winMat);
+          w.position.set(x, row, winZ);
+          w.rotation.y = face;
+          g.add(w);
+        }
+      }
+      g.add(box(92.4, 0.2, 0.34, stone, 0, 1.48, winZ));
+      g.add(box(92.4, 0.2, 0.34, stone, 0, 4.78, winZ));
+    }
+
+    // ── entrance: recessed doors, canopy, steps, sign ─────────
+    // door surround
+    g.add(box(0.9, 4.0, 0.5, stone, 58.2, 2.0, -3.1));
+    g.add(box(0.9, 4.0, 0.5, stone, 58.2, 2.0, 3.1));
+    g.add(box(0.9, 0.55, 6.7, stone, 58.2, 3.92, 0));
+    // glass doors set into the opening
+    const doorGlass = new THREE.MeshStandardMaterial({ color: 0x1a2530, emissive: 0x8fb4c8, emissiveIntensity: 0.22, roughness: 0.25, metalness: 0.25 });
+    for (const z of [-1.08, 1.08]) {
+      g.add(box(0.09, 2.75, 1.92, doorGlass, 57.94, 1.42, z));
+      g.add(box(0.14, 2.95, 0.1, iron, 57.9, 1.5, z - 1.0));
+      g.add(box(0.14, 2.95, 0.1, iron, 57.9, 1.5, z + 1.0));
+      g.add(box(0.1, 0.1, 2.0, iron, 57.9, 2.55, z));
+      g.add(box(0.1, 0.5, 0.05, new THREE.MeshBasicMaterial({ color: 0xb8c8ba }), 57.82, 1.25, z + 0.55));
+    }
+    const canopy = box(4.6, 0.28, 7.6, new THREE.MeshStandardMaterial({ color: 0x2f3739, roughness: 0.55, metalness: 0.3 }), 60.1, 4.18, 0);
     g.add(canopy);
-    for (const z of [-2.8, 2.8]) g.add(box(0.18, 3.4, 0.18, new THREE.MeshStandardMaterial({ color: 0x2a3032, metalness: 0.6, roughness: 0.4 }), 61.7, 1.7, z));
-    const schoolSign = makeLabel('MILLBROOK HIGH', { color: '#cfd8c8', bg: 'rgba(8,12,10,.9)', size: 512, h: 110, font: 'bold 52px Courier New' });
-    schoolSign.scale.set(6, 1.3, 1); schoolSign.position.set(58.8, 5.3, 0); schoolSign.rotation.y = Math.PI / 2; g.add(schoolSign);
+    for (const z of [-3.15, 3.15]) {
+      g.add(box(0.5, 4.18, 0.5, stone, 61.65, 2.09, z));
+      g.add(box(0.7, 0.24, 0.7, stoneDark, 61.65, 4.3, z));
+    }
+    // shallow steps
+    for (let i = 0; i < 3; i++) {
+      g.add(box(0.9, 0.16, 7.6, stone, 62.75 + i * 0.9, 0.08 + i * 0.16, 0));
+    }
+    // sign band (canvas texture on a real plane, so the text cannot clip)
+    g.add(box(0.32, 1.7, 7.2, new THREE.MeshStandardMaterial({ color: 0x101816, roughness: 0.6 }), 58.5, 5.2, 0));
+    {
+      const c = document.createElement('canvas');
+      c.width = 1024; c.height = 256;
+      const gg = c.getContext('2d');
+      gg.fillStyle = '#09110d'; gg.fillRect(0, 0, 1024, 256);
+      gg.strokeStyle = '#55685a'; gg.lineWidth = 6; gg.strokeRect(6, 6, 1012, 244);
+      gg.fillStyle = '#d8e6d4'; gg.font = 'bold 92px "Courier New"'; gg.textAlign = 'center'; gg.textBaseline = 'middle';
+      gg.fillText('MILLBROOK HIGH', 512, 108);
+      gg.fillStyle = '#a9bca6'; gg.font = 'bold 38px "Courier New"';
+      gg.fillText('HOME OF THE FIGHTING Q\u2019S', 512, 194);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(7.0, 1.75),
+        new THREE.MeshBasicMaterial({ map: tex })
+      );
+      sign.position.set(58.68, 5.2, 0);
+      sign.rotation.y = Math.PI / 2;
+      g.add(sign);
+    }
+
+    // roof edge + parapet (no giant floating slab)
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x262b30, roughness: 0.96 });
+    g.add(box(117, 0.45, 62.5, roofMat, 0, 7.95, -13));
+    g.add(box(0.5, 0.95, 62.5, stoneDark, 58.1, 8.45, -13));
+    g.add(box(117, 0.95, 0.5, stoneDark, 0, 8.45, 18.05));
+    g.add(box(117, 0.95, 0.5, stoneDark, 0, 8.45, -44.05));
+    // rooftop units so the roofline reads as a building, not a slab
+    for (const [x, z, w, d] of [[44, -8, 3.2, 2.2], [48, -19, 2.4, 2.0], [30, -38, 3.0, 2.4]]) {
+      g.add(box(w, 1.1, d, new THREE.MeshStandardMaterial({ color: 0x4a5052, roughness: 0.8 }), x, 8.8, z));
+      g.add(box(w * 0.7, 0.2, d * 0.7, iron, x, 9.45, z));
+    }
+
+    // planting, bike rack and benches around the entrance
+    const bushMat = new THREE.MeshStandardMaterial({ color: 0x243c2c, roughness: 0.95 });
+    const bushGeo = new THREE.IcosahedronGeometry(0.62, 0);
+    for (let z = -42; z <= 17; z += 3.1) {
+      if (Math.abs(z) < 4.2) continue;
+      const b = new THREE.Mesh(bushGeo, bushMat);
+      b.position.set(59.35 + (Math.random() - 0.5) * 0.25, 0.46, z + (Math.random() - 0.5) * 0.3);
+      b.scale.set(1.1 + Math.random() * 0.4, 0.72 + Math.random() * 0.3, 1.1 + Math.random() * 0.4);
+      b.rotation.y = Math.random() * 6.28;
+      g.add(b);
+    }
+    const rackMat = new THREE.MeshStandardMaterial({ color: 0x596467, roughness: 0.5, metalness: 0.6 });
+    for (let i = 0; i < 4; i++) {
+      const x = 61.4 + (i % 2) * 0.5;
+      const z = 5.4 + i * 0.75;
+      g.add(box(0.06, 0.72, 0.06, rackMat, x, 0.36, z));
+      g.add(box(0.06, 0.06, 0.62, rackMat, x, 0.72, z + 0.31));
+    }
+    const bench = makeBench(2.0);
+    bench.position.set(60.2, 0, 8.5); bench.rotation.y = Math.PI / 2; g.add(bench);
+    const trash = makeTrash(); trash.position.set(60.4, 0, 10.4); g.add(trash);
+
+    // ── forecourt dressing ───────────────────────────────────
+    // flagpole with the school colours, so the front lawn is not a void
+    {
+      const pole = cyl(0.055, 0.075, 9.2, new THREE.MeshStandardMaterial({ color: 0xb9bdb6, metalness: 0.6, roughness: 0.35 }), 65.2, 4.6, 10.8);
+      g.add(pole);
+      g.add(sphere(0.11, new THREE.MeshStandardMaterial({ color: 0xd9c46a, metalness: 0.7, roughness: 0.3 }), 65.2, 9.24, 10.8));
+      const fc = document.createElement('canvas');
+      fc.width = 256; fc.height = 160;
+      const fg = fc.getContext('2d');
+      fg.fillStyle = '#1d4d38'; fg.fillRect(0, 0, 256, 160);
+      fg.fillStyle = '#d9c46a'; fg.fillRect(0, 54, 256, 52);
+      fg.fillStyle = '#123026'; fg.font = 'bold 92px "Courier New"'; fg.textAlign = 'center'; fg.textBaseline = 'middle';
+      fg.fillText('M', 128, 82);
+      const ftex = new THREE.CanvasTexture(fc); ftex.colorSpace = THREE.SRGBColorSpace;
+      const flag = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.35), new THREE.MeshStandardMaterial({ map: ftex, side: THREE.DoubleSide, roughness: 0.9 }));
+      flag.position.set(66.35, 8.15, 10.8);
+      flag.rotation.y = -0.25;
+      g.add(flag);
+    }
+    // school bus parked at the kerb
+    {
+      const bus = new THREE.Group();
+      const yellow = new THREE.MeshStandardMaterial({ color: 0xc99b28, roughness: 0.62, metalness: 0.18 });
+      const dark = new THREE.MeshStandardMaterial({ color: 0x1b2226, roughness: 0.7 });
+      const glass = new THREE.MeshStandardMaterial({ color: 0x223a44, emissive: 0x335a66, emissiveIntensity: 0.16, roughness: 0.22, metalness: 0.35 });
+      bus.add(box(7.6, 2.15, 2.35, yellow, 0, 1.5, 0));
+      bus.add(box(1.3, 1.35, 2.3, yellow, 4.35, 1.15, 0));
+      bus.add(box(7.2, 0.16, 2.25, yellow, 0, 2.66, 0));
+      bus.add(box(0.2, 0.5, 2.3, dark, 3.9, 2.45, 0));
+      for (let i = 0; i < 5; i++) {
+        bus.add(box(0.84, 0.72, 0.06, glass, -2.7 + i * 1.35, 1.95, 1.19));
+        bus.add(box(0.84, 0.72, 0.06, glass, -2.7 + i * 1.35, 1.95, -1.19));
+      }
+      bus.add(box(1.0, 0.8, 0.06, glass, 4.45, 1.8, 1.14));
+      bus.add(box(0.6, 0.22, 2.32, dark, 4.9, 0.52, 0));
+      for (const [x, z] of [[-2.6, 1.15], [2.6, 1.15], [-2.6, -1.15], [2.6, -1.15]]) {
+        const wheel = cyl(0.48, 0.48, 0.3, dark, x, 0.48, z);
+        wheel.rotation.x = Math.PI / 2;
+        bus.add(wheel);
+      }
+      const stripe = box(7.65, 0.16, 2.37, new THREE.MeshStandardMaterial({ color: 0x171b1c, roughness: 0.7 }), 0, 0.92, 0);
+      bus.add(stripe);
+      const busSign = makeLabel('MILLBROOK SCHOOLS', { color: '#23260f', bg: 'rgba(214,178,58,.96)', size: 768, h: 84, font: 'bold 40px Courier New' });
+      busSign.scale.set(3.6, 0.4, 1); busSign.position.set(0, 2.32, 1.22); bus.add(busSign);
+      bus.position.set(84, 0, -8.8);
+      g.add(bus);
+      this.addCollider(79.8, -10.1, 88.2, -7.5, { type: 'car' });
+    }
+    // visitor parking sign near the kerb
+    {
+      const post = cyl(0.04, 0.05, 2.5, new THREE.MeshStandardMaterial({ color: 0x8e9490, metalness: 0.4, roughness: 0.5 }), 71, 1.25, 12.2);
+      g.add(post);
+      const vs = makeLabel('VISITOR PARKING', { color: '#e6e7df', bg: 'rgba(24,42,34,.95)', size: 512, h: 150, font: 'bold 44px Courier New' });
+      vs.scale.set(1.7, 0.5, 1); vs.position.set(71, 2.4, 12.2); vs.rotation.y = -Math.PI / 2 + 0.2; g.add(vs);
+    }
     // cars
     const carSpots = [[66, 8, 0x354a52, 0], [72, 8, 0x5a3030, 0], [85, 7.5, 0x3f4650, 0], [95, -8, 0x4b4b55, Math.PI], [74, -8, 0x384f45, Math.PI]];
     for (const [x, z, c, ry] of carSpots) {
       const car = makeCar(c); car.position.set(x, 0, z); car.rotation.y = ry; g.add(car);
       this.addCollider(x - 1.1, z - 2.2, x + 1.1, z + 2.2, { type: 'car' });
     }
-    // streetlights
-    for (const [x, z] of [[68, 3.1], [88, 3.1], [108, 3.1], [120, -3.1]]) {
+    // streetlights (kept off the entrance sightline)
+    for (const [x, z] of [[71, 4.6], [92, 4.6], [113, 4.6], [122, -3.1]]) {
       const sl = makeStreetlight(); sl.position.set(x, 0, z); if (z < 0) sl.rotation.y = Math.PI; g.add(sl);
     }
-    const streetGlow1 = new THREE.PointLight(0xffd9a0, 9, 20, 2); streetGlow1.position.set(88, 5.8, 0); g.add(streetGlow1);
-    const streetGlow2 = new THREE.PointLight(0xffd9a0, 9, 20, 2); streetGlow2.position.set(112, 5.8, 0); g.add(streetGlow2);
+    const streetGlow1 = this.addPointSource(0xffd9a0, 9, 20, 89, 5.8, 4.6);
+    const streetGlow2 = this.addPointSource(0xffd9a0, 9, 20, 113, 5.8, 4.6);
+    // warm wash on the new front elevation
+    this.addPointSource(0xffc48a, 5.5, 17, 63.5, 5.4, 1.5);
+    this.addPointSource(0x9fc8e0, 3.4, 14, 64.0, 4.2, -12.0);
     // dumpster
     const dump = makeDumpster(); dump.position.set(63, 0, 5.4); dump.rotation.y = 0.4; g.add(dump);
     this.addCollider(61.6, 4.6, 64.4, 6.4, { type: 'dumpster' });
@@ -681,8 +937,7 @@ export class World {
     police.rotation.y = -Math.PI / 2;
     g.add(police);
     this.addCollider(129.3, -8.5, 139, 8.5, { type: 'police' });
-    const policeGlow = new THREE.PointLight(0x9fd0ff, 16, 26, 2);
-    policeGlow.position.set(130.5, 4.5, 0); g.add(policeGlow);
+    const policeGlow = this.addPointSource(0x9fd0ff, 16, 26, 130.5, 4.5, 0);
     // police parking lights
     this.scene.add(g);
     this.outdoorGroup = g;
@@ -869,9 +1124,7 @@ export class World {
     // emergency lights
     this.emergency = [];
     for (const [x, z] of [[-30, 0], [0, 0], [30, 0], [-20, -27], [20, -27], [-55, -12], [55, -12], [58.5, 0]]) {
-      const l = new THREE.PointLight(0xff3344, 0, 14, 2);
-      l.position.set(x, 2.85, z);
-      this.scene.add(l);
+      const l = this.addPointSource(0xff3344, 0, 14, x, 2.85, z);
       const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), new THREE.MeshBasicMaterial({ color: 0x5a0a10 }));
       bulb.position.set(x, 2.95, z);
       this.scene.add(bulb);
@@ -879,6 +1132,8 @@ export class World {
     }
     this.lightState = 'day';
     this.setLighting('day');
+    this.buildLightPool(5);
+    this.updateLightPool(true);
   }
 
   setLighting(state) {
@@ -886,44 +1141,44 @@ export class World {
     if (!this.hemi) return;
     const t = this.renderer;
     if (state === 'day') {
-      this.hemi.intensity = 1.15; this.hemi.color.set(0xdfe8dd);
-      this.ambient.intensity = 0.55;
-      this.moon.intensity = 1.2;
-      this.scene.background = new THREE.Color(0x9fb3c2);
-      this.scene.fog.color.set(0x9aa89a);
-      this.scene.fog.density = 0.006;
+      this.hemi.intensity = 1.35; this.hemi.color.set(0xe6f0ff); this.hemi.groundColor.set(0x6d7460);
+      this.ambient.intensity = 0.52;
+      this.moon.color.set(0xfff1d6); this.moon.intensity = 2.1; this.moon.position.set(62, 54, 26);
+      this.scene.background = new THREE.Color(0xa9c6e2);
+      this.scene.fog.color.set(0xb7c4b4);
+      this.scene.fog.density = 0.0045;
       this.setFixturePower(true, 0.9);
       for (const e of this.emergency) { e.light.intensity = 0; e.bulb.material.color.set(0x5a0a10); }
     } else if (state === 'lockdown') {
-      this.hemi.intensity = 0.42; this.hemi.color.set(0x7f9cb8);
+      this.hemi.intensity = 0.42; this.hemi.color.set(0x7f9cb8); this.hemi.groundColor.set(0x232a25);
       this.ambient.intensity = 0.27;
-      this.moon.intensity = 0.72;
+      this.moon.color.set(0x9fb8d8); this.moon.intensity = 0.72; this.moon.position.set(-20, 38, -12);
       this.scene.background = new THREE.Color(0x05080d);
       this.scene.fog.color.set(0x060a10);
       this.scene.fog.density = 0.032;
       this.setFixturePower(false, 0);
       for (const e of this.emergency) { e.light.intensity = 1.4; e.bulb.material.color.set(0xff2637); }
     } else if (state === 'power') {
-      this.hemi.intensity = 0.4; this.hemi.color.set(0xa8bcc4);
+      this.hemi.intensity = 0.4; this.hemi.color.set(0xa8bcc4); this.hemi.groundColor.set(0x232a25);
       this.ambient.intensity = 0.22;
-      this.moon.intensity = 0.45;
+      this.moon.color.set(0x9fb8d8); this.moon.intensity = 0.45; this.moon.position.set(-20, 38, -12);
       this.scene.background = new THREE.Color(0x070b10);
       this.scene.fog.color.set(0x080d12);
       this.scene.fog.density = 0.028;
       this.setFixturePower(true, 0.55);
       for (const e of this.emergency) { e.light.intensity = 0.1; e.bulb.material.color.set(0x5a0a10); }
     } else if (state === 'dark') {
-      this.hemi.intensity = 0.12; this.ambient.intensity = 0.06;
-      this.moon.intensity = 0.25;
+      this.hemi.intensity = 0.12; this.hemi.groundColor.set(0x232a25); this.ambient.intensity = 0.06;
+      this.moon.color.set(0x9fb8d8); this.moon.intensity = 0.25; this.moon.position.set(-20, 38, -12);
       this.scene.background = new THREE.Color(0x03060a);
       this.scene.fog.color.set(0x03060a);
       this.scene.fog.density = 0.05;
       this.setFixturePower(false, 0);
       for (const e of this.emergency) e.light.intensity = 0.25;
     } else if (state === 'outside') {
-      this.hemi.intensity = 0.45; this.hemi.color.set(0x6c88a8);
+      this.hemi.intensity = 0.45; this.hemi.color.set(0x6c88a8); this.hemi.groundColor.set(0x232a25);
       this.ambient.intensity = 0.2;
-      this.moon.intensity = 1.0; this.moon.position.set(-30, 50, -30);
+      this.moon.color.set(0x9fb8d8); this.moon.intensity = 1.0; this.moon.position.set(-30, 50, -30);
       this.scene.background = new THREE.Color(0x0a1424);
       this.scene.fog.color.set(0x060a14);
       this.scene.fog.density = 0.018;
@@ -996,7 +1251,7 @@ export class World {
     for (const r of this.lockedRooms) this.doorByLabel[r.lockLabel] = r.doorObj;
 
     // key 1 spawns in the corridor outside Classroom 101
-    this.addItem('key', -8, 2.05, { keyId: 1 });
+    this.addItem('key', -10.9, 2.25, { keyId: 1 });
     // keys 2..8 inside the keyed rooms
     for (const r of this.lockedRooms) {
       const spots = shuffle(this.roomSpots(r));
@@ -1099,6 +1354,7 @@ export class World {
       this.dust.rotation.y += dt * 0.008;
       this.dust.position.y = Math.sin(this.time * 0.1) * 0.1;
     }
+    this.updateLightPool();
   }
 
   setBodiesVisible(v) {
