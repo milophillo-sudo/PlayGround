@@ -10,7 +10,7 @@ import {
 import { TimCharacter } from './characters.js';
 import {
   watchSignTexture, sprayPlankTexture, storeSignTexture, smallSignTexture,
-  canvasTex, mulberry32, woodTexture, glowTexture, chainlinkMaterial,
+  canvasTex, mulberry32, woodTexture, metalTexture, glowTexture, chainlinkMaterial,
   grassTexture, dirtTexture, labelTexture
 } from './textures.js';
 
@@ -375,10 +375,19 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
   addPanel(-20.35, 19.3); // -30 .. -10.7
   addPanel(-7.1, 4.2);    // -9.2 .. -5
   addPanel(17.5, 25);     // 5 .. 30
-  // hole edges
-  for (const x of [-10.7, -9.2]) {
+  // hole edges — the gap is deliberately narrow: Tim has to get low
+  for (const x of [-10.7, -9.2, -10.55, -9.45]) {
     const post = cyl(0.07, 0.08, 3.05, MAT.darkMetal, 6, x, 1.5, fenceZ);
     fence.add(post);
+  }
+  // bent crossbar and hanging chain make the opening read as crawl-only
+  const holeBar = box(1.25, 0.07, 0.07, MAT.rust, -10, 0.98, fenceZ + 0.02);
+  holeBar.rotation.z = 0.06; fence.add(holeBar);
+  for (let i = 0; i < 5; i++) {
+    const chain = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.012, 4, 7), MAT.metal);
+    chain.position.set(-10.4 + i * 0.2, 1.16 - Math.sin(i * 1.2) * 0.1, fenceZ + 0.03);
+    chain.rotation.set(0.2, 0.4, 0.3 + i * 0.2);
+    fence.add(chain);
   }
   // torn wire flaps
   const tornMat = chainlinkMaterial(); tornMat.map = tornMat.map.clone(); tornMat.map.repeat.set(0.8, 1.2); tornMat.map.needsUpdate = true;
@@ -544,6 +553,49 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
   const serviceSign = plane(0.8, 0.4, new THREE.MeshStandardMaterial({ map: smallSignTexture('SERVICE', '', { w: 512, h: 256, bg: '#b7aa86', fg: '#3b3a2d', size: 120, seed: 45 }), roughness: 0.9 }), -23.8, 1.8, -26.4);
   serviceSign.rotation.y = -Math.PI / 2; root.add(serviceSign);
 
+  /* ---- maintenance shed outside the gate (optional exploration) ---- */
+  const shed = new THREE.Group();
+  shed.position.set(-20.8, 0, 20.4);
+  shed.rotation.y = 0.14;
+  root.add(shed);
+  const shedMat = new THREE.MeshStandardMaterial({ map: woodTexture({ seed: 64, light: false }), roughness: 0.94 });
+  const shedRoofMat = new THREE.MeshStandardMaterial({ map: metalTexture({ seed: 19, base: [64, 62, 54] }), roughness: 0.75, metalness: 0.35 });
+  shed.add(box(4.0, 0.14, 3.2, MAT.concreteDark, 0, 0.07, 0));
+  shed.add(box(4.0, 2.5, 0.12, shedMat, 0, 1.25, -1.55));
+  shed.add(box(0.12, 2.5, 3.1, shedMat, -1.95, 1.25, 0));
+  // open front on the east side — just corner posts and a header
+  shed.add(box(0.14, 2.5, 0.14, shedMat, 1.95, 1.25, -1.55));
+  shed.add(box(0.14, 2.5, 0.14, shedMat, 1.95, 1.25, 1.55));
+  shed.add(box(0.14, 0.22, 3.2, shedMat, 1.95, 2.45, 0));
+  const roof = box(4.5, 0.12, 3.6, shedRoofMat, 0, 2.62, 0); roof.rotation.x = -0.08; shed.add(roof);
+  // workbench + toolbox
+  shed.add(box(2.6, 0.12, 0.8, new THREE.MeshStandardMaterial({ color: 0x4b3f30, roughness: 0.9 }), 0, 0.9, -1.0));
+  for (const sx of [-1.1, 1.1]) shed.add(box(0.09, 0.88, 0.09, MAT.darkMetal, sx, 0.44, -1.0));
+  const toolbox = new THREE.Group();
+  toolbox.position.set(0.4, 1.02, -0.95);
+  toolbox.add(box(0.62, 0.24, 0.34, new THREE.MeshStandardMaterial({ color: 0x8a2d1f, roughness: 0.55, metalness: 0.45 }), 0, 0, 0));
+  toolbox.add(box(0.66, 0.05, 0.38, MAT.darkMetal, 0, 0.14, 0));
+  toolbox.add(box(0.22, 0.05, 0.05, MAT.metal, 0, 0.19, 0));
+  toolbox.userData.noCull = true;
+  shed.add(toolbox);
+  // hanging bulb
+  const shedBulb = new THREE.PointLight(0xffc07a, 7, 6, 2);
+  shedBulb.position.set(0, 2.2, 0); shed.add(shedBulb);
+  const shedGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,200,140,1)', 'rgba(255,140,60,0)'), transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending }));
+  shedGlow.position.set(0, 2.2, 0); shedGlow.scale.set(1.8, 1.8, 1); shed.add(shedGlow);
+  // shelves of junk
+  for (let i = 0; i < 3; i++) {
+    shed.add(box(2.8, 0.05, 0.5, MAT.wood, 0, 0.5 + i * 0.62, -1.35));
+    for (let j = 0; j < 3; j++) {
+      const junk = box(0.22 + (i + j) * 0.04, 0.2, 0.22, new THREE.MeshStandardMaterial({ color: [0x5c5a4c, 0x6e3422, 0x3f4d3d][(i + j) % 3], roughness: 0.9 }), -1.0 + j * 0.55, 0.62 + i * 0.62, -1.35);
+      shed.add(junk);
+    }
+  }
+  // toolbox marker
+  const shedMarker = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,196,110,1)', 'rgba(255,150,60,0)'), transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  shedMarker.position.set(0.4, 1.55, -0.95); shedMarker.scale.set(0.9, 0.9, 1); shed.add(shedMarker);
+  const shedTrigger = new THREE.Vector3(-18.9, 0, 20.4);
+
   // grass and weeds
   const grass1 = createFernPatch(600, 21, 46); grass1.position.set(0, 0, 14); root.add(grass1);
   const grass2 = createFernPatch(250, 22, 26); grass2.position.set(-24, 0, -20); root.add(grass2);
@@ -611,6 +663,8 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
     { minX: 15.2, maxX: 17.9, minZ: -5.2, maxZ: -2.7, name: 'car2' },
     { minX: -25.6, maxX: -22.8, minZ: -28.5, maxZ: -25.8, name: 'boxes' },
     { minX: 23.2, maxX: 25.8, minZ: -14.4, maxZ: -12.5, name: 'dumpster' },
+    { minX: -22.9, maxX: -18.7, minZ: 18.7, maxZ: 19.0, name: 'shed back' },
+    { minX: -22.9, maxX: -22.5, minZ: 18.7, maxZ: 22.1, name: 'shed west' },
   ];
 
   return {
@@ -618,9 +672,10 @@ export function buildFurnitureCompound(scene, { cutscene = false } = {}) {
     signLight, entranceLight, floodLight, ash, animate, colliders,
     spawn: new THREE.Vector3(0, 0, 22),
     bounds: { minX: -27.6, maxX: 27.6, minZ: -38.5, maxZ: 26.5 },
-    gateZ: 12, holeX: -10, holeHalf: 0.8,
+    gateZ: 12, holeX: -10, holeHalf: 0.52,
     doorTrigger: new THREE.Vector3(0, 0, -14.2),
     ventTrigger: new THREE.Vector3(-24.2, 0, -26.0),
+    shed, shedTrigger, shedMarker,
     cutscene,
     dispose() {
       scene.remove(root);

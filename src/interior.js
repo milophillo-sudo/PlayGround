@@ -198,6 +198,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   root.add(ironFrame);
   const ironMat = new THREE.MeshStandardMaterial({ map: metalTexture({ seed: 88, base: [78, 74, 64] }), roughness: 0.62, metalness: 0.55 });
   const ironDoor = new THREE.Group();
+  ironDoor.userData.noCull = true;
   ironDoor.position.set(0, 0, 0);
   ironFrame.add(ironDoor);
   for (let i = 0; i < 12; i++) {
@@ -323,6 +324,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   handle.add(cyl(0.018, 0.018, 0.16, MAT.darkMetal, 6, 0.36, 0, 0));
   jack.add(handle);
   jack.userData.handle = handle;
+  jack.userData.noCull = true;
   root.add(jack);
 
   // actual fuel can (pickup) — bright red jerry can
@@ -335,6 +337,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   const handleSlot = box(0.22, 0.04, 0.08, new THREE.MeshStandardMaterial({ color: 0x3a2a20, roughness: 0.9 }), 0, 0.53, 0.02); fuelPickup.add(handleSlot);
   const fuelGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,170,80,1)', 'rgba(255,110,30,0)'), transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
   fuelGlow.position.set(0, 0.9, 0); fuelGlow.scale.set(1.7, 1.7, 1); fuelPickup.add(fuelGlow);
+  fuelPickup.userData.noCull = true;
   root.add(fuelPickup);
   addCollider(9.4, 10.0, -19.1, -18.7, 'fuel can');
 
@@ -342,6 +345,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   const locker = new THREE.Group();
   locker.position.set(5.55, 0, -13.95);
   locker.rotation.y = 0.08;
+  locker.userData.noCull = true;
   root.add(locker);
   const lockerMat = new THREE.MeshStandardMaterial({ map: metalTexture({ seed: 77, base: [76, 80, 72] }), roughness: 0.7, metalness: 0.35 });
   const lockerBody = box(0.95, 2.2, 0.55, lockerMat, 0, 1.1, 0);
@@ -356,6 +360,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   // note on the counter
   const note = plane(1.0, 1.25, new THREE.MeshStandardMaterial({ map: paperNoteTexture(), roughness: 0.9, side: THREE.DoubleSide }), -9.3, 1.12, 7.1);
   note.rotation.set(-0.32, 0.14, 0.02);
+  note.userData.noCull = true;
   root.add(note);
 
   // fuel door warning light
@@ -456,6 +461,40 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   }
   addCollider(11.6, 13.9, -8.8, -5.6, 'bed');
 
+  /* ---------------- foreman's office nook (east wall) ---------------- */
+  const office = new THREE.Group();
+  office.position.set(14.3, 0, -1.7);
+  root.add(office);
+  const officeWood = new THREE.MeshStandardMaterial({ map: woodTexture({ seed: 73, light: false }), roughness: 0.86 });
+  // desk
+  office.add(box(2.5, 0.12, 1.15, officeWood, 0, 0.86, 0));
+  for (const [sx, sz] of [[-1.05, -0.42], [1.05, -0.42], [-1.05, 0.42], [1.05, 0.42]]) office.add(box(0.08, 0.82, 0.08, MAT.darkMetal, sx, 0.42, sz));
+  office.add(box(0.55, 0.06, 0.42, MAT.metal, 0.55, 0.95, -0.05));
+  // chair
+  office.add(box(0.55, 0.1, 0.55, new THREE.MeshStandardMaterial({ color: 0x3c3328, roughness: 1 }), -0.1, 0.48, 0.9));
+  office.add(box(0.55, 0.6, 0.1, new THREE.MeshStandardMaterial({ color: 0x3c3328, roughness: 1 }), -0.1, 0.78, 1.16));
+  for (const [sx, sz] of [[-0.35, 0.68], [0.15, 0.68], [-0.35, 1.12], [0.15, 1.12]]) office.add(box(0.05, 0.45, 0.05, MAT.darkMetal, sx - 0.1, 0.23, sz - 0.1));
+  // filing cabinet
+  office.add(box(0.8, 1.5, 0.7, new THREE.MeshStandardMaterial({ color: 0x59604f, roughness: 0.7, metalness: 0.3 }), -1.9, 0.75, -0.2));
+  for (let i = 0; i < 3; i++) office.add(box(0.68, 0.03, 0.04, MAT.darkMetal, -1.9, 0.45 + i * 0.4, 0.16));
+  // corkboard with dead photos
+  office.add(box(1.7, 1.1, 0.06, new THREE.MeshStandardMaterial({ color: 0x5a4330, roughness: 1 }), 0, 2.0, -0.52));
+  for (let i = 0; i < 5; i++) {
+    const photo = box(0.26, 0.32, 0.015, new THREE.MeshStandardMaterial({ color: 0xb9ad91, roughness: 1 }), -0.55 + i * 0.28, 2.02 + (i % 2) * 0.2, -0.48);
+    photo.rotation.z = (i - 2) * 0.08; office.add(photo);
+  }
+  // desk lamp
+  office.add(cyl(0.03, 0.04, 0.6, MAT.darkMetal, 6, -0.75, 1.15, -0.2));
+  const officeLamp = new THREE.PointLight(0xffc07a, 6, 5, 2);
+  officeLamp.position.set(-0.75, 1.45, -0.2); office.add(officeLamp);
+  // foreman's note (interactable)
+  const officeNote = plane(0.55, 0.4, new THREE.MeshStandardMaterial({ map: paperNoteTexture(), roughness: 0.9, side: THREE.DoubleSide }), 14.9, 1.0, -1.55);
+  officeNote.rotation.set(-0.2, -0.5, 0.04);
+  officeNote.userData.noCull = true;
+  root.add(officeNote);
+  addCollider(13.0, 15.8, -2.5, -0.9, 'office desk');
+  addCollider(12.0, 12.9, -2.1, -1.2, 'filing cabinet');
+
   // wardrobe wall
   for (let i = 0; i < 3; i++) {
     const wd = new THREE.Group(); wd.position.set(-10.5 + i * 2.1, 0, -9.8); wd.rotation.y = 0.02 * i; root.add(wd);
@@ -508,7 +547,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     ['TOMATO', '#a03428'], ['DOG FOOD', '#5c6b3a'],
   ];
   const canPositions = [
-    [-10.9, 1.24, 6.35], [-5.9, 0.78, 2.4], [-1.2, 0.94, -5.6], [-15.3, 1.62, -1.0],
+    [-10.9, 1.24, 6.35], [-5.9, 0.78, 2.4], [-1.2, 0.94, -5.6], [14.9, 1.02, -1.4],
     [12.9, 1.98, -7.2], [-12.5, 0.22, 5.6], [9.6, 0.94, 8.0], [-10.4, 0.55, -9.3],
     [-13.9, 0.5, 9.4], [2.5, 0.34, 4.9],
   ];
@@ -531,7 +570,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     g.position.set(...canPositions[i]);
     g.rotation.z = Math.PI / 2 * (i % 3 === 0 ? 1 : 0);
     g.rotation.y = i * 0.7;
-    g.userData = { index: i, glow, base: new THREE.Vector3(...canPositions[i]), taken: false, name };
+    g.userData = { index: i, glow, base: new THREE.Vector3(...canPositions[i]), taken: false, name, noCull: true };
     root.add(g);
     cans.push(g);
   }
@@ -616,6 +655,10 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
   fuelMarker.visible = false;
   const jackMarker = makeMarker(8.55, 1.9, -17.4, 0xffd08a);
   jackMarker.visible = false;
+  const ironMarker = makeMarker(11.2, 2.0, -19.0, 0xffd08a);
+  ironMarker.visible = false;
+  const officeMarker = makeMarker(14.9, 1.6, -1.5, 0xffd08a);
+  officeMarker.visible = false;
 
   /* ---------------- state / animation ---------------- */
   const state = {
@@ -652,7 +695,7 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     // keypad door LED pulse
     keyLed.material.emissiveIntensity = 1.2 + Math.sin(t * 3) * 0.6;
     // markers
-    for (const m of [keyMarker, fuelMarker, jackMarker]) {
+    for (const m of [keyMarker, fuelMarker, jackMarker, ironMarker, officeMarker]) {
       if (!m.visible) continue;
       const s = m.children[0];
       s.material.opacity = 0.35 + Math.sin(t * 2.6) * 0.18;
@@ -678,12 +721,13 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     jack: new THREE.Vector3(8.55, 0, -17.2),
     iron: new THREE.Vector3(11.2, 0, -19.0),
     locker: new THREE.Vector3(5.55, 0, -13.7),
+    office: new THREE.Vector3(14.9, 0, -1.5),
   };
 
   return {
     root, cans, colliders, wallMeshes, floor, fuel, keyDoor, keypad, keyLed, keyPadGlow: keypadGlow,
-    bloodSign, note, locker, jack, ironDoor, ironFrame, ironCollider, fuelPickup, fuelGlow, genset, table, leafL, leafR,
-    keyMarker, fuelMarker, jackMarker, warningLight, exitLight, workLight, doorBulb,
+    bloodSign, note, officeNote, office, locker, jack, ironDoor, ironFrame, ironCollider, fuelPickup, fuelGlow, genset, table, leafL, leafR,
+    keyMarker, fuelMarker, jackMarker, ironMarker, officeMarker, warningLight, exitLight, workLight, doorBulb,
     state, animate, dust, spawn, bounds, interactables,
     openKeypadDoor() {
       state.keypadOpen = true;
@@ -720,6 +764,13 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
       jack.visible = false;
       jackMarker.visible = false;
       return true;
+    },
+    resetJack() {
+      state.jackTaken = false;
+      jack.visible = true;
+      jack.userData.handle.rotation.x = 0;
+      jackMarker.visible = false;
+      ironMarker.visible = false;
     },
     pushLocker(toZ = -12.4) {
       state.lockerPushed = true;
@@ -761,6 +812,8 @@ export function buildStoreInterior(scene, { evening = true } = {}) {
     showKeyMarker(v) { keyMarker.visible = v; },
     showFuelMarker(v) { fuelMarker.visible = v; },
     showJackMarker(v) { jackMarker.visible = v; },
+    showIronMarker(v) { ironMarker.visible = v; },
+    showOfficeMarker(v) { officeMarker.visible = v; },
     canCount() { return cans.filter(c => c.userData.taken).length; },
     dispose() {
       scene.remove(root);

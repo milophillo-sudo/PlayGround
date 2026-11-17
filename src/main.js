@@ -485,6 +485,7 @@ setFade(1);
 requestAnimationFrame(frame);
 
 setTimeout(() => {
+  if (mode !== 'loading') return;
   loading.classList.remove('visible');
   menu.classList.add('visible');
   mode = 'menu';

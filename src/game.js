@@ -18,6 +18,13 @@ function lerpAngle(a, b, t) {
   return a + d * t;
 }
 
+// layered, smooth pseudo-noise for handheld / impact camera motion
+function shakeNoise(x) {
+  return Math.sin(x * 1.7 + Math.sin(x * 0.63) * 2.7) * 0.55 +
+    Math.sin(x * 3.1 + 1.9) * 0.3 +
+    Math.sin(x * 5.3 + 4.1) * 0.15;
+}
+
 function markerMesh() {
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: 0xffb168, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
@@ -96,6 +103,31 @@ export class Game {
     this.branchLabel = '';
     this.chaseChoice = '';
     this.truckCam = { pos: new THREE.Vector3(0.12, 1.64, -0.55), look: new THREE.Vector3(0.0, 1.52, 5.6) };
+    /* first-person / camera */
+    this.firstPerson = true;
+    this.fpBob = 0;
+    this.fpBobAmt = 0;
+    this.strafe = 0;
+    this.fovTarget = 70;
+    this.trauma = 0;
+    this.shakeTime = 0;
+    this.cullables = [];
+    this.cullTimer = 0;
+    this.frustum = new THREE.Frustum();
+    this.frustumMatrix = new THREE.Matrix4();
+    this.tmpSphere = new THREE.Sphere();
+    /* escape / chase state */
+    this.hasJack = false;
+    this.escapePhase = null;
+    this.escapeCrawlDone = false;
+    this.chaseActive = false;
+    this.chaseDelay = 0;
+    this.chaseCrawling = false;
+    this.chaseHoleCrossed = false;
+    this.chaseEnding = false;
+    this.chaseHitCooldown = 0;
+    this.shedLooted = false;
+    this.officeRead = false;
     this.bindEvents();
     this.initKeypad();
   }
@@ -110,8 +142,10 @@ export class Game {
     this.tim = new TimCharacter();
     this.tim.group.position.copy(compound.spawn);
     this.tim.group.rotation.y = Math.PI;
+    this.tim.group.userData.noCull = true;
     scene.add(this.tim.group);
     this.player = this.tim.group;
+    this.shedMarker = compound.shedMarker;
 
     // the truck he arrived in
     const truck = createTruck({ headlights: false });
@@ -162,7 +196,71 @@ export class Game {
     } else {
       document.getElementById('lookHint')?.classList.remove('hide');
     }
+    this.setFirstPerson(true);
+    this.camera.fov = 70;
+    this.camera.updateProjectionMatrix();
+    this.setupCulling(scene);
     this.running = true;
+  }
+
+  /* ------------------------ first person / culling ------------------------ */
+  setFirstPerson(on) {
+    this.firstPerson = !!on;
+    if (this.tim?.parts?.head) this.tim.parts.head.visible = !on;
+    if (this.tim?.parts?.face?.head) this.tim.parts.face.head.visible = !on;
+    // the backpack and headphones are fine; hide only the head so the body reads
+    if (this.tim?.parts?.armL) {
+      // keep arms at rest; they are visible when looking down
+    }
+  }
+
+  setupCulling(root) {
+    this.cullables = [];
+    if (!root) return;
+    root.updateMatrixWorld(true);
+    const skip = new Set([this.tim?.group, this.jake?.group, this.mace?.group, this.player].filter(Boolean));
+    root.traverse((o) => {
+      if (!o.isMesh || o.isSprite) return;
+      let p = o;
+      while (p) {
+        if (skip.has(p) || p.userData?.noCull) return;
+        p = p.parent;
+      }
+      if (o.userData?.taken) return;
+      if (o.material && o.material.transparent && (o.material.opacity ?? 1) < 0.45) return;
+      const g = o.geometry;
+      if (!g) return;
+      if (!g.boundingSphere) g.computeBoundingSphere();
+      const r = g.boundingSphere?.radius ?? 1;
+      if (r > 2.8) return;
+      o.userData.cullBase = o.visible;
+      o.userData.cullRadius = r;
+      this.cullables.push(o);
+    });
+  }
+
+  updateCulling(dt) {
+    if (!this.cullables.length) return;
+    this.cullTimer -= dt;
+    if (this.cullTimer > 0) return;
+    this.cullTimer = 0.22;
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    this.frustumMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
+    const cp = cam.position;
+    for (const o of this.cullables) {
+      if (!o.parent) continue;
+      if (o.userData.taken) { o.visible = false; continue; }
+      const wp = o.getWorldPosition(this.tmpV);
+      const d = wp.distanceTo(cp);
+      const radius = o.userData.cullRadius || 1;
+      const maxDist = 34 + radius * 6;
+      if (d > maxDist) { o.visible = false; continue; }
+      this.tmpSphere.center.copy(wp);
+      this.tmpSphere.radius = radius * 1.35;
+      o.visible = this.frustum.intersectsSphere(this.tmpSphere) ? o.userData.cullBase !== false : false;
+    }
   }
 
   /* ------------------------------ input ------------------------------ */
@@ -215,7 +313,7 @@ export class Game {
         const dy = e.clientY - this.lastLook.y;
         this.lastLook = { x: e.clientX, y: e.clientY };
         this.yaw -= dx * 0.005 * this.sensitivity;
-        this.pitch = clamp(this.pitch + dy * 0.0035 * this.sensitivity, -0.18, 0.72);
+        this.pitch = clamp(this.pitch + dy * 0.0035 * this.sensitivity, -1.15, 1.15);
       }
     };
     this.onCanvasUp = (e) => {
@@ -225,7 +323,7 @@ export class Game {
       if (this.state !== 'active') return;
       if (document.pointerLockElement === canvas) {
         this.yaw -= e.movementX * 0.0022 * this.sensitivity;
-        this.pitch = clamp(this.pitch + e.movementY * 0.0017 * this.sensitivity, -0.18, 0.72);
+        this.pitch = clamp(this.pitch + e.movementY * 0.0017 * this.sensitivity, -1.15, 1.15);
         this.dismissLookHint();
       }
     };
@@ -482,6 +580,10 @@ export class Game {
     this.updateShards(dt);
     this.updateMarkers(dt);
     this.updateCamera(dt);
+    const fp = this.state === 'active' && !this.crawling && !this.chaseCrawling &&
+      (this.phase === 'lot' || this.phase === 'store' || this.phase === 'chase');
+    if (fp !== this.firstPerson) this.setFirstPerson(fp);
+    this.updateCulling(dt);
     this.updateCaption(dt);
     audio.update(dt);
 
@@ -523,6 +625,7 @@ export class Game {
     if (len > 1) { ix /= len; iz /= len; }
     const moving = len > 0.12;
     const running = !!this.keys['shift'];
+    this.strafe = damp(this.strafe, moving ? ix : 0, 7, dt);
     const targetCrouch = this.crouch ? 1 : 0;
     this.crouchAmt = damp(this.crouchAmt, targetCrouch, 9, dt);
     this.tim.setCrouch(this.crouchAmt);
@@ -539,12 +642,11 @@ export class Game {
       const speed = this.crouch ? 1.45 : (running ? 4.5 : 2.85);
       this.move.set(vx, vz);
       this.tryMove(vx * speed * dt, vz * speed * dt);
-      const targetRot = Math.atan2(vx, vz);
-      this.player.rotation.y = lerpAngle(this.player.rotation.y, targetRot, 1 - Math.exp(-12 * dt));
       this.stepTimer -= dt;
       if (this.stepTimer <= 0) {
         this.stepTimer = this.crouch ? 0.62 : (running ? 0.3 : 0.44);
         audio.step(running);
+        this.addShake(running ? 0.018 : 0.012);
       }
       this.tim.setLocomotion(speed, dt);
     } else {
@@ -571,6 +673,7 @@ export class Game {
     if (len > 1) { ix /= len; iz /= len; }
     const moving = len > 0.12;
     const running = !!this.keys['shift'];
+    this.strafe = damp(this.strafe, moving ? ix : 0, 7, dt);
     const targetCrouch = this.crouch ? 1 : 0;
     this.crouchAmt = damp(this.crouchAmt, targetCrouch, 9, dt);
     this.tim.setCrouch(this.crouchAmt);
@@ -585,10 +688,8 @@ export class Game {
       const speed = this.crouch ? 1.3 : (running ? 3.8 : 2.5);
       this.move.set(vx, vz);
       this.tryMoveFree(vx * speed * dt, vz * speed * dt);
-      const targetRot = Math.atan2(vx, vz);
-      this.player.rotation.y = lerpAngle(this.player.rotation.y, targetRot, 1 - Math.exp(-12 * dt));
       this.stepTimer -= dt;
-      if (this.stepTimer <= 0) { this.stepTimer = this.crouch ? 0.62 : (running ? 0.32 : 0.46); audio.step(running); }
+      if (this.stepTimer <= 0) { this.stepTimer = this.crouch ? 0.62 : (running ? 0.32 : 0.46); audio.step(running); this.addShake(running ? 0.014 : 0.009); }
       this.tim.setLocomotion(speed, dt);
     } else {
       this.tim.setLocomotion(0, dt);
@@ -598,6 +699,7 @@ export class Game {
   }
 
   updateChasePlayer(dt) {
+    if (this.chaseEnding) return;
     let ix = 0, iz = 0;
     if (this.keys['w'] || this.keys['arrowup']) iz -= 1;
     if (this.keys['s'] || this.keys['arrowdown']) iz += 1;
@@ -609,6 +711,9 @@ export class Game {
     if (len > 1) { ix /= len; iz /= len; }
     const moving = len > 0.12;
     const running = !!this.keys['shift'];
+    this.strafe = damp(this.strafe, moving ? ix : 0, 7, dt);
+    this.crouchAmt = damp(this.crouchAmt, this.crouch ? 1 : 0, 10, dt);
+    this.tim.setCrouch(this.crouchAmt);
     if (moving) {
       const fwdX = -Math.sin(this.yaw), fwdZ = -Math.cos(this.yaw);
       const rightX = Math.cos(this.yaw), rightZ = -Math.sin(this.yaw);
@@ -616,14 +721,87 @@ export class Game {
       let vz = fwdZ * -iz + rightZ * ix;
       const vlen = Math.hypot(vx, vz) || 1;
       vx /= vlen; vz /= vlen;
-      const speed = running ? 4.8 : 3.2;
-      this.tryMoveFree(vx * speed * dt, vz * speed * dt);
-      this.player.rotation.y = lerpAngle(this.player.rotation.y, Math.atan2(vx, vz), 1 - Math.exp(-12 * dt));
+      const speed = this.crouch ? 1.6 : (running ? 4.9 : 3.4);
+      this.tryMoveChase(vx * speed * dt, vz * speed * dt);
       this.tim.setLocomotion(speed, dt);
       this.stepTimer -= dt;
-      if (this.stepTimer <= 0) { this.stepTimer = 0.3; audio.step(true); }
+      if (this.stepTimer <= 0) { this.stepTimer = this.crouch ? 0.55 : 0.3; audio.step(true); this.addShake(0.02); }
     } else this.tim.setLocomotion(0, dt);
     this.tim.update(dt);
+    this.updateChaseAI(dt);
+
+    // hole prompt / truck trigger
+    const p = this.player.position;
+    const holeD = Math.hypot(p.x - this.compound.holeX, p.z - 12.0);
+    if (!this.chaseHoleCrossed) {
+      if (holeD < 3.4) {
+        this.callbacks.onPrompt?.(this.crouchAmt > 0.45 ? 'CRAWL THROUGH THE GAP' : 'CROUCH TO CRAWL THROUGH');
+      } else this.callbacks.onPrompt?.(null);
+    } else {
+      const truckD = Math.hypot(p.x - 1.5, p.z - 26.5);
+      this.callbacks.onPrompt?.(truckD < 4.2 ? 'GET IN THE TRUCK' : null);
+      if (truckD < 4.2) this.beginTruckEscape();
+    }
+    this.updateHudState();
+  }
+
+  updateChaseAI(dt) {
+    if (!this.chaseActive || this.chaseCrawling || this.state !== 'active') return;
+    this.chaseDelay -= dt;
+    if (this.chaseDelay > 0) return;
+    this.chaseHitCooldown = Math.max(0, this.chaseHitCooldown - dt);
+    const p = this.player.position;
+    const pursuers = [
+      [this.jake, 3.05, 0.95],
+      [this.mace, 2.55, 1.35],
+    ];
+    for (const [actor, speed, minDist] of pursuers) {
+      if (!actor) continue;
+      const a = actor.group.position;
+      const dx = p.x - a.x, dz = p.z - a.z;
+      const d = Math.hypot(dx, dz) || 1;
+      if (d > minDist) {
+        const step = Math.min(speed * dt, d - minDist * 0.85);
+        a.x += dx / d * step;
+        a.z += dz / d * step;
+        actor.group.rotation.y = lerpAngle(actor.group.rotation.y, Math.atan2(dx, dz), 1 - Math.exp(-8 * dt));
+        actor.setLocomotion(speed, dt);
+        actor.update(dt);
+      } else {
+        actor.setLocomotion(0, dt);
+        actor.update(dt);
+      }
+    }
+    // if Jake closes the distance, he ends it
+    const jd = Math.hypot(p.x - this.jake.group.position.x, p.z - this.jake.group.position.z);
+    if (jd < 1.05 && this.chaseHitCooldown <= 0) {
+      this.chaseHitCooldown = 4;
+      this.addShake(0.4);
+      this.cameraShake = 0.3;
+      this.playerDeath('stab', 'chase');
+    }
+  }
+
+  tryMoveChase(dx, dz) {
+    const p = this.player.position;
+    const r = 0.32;
+    const prevZ = p.z;
+    const nx = p.x + dx;
+    if (!this.collidesFree(nx, p.z, r)) p.x = nx;
+    let nz = p.z + dz;
+    const fenceCross = (prevZ - 12) * (nz - 12) <= 0 && Math.abs(nz - 12) < 1.0;
+    if (fenceCross) {
+      const atHole = Math.abs(p.x - this.compound.holeX) < this.compound.holeHalf;
+      if (atHole && this.crouchAmt > 0.5 && !this.chaseHoleCrossed) {
+        this.startChaseCrawl();
+        return;
+      }
+      if (!this.chaseHoleCrossed) nz = prevZ > 12 ? 12.45 : 11.55;
+    }
+    if (!this.collidesFree(p.x, nz, r)) p.z = nz;
+    const b = this.bounds;
+    p.x = clamp(p.x, b.minX + r, b.maxX - r);
+    p.z = clamp(p.z, b.minZ + r, b.maxZ - r);
   }
 
   tryMoveFree(dx, dz) {
@@ -657,31 +835,43 @@ export class Game {
     };
     if (this.interior) {
       const spots = this.interior.interactables || {};
-      for (const can of this.interior.cans) {
-        if (can.userData.taken) continue;
-        const d = Math.hypot(p.x - can.position.x, p.z - can.position.z);
-        if (d < 1.55) consider(Math.max(0, d - 0.3), 'TAKE ' + can.userData.name, 'can', can);
-      }
       const near = (v, max, pad = 0) => {
         if (!v) return 1e9;
         const d = Math.hypot(p.x - v.x, p.z - v.z);
         return d < max ? d + pad : 1e9;
       };
-      const dNote = near(spots.note, 2.0, 0.15);
-      if (dNote < 1e8) consider(dNote, 'READ THE MEMO', 'note');
-      const dB = near(spots.blood, 2.5, 0.3);
-      if (dB < 1e8) consider(dB, 'INSPECT THE WALL', 'blood');
-      if (!this.keypadUnlocked) {
-        const dK = near(spots.keypad, 2.2, 0.1);
-        if (dK < 1e8) consider(dK, 'ENTER THE CODE', 'keypad');
+      // escape interactions take priority
+      if (this.escapePhase === 'jack') {
+        const dJ = near(spots.jack, 2.0, -0.4);
+        if (dJ < 1e8) consider(dJ, 'TAKE THE SCISSOR JACK', 'jack');
+      } else if (this.escapePhase === 'door') {
+        const dI = near(spots.iron, 2.7, -0.4);
+        if (dI < 1e8) consider(dI, 'JACK THE IRON DOOR', 'iron');
       }
-      if (this.keypadUnlocked && !this.fuelTaken) {
-        const dF = near(spots.fuel, 2.1, 0.2);
-        if (dF < 1e8) consider(dF, 'TAKE THE FUEL', 'fuel');
-      }
-      if (!this.standoffStarted) {
-        const dL = near(spots.locker, 1.9, 0.4);
-        if (dL < 1e8) consider(dL, 'INSPECT THE LOCKER', 'locker');
+      if (!this.escapePhase) {
+        for (const can of this.interior.cans) {
+          if (can.userData.taken) continue;
+          const d = Math.hypot(p.x - can.position.x, p.z - can.position.z);
+          if (d < 1.55) consider(Math.max(0, d - 0.3), 'TAKE ' + can.userData.name, 'can', can);
+        }
+        const dNote = near(spots.note, 2.0, 0.15);
+        if (dNote < 1e8) consider(dNote, 'READ THE MEMO', 'note');
+        const dB = near(spots.blood, 2.5, 0.3);
+        if (dB < 1e8) consider(dB, 'INSPECT THE WALL', 'blood');
+        const dO = near(spots.office, 2.0, 0.2);
+        if (dO < 1e8) consider(dO, "READ THE FOREMAN'S LOG", 'office');
+        if (!this.keypadUnlocked) {
+          const dK = near(spots.keypad, 2.2, 0.1);
+          if (dK < 1e8) consider(dK, 'ENTER THE CODE', 'keypad');
+        }
+        if (this.keypadUnlocked && !this.fuelTaken) {
+          const dF = near(spots.fuel, 2.1, 0.2);
+          if (dF < 1e8) consider(dF, 'TAKE THE FUEL', 'fuel');
+        }
+        if (!this.standoffStarted) {
+          const dL = near(spots.locker, 1.9, 0.4);
+          if (dL < 1e8) consider(dL, 'INSPECT THE LOCKER', 'locker');
+        }
       }
     }
     this.storeFocus = best;
@@ -702,9 +892,13 @@ export class Game {
       const atHole = Math.abs(p.x - this.compound.holeX) < this.compound.holeHalf;
       if (!(atHole && this.crouchAmt > 0.5)) {
         nz = prevZ > 12 ? 12.35 : 11.65;
+      } else if (prevZ > 12) {
+        // going in — play the crawl instead of sliding through
+        this.inside = true;
+        this.startLotCrawl();
+        return;
       } else {
-        this.inside = prevZ > 12;
-        if (this.inside) this.onEnteredLot();
+        this.inside = false;
       }
     }
     if (!this.collides(p.x, nz, r)) p.z = nz;
@@ -765,6 +959,15 @@ export class Game {
       const d = Math.hypot(p.x - this.compound.ventTrigger.x, p.z - this.compound.ventTrigger.z);
       if (d < 3.6) {
         this.callbacks.onPrompt?.(this.isTouch ? 'CLIMB THE BOXES' : 'CLIMB THE BOXES');
+      } else {
+        this.callbacks.onPrompt?.(null);
+      }
+    } else if (this.state === 'active') {
+      // optional exploration: the maintenance shed outside the gate
+      const shed = this.compound.shedTrigger;
+      const dShed = shed ? Math.hypot(p.x - shed.x, p.z - shed.z) : 1e9;
+      if (!this.shedLooted && dShed < 3.1) {
+        this.callbacks.onPrompt?.('SEARCH THE SHED');
       } else {
         this.callbacks.onPrompt?.(null);
       }
@@ -1048,6 +1251,7 @@ export class Game {
     this.player = this.tim.group;
     this.mace = null;
     this.jake = null;
+    this.setupCulling(scene);
 
     this.camera.position.set(0, 2.2, 14.8);
     this.cameraLook.set(0, 1.35, 2.0);
@@ -1095,6 +1299,7 @@ export class Game {
     this.callbacks.onPrompt?.(null);
     this.callbacks.onObjective?.('THE FUEL ROOM', 'Someone else wants it.');
     document.exitPointerLock?.();
+    audio.setMood('encounter');
 
     const from = this.tim.group.position.clone();
     const to = new THREE.Vector3(8.2, 0, -16.4);
@@ -1188,142 +1393,351 @@ export class Game {
 
   async escapeSequence() {
     if (this.disposed) return;
+    this.tim.group.rotation.x = 0;
+    this.tim.group.rotation.z = 0;
+    this.tim.group.position.y = 0;
+    this.tim.poseLock = false;
     this.state = 'sequence';
     this.escapeAttempts++;
     this.dead = false;
     this.callbacks.onPrompt?.(null);
     this.callbacks.hideChoice?.();
     document.getElementById('deathFx')?.classList.remove('show');
-    if (this.escapeAttempts > 1) {
-      this.interior.resetEscape();
-      this.tim.group.position.set(8.2, 0, -16.4);
-      this.tim.group.rotation.y = 0;
-      this.tim.setCrouch(0);
-      this.mace.group.position.set(8.4, 0, -11.9);
-      this.camera.position.set(6.7, 1.9, -17.1);
-      this.cameraLook.set(8.7, 1.4, -12.4);
-    }
-    this.escape = { time: 20, active: true };
+    document.exitPointerLock?.();
+    this.escapePhase = 'jack';
+    this.hasJack = false;
+    this.escapeCrawlDone = false;
+    this.interior?.resetEscape();
+    this.interior?.resetJack();
+    this.interior?.showJackMarker(true);
+    this.interior?.showIronMarker(false);
+    this.escape = { time: 32, active: true };
     this.showEscapeTimer(true);
     this.updateEscapeTimer(0.0001);
-    this.callbacks.onObjective?.('GET OUT', 'The iron door at the back. Move.');
-    audio.setMood('tense');
+    this.callbacks.onObjective?.('TAKE THE SCISSOR JACK', 'The work table. Move.');
+    audio.setMood('encounter');
     audio.heartbeat();
 
+    // Tim is inside the fuel room. Mace fills the doorway.
+    this.tim.group.position.set(8.2, 0, -16.4);
+    this.tim.group.rotation.y = 0;
+    this.tim.setCrouch(0);
+    this.tim.poseLock = false;
+    this.tim.body.position.y = 0;
+    this.mace.group.position.set(8.4, 0, -11.9);
+    this.mace.group.rotation.y = Math.PI;
+    this.mace.setGunRaised(true);
+    this.mace.setExpression('angry');
+    this.camera.position.set(6.7, 1.9, -17.1);
+    this.cameraLook.set(8.7, 1.4, -12.4);
+    this.camera.lookAt(this.cameraLook);
+
     this.interior.closeKeypadDoor();
-    audio.doorCreak();
-    this.caption('', 'The locker hit the frame. The door buckled — but it held.', 3.2);
     const locker = this.interior.locker;
     const lFrom = locker.position.clone();
     const lTo = new THREE.Vector3(7.6, 0, -13.2);
-    const tFrom = this.tim.group.position.clone();
-    const tTo = new THREE.Vector3(6.5, 0, -15.1);
-    await this.tween(0.9, (u) => {
+    await this.tween(0.75, (u) => {
       locker.position.lerpVectors(lFrom, lTo, u);
       locker.rotation.y = 0.08 + u * 0.24;
-      this.tim.group.position.lerpVectors(tFrom, tTo, u);
-      this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, Math.PI, 0.1);
-      this.tim.setLocomotion(1.2, 1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(5.6, 1.82, -16.8), 0.07);
-      this.cameraLook.lerp(new THREE.Vector3(8.0, 1.3, -13.4), 0.08);
+      this.camera.position.lerp(new THREE.Vector3(6.1, 1.75, -16.4), 0.08);
+      this.cameraLook.lerp(new THREE.Vector3(8.4, 1.25, -13.0), 0.09);
       this.camera.lookAt(this.cameraLook);
     });
     this.interior.blockFuelDoor();
     audio.woodKnock();
-    this.cameraShake = 0.09;
-    this.caption('MACE', 'Twenty seconds, kid! Twenty!', 2.6);
-    await this.wait(1.2);
+    this.addShake(0.12);
+    this.caption('MACE', 'Thirty seconds, kid. Thirty!', 2.8);
+    this.caption('', 'The locker hit the frame. The fuel door buckled — but it held.', 3.2);
+    this.state = 'active';
+    this.callbacks.onPrompt?.(null);
+  }
 
-    // run to the table and the scissor jack
-    const runFrom = this.tim.group.position.clone();
-    const runTo = new THREE.Vector3(9.0, 0, -16.6);
-    await this.tween(0.8, (u) => {
-      this.tim.group.position.lerpVectors(runFrom, runTo, u);
-      this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, Math.PI, 0.12);
-      this.tim.setLocomotion(2.2, 1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(5.0, 2.15, -14.2), 0.08);
-      this.cameraLook.lerp(new THREE.Vector3(9.4, 1.05, -18.3), 0.09);
+  async kickIronDoor() {
+    if (this.state !== 'active') return;
+    this.state = 'sequence';
+    this.callbacks.onPrompt?.(null);
+    document.exitPointerLock?.();
+    this.escapePhase = 'jack';
+    const from = this.tim.group.position.clone();
+    const to = new THREE.Vector3(9.95, 0, -18.05);
+    await this.tween(0.45, (u) => {
+      this.tim.group.position.lerpVectors(from, to, u);
+      this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, Math.PI, 0.16);
+      this.camera.position.lerp(new THREE.Vector3(8.4, 1.72, -16.7), 0.1);
+      this.cameraLook.lerp(new THREE.Vector3(11.2, 1.05, -19.4), 0.1);
       this.camera.lookAt(this.cameraLook);
     });
-    this.tim.setLocomotion(0, 1 / 60);
-    this.caption('', 'The scissor jack was still on the work table.', 2.4);
-    await this.wait(0.7);
+    this.tim.poseLock = true;
+    this.tim.parts.legR.hip.rotation.x = -1.55;
+    this.tim.parts.legR.knee.rotation.x = 0.18;
+    this.tim.parts.legL.hip.rotation.x = 0.4;
+    this.tim.parts.torso.rotation.x = 0.24;
+    this.addShake(0.14);
+    this.cameraShake = 0.08;
+    audio.woodKnock();
+    audio.step(true);
+    await this.wait(0.35);
+    this.tim.parts.legR.hip.rotation.x = 0;
+    this.tim.parts.legR.knee.rotation.x = 0;
+    this.tim.parts.legL.hip.rotation.x = 0;
+    this.tim.parts.torso.rotation.x = 0;
+    this.tim.poseLock = false;
+    this.caption('TIM', 'It will not budge. It has to be lifted.', 2.6);
+    this.callbacks.onObjective?.('FIND SOMETHING TO LIFT THE DOOR', 'The work table. Look for a jack.');
+    this.interior.showJackMarker(true);
+    this.state = 'active';
+  }
+
+  async useJackOnDoor() {
+    if (this.state !== 'active' || !this.hasJack) return;
+    this.state = 'sequence';
+    this.escapePhase = 'crank';
+    if (this.escape) this.escape.active = false;
+    this.showEscapeTimer(false);
+    document.exitPointerLock?.();
+    this.callbacks.onPrompt?.(null);
+    this.interior.showIronMarker(false);
+
+    // frame the door and the work table
+    const from = this.tim.group.position.clone();
+    const to = new THREE.Vector3(9.9, 0, -18.0);
+    await this.tween(0.55, (u) => {
+      this.tim.group.position.lerpVectors(from, to, u);
+      this.tim.group.rotation.y = lerpAngle(this.tim.group.rotation.y, Math.PI, 0.18);
+      this.camera.position.lerp(new THREE.Vector3(8.3, 1.85, -16.6), 0.1);
+      this.cameraLook.lerp(new THREE.Vector3(11.3, 0.9, -19.3), 0.11);
+      this.camera.lookAt(this.cameraLook);
+    });
+    this.caption('TIM', 'Come on. Come on.', 1.8);
+    await this.wait(0.35);
 
     const ok = await this.runQTE({
       mode: 'tap',
       kicker: 'THE IRON DOOR',
       title: 'CRANK THE JACK',
       hint: 'Tap the handle — or press SPACE — to lift the door.',
-      target: 14,
-      duration: 12,
+      target: 12,
+      duration: 10,
       glyph: '↻',
     });
     if (!ok) { this.escapeFailed(); return; }
 
-    this.escape.active = false;
-    this.showEscapeTimer(false);
     audio.doorCreak();
     this.caption('', 'The jack bit. The door rose an inch at a time.', 2.8);
-    await this.tween(1.1, (u) => {
+    await this.tween(1.2, (u) => {
       this.interior.setIronLift(u * 0.92);
-      this.camera.position.lerp(new THREE.Vector3(7.9, 1.85, -15.6), 0.08);
-      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.7, -19.5), 0.09);
+      this.camera.position.lerp(new THREE.Vector3(8.6, 1.55, -16.4), 0.09);
+      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.55, -19.6), 0.1);
       this.camera.lookAt(this.cameraLook);
     });
     this.caption('MACE', 'No. No — NO!', 2.2);
-    await this.wait(0.6);
+    await this.wait(0.55);
 
-    // crawl under
+    // crawl under the iron door
     this.tim.poseLock = true;
     this.tim.setCrouch(1);
     const cFrom = this.tim.group.position.clone();
     const cTo = new THREE.Vector3(11.2, 0, -20.7);
-    await this.tween(2.4, (u) => {
+    await this.tween(2.5, (u) => {
       this.tim.group.position.lerpVectors(cFrom, cTo, u);
       this.tim.group.rotation.y = Math.PI;
-      this.tim.parts.torso.rotation.x = 0.9;
+      const wob = Math.sin(u * Math.PI * 3) * 0.04;
+      this.tim.parts.torso.rotation.x = 0.95 + wob;
       this.tim.parts.head.rotation.x = -0.4;
-      this.tim.parts.armL.shoulder.rotation.x = -1.2;
-      this.tim.parts.armR.shoulder.rotation.x = -1.2;
-      this.tim.parts.legL.hip.rotation.x = -0.5;
-      this.tim.parts.legR.hip.rotation.x = -0.5;
+      this.tim.parts.armL.shoulder.rotation.x = -1.2 + Math.sin(u * 18) * 0.2;
+      this.tim.parts.armR.shoulder.rotation.x = -1.2 - Math.sin(u * 18) * 0.2;
+      this.tim.parts.armL.elbow.rotation.x = -0.5;
+      this.tim.parts.armR.elbow.rotation.x = -0.5;
+      this.tim.parts.legL.hip.rotation.x = -0.5 + Math.sin(u * 14) * 0.18;
+      this.tim.parts.legR.hip.rotation.x = -0.5 - Math.sin(u * 14) * 0.18;
       this.tim.parts.legL.knee.rotation.x = 0.8;
       this.tim.parts.legR.knee.rotation.x = 0.8;
+      this.tim.body.position.y = -0.44;
       this.tim.updateFace(1 / 60);
-      this.camera.position.lerp(new THREE.Vector3(8.7, 1.35, -17.0), 0.06);
-      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.45, -20.7), 0.08);
+      this.camera.position.lerp(new THREE.Vector3(9.2, 0.95, -17.6), 0.08);
+      this.cameraLook.lerp(new THREE.Vector3(11.2, 0.38, -20.7), 0.1);
       this.camera.lookAt(this.cameraLook);
     });
     this.tim.poseLock = false;
+    this.tim.body.position.y = 0;
     this.interior.setIronLift(0);
     audio.woodKnock();
     audio.sting();
+    this.addShake(0.2);
     this.cameraShake = 0.16;
-    this.caption('', 'He kicked the jack away. The door came down like a guillotine.', 3.4);
-    await this.wait(1.1);
+    this.caption('', 'The jack slipped. The door came down like a guillotine.', 3.4);
+    await this.wait(1.2);
+    this.escapePhase = null;
+    this.escape = null;
     this.callbacks.onFade?.(1);
-    await this.wait(1.1);
+    await this.wait(1.0);
     this.chaseSequence();
   }
 
   escapeFailed() {
     if (this.dead || this.disposed) return;
+    this.playerDeath('shot', 'escape');
+  }
+
+  /* ---------------- death scenes ---------------- */
+  async playerDeath(kind = 'stab', retry = 'chase') {
+    if (this.dead || this.disposed) return;
     this.dead = true;
     this.state = 'sequence';
+    this.chaseActive = false;
+    this.chaseCrawling = false;
+    this.chaseEnding = true;
     if (this.escape) this.escape.active = false;
     this.showEscapeTimer(false);
     this.abortQTE(false);
-    document.getElementById('deathFx')?.classList.add('show');
-    audio.roar();
+    this.callbacks.onPrompt?.(null);
+    this.callbacks.hideChoice?.();
+    this.callbacks.onCaption?.(null);
+    document.exitPointerLock?.();
+    audio.setMood('encounter');
+    this.tim.poseLock = true;
+    this.tim.setExpression('scared');
+    const p = this.player.position.clone();
+
+    const facing = this.player.rotation.y;
+    const fx = Math.sin(facing), fz = Math.cos(facing);
+    const rx = Math.cos(facing), rz = -Math.sin(facing);
+
+    if (kind === 'shot') {
+      // Mace steps through the fuel-room door and ends it
+      if (this.mace) {
+        this.mace.group.position.set(p.x - fx * 1.65, 0, p.z - fz * 1.65);
+        this.mace.group.rotation.y = facing + Math.PI;
+        this.mace.setGunRaised(true);
+        this.mace.setExpression('angry');
+        this.mace.poseLock = true;
+        this.mace.parts.armR.shoulder.rotation.x = -1.5;
+        this.mace.parts.armR.elbow.rotation.x = -0.12;
+        this.mace.parts.armL.shoulder.rotation.x = -1.2;
+        this.mace.parts.armL.elbow.rotation.x = -0.8;
+      }
+      this.camera.position.set(p.x + rx * 2.2 + fx * 0.4, 1.68, p.z + rz * 2.2 + fz * 0.4);
+      this.cameraLook.set(p.x, 1.25, p.z);
+      this.camera.lookAt(this.cameraLook);
+      this.caption('MACE', 'Enough.', 1.4);
+      await this.wait(0.7);
+      // the first shell tears into the jammed iron door
+      if (this.interior) this.spawnBurst(new THREE.Vector3(11.2, 1.25, -19.15), { color: 'rgba(255,235,180,1)', edge: 'rgba(255,140,40,0)', size: 1.8, life: 200 });
+      audio.shot();
+      this.addShake(0.34);
+      this.cameraShake = 0.22;
+      this.caption('', 'The blast hit the iron door. The jack spun loose.', 1.9);
+      await this.wait(1.0);
+      this.caption('TIM', 'I - I -', 1.6);
+      await this.wait(1.0);
+      if (this.mace) this.spawnBurst(this.mace.group.position.clone().add(new THREE.Vector3(-fx * 0.3, 1.42, -fz * 0.3)), { size: 1.7, life: 180 });
+      audio.shot();
+      this.callbacks.onFlash?.();
+      this.addShake(0.55);
+      this.cameraShake = 0.5;
+      this.spawnBurst(new THREE.Vector3(p.x, 1.25, p.z), { color: 'rgba(255,235,180,1)', edge: 'rgba(255,140,40,0)', size: 2.2, life: 220 });
+      this.spawnBurst(new THREE.Vector3(p.x, 1.15, p.z), { color: 'rgba(150,20,12,1)', edge: 'rgba(60,0,0,0)', size: 1.5, life: 700 });
+      this.caption('', 'The blast folded him in half.', 2.4);
+      await this.tween(0.9, (u) => {
+        this.tim.group.rotation.x = u * 1.45;
+        this.tim.group.position.y = Math.sin(u * Math.PI) * 0.16;
+        this.tim.body.position.y = -u * 0.1;
+        this.camera.position.y = 1.68 + u * 0.08;
+        this.camera.lookAt(this.cameraLook);
+      });
+      this.tim.group.position.y = 0.12;
+      const blood = bloodDecal(1.5, 1.2);
+      blood.position.set(p.x, 0.045, p.z + 0.2);
+      this.scene.add(blood);
+    } else {
+      // drag him a few steps into the open so the kill reads against the sky, not a wall
+      let ox = 0, oz = 1;
+      if (this.phase === 'chase') {
+        ox = 1.5 - p.x; oz = 27.5 - p.z;
+        const l = Math.hypot(ox, oz) || 1; ox /= l; oz /= l;
+      } else {
+        ox = fx; oz = fz;
+      }
+      const c = new THREE.Vector3(p.x + ox * 2.6, 0, p.z + oz * 2.6);
+      this.player.position.copy(c);
+      this.player.rotation.y = Math.atan2(ox, oz);
+      p.copy(c);
+      if (this.jake) {
+        this.jake.poseLock = true;
+        this.jake.group.position.set(c.x + ox * 1.15, 0, c.z + oz * 1.15);
+        this.jake.group.rotation.y = Math.atan2(-ox, -oz);
+        this.jake.setExpression('snarl');
+        if (this.jake.parts.knife) this.jake.parts.knife.visible = true;
+        this.jake.parts.armL.shoulder.rotation.x = -1.35;
+        this.jake.parts.armL.elbow.rotation.x = -0.9;
+        this.jake.parts.armR.shoulder.rotation.x = -1.2;
+        this.jake.parts.armR.elbow.rotation.x = -1.1;
+      }
+      const crx = oz, crz = -ox;
+      this.camera.position.set(c.x + crx * 2.9 + ox * 0.2, 1.62, c.z + crz * 2.9 + oz * 0.2);
+      this.cameraLook.set(c.x, 1.2, c.z);
+      this.camera.lookAt(this.cameraLook);
+      this.caption('JAKE', 'Not fast enough.', 1.6);
+      await this.wait(0.6);
+      this.caption('TIM', 'No - no -', 1.3);
+      await this.wait(0.7);
+      // the thrust
+      if (this.jake) {
+        this.jake.parts.armR.shoulder.rotation.x = -1.7;
+        this.jake.parts.armR.elbow.rotation.x = -0.05;
+      }
+      audio.cloth();
+      audio.noiseBurst({ dur: 0.2, freq: 520, q: 1.8, gain: 0.24, type: 'bandpass' });
+      audio.tone({ freq: 92, dur: 0.3, gain: 0.1, type: 'sawtooth', slide: 0.45 });
+      this.addShake(0.45);
+      this.cameraShake = 0.32;
+      this.spawnBurst(new THREE.Vector3(p.x, 1.2, p.z), { color: 'rgba(150,20,12,1)', edge: 'rgba(60,0,0,0)', size: 1.2, life: 600 });
+      this.caption('', 'The blade went in under the ribs.', 2.4);
+      await this.wait(0.55);
+      // knees, then the ground
+      await this.tween(0.7, (u) => {
+        this.tim.parts.legL.hip.rotation.x = -0.5 * u;
+        this.tim.parts.legR.hip.rotation.x = -0.4 * u;
+        this.tim.parts.legL.knee.rotation.x = 1.5 * u;
+        this.tim.parts.legR.knee.rotation.x = 1.4 * u;
+        this.tim.body.position.y = -0.55 * u;
+        this.tim.parts.torso.rotation.x = 0.35 * u;
+      });
+      await this.tween(0.75, (u) => {
+        this.tim.group.rotation.x = -u * 1.4;
+        this.tim.group.position.y = -u * 0.15;
+        this.tim.body.position.y = -0.55;
+        this.camera.position.y = 1.6 - u * 0.35;
+        this.camera.lookAt(this.cameraLook);
+      });
+      const blood = bloodDecal(1.7, 1.4);
+      blood.position.set(p.x - ox * 0.3, 0.045, p.z - oz * 0.3);
+      this.scene.add(blood);
+    }
+
     audio.sting();
     this.callbacks.onCaption?.(null);
-    setTimeout(() => {
-      if (this.disposed) return;
-      document.getElementById('deathFx')?.classList.remove('show');
-      this.dead = false;
+    document.getElementById('deathFx')?.classList.add('show');
+    await this.wait(3.0);
+    if (this.disposed) return;
+    document.getElementById('deathFx')?.classList.remove('show');
+    this.dead = false;
+    this.chaseEnding = false;
+    this.chaseCrawling = false;
+    this.chaseActive = false;
+    this.tim.group.rotation.x = 0;
+    this.tim.group.rotation.z = 0;
+    this.tim.group.position.y = 0;
+    this.tim.body.position.y = 0;
+    this.tim.poseLock = false;
+    if (this.mace) this.mace.poseLock = false;
+    if (this.jake) this.jake.poseLock = false;
+    if (retry === 'escape') {
       this.escapeAttempts++;
       this.escapeSequence();
-    }, 2600);
+    } else {
+      this.chaseSequence();
+    }
   }
 
   /* ------------------------- quick actions ------------------------- */
@@ -1400,11 +1814,306 @@ export class Game {
     resolve?.(ok);
   }
 
+  async startLotCrawl() {
+    if (this.crawling) return;
+    this.crawling = true;
+    this.state = 'sequence';
+    this.callbacks.onPrompt?.(null);
+    document.exitPointerLock?.();
+    const p = this.player.position;
+    const from = p.clone();
+    const to = new THREE.Vector3(this.compound.holeX, 0, 11.15);
+    this.tim.poseLock = true;
+    this.tim.setCrouch(1);
+    audio.cloth();
+    audio.vent();
+    await this.tween(1.8, (u) => {
+      p.lerpVectors(from, to, u);
+      const wob = Math.sin(u * Math.PI * 3) * 0.04;
+      this.tim.parts.torso.rotation.x = 0.92 + wob;
+      this.tim.parts.head.rotation.x = -0.42;
+      this.tim.parts.armL.shoulder.rotation.x = -1.28 + Math.sin(u * 18) * 0.22;
+      this.tim.parts.armR.shoulder.rotation.x = -1.28 - Math.sin(u * 18) * 0.22;
+      this.tim.parts.armL.elbow.rotation.x = -0.55;
+      this.tim.parts.armR.elbow.rotation.x = -0.55;
+      this.tim.parts.legL.hip.rotation.x = -0.45 + Math.sin(u * 14) * 0.18;
+      this.tim.parts.legR.hip.rotation.x = -0.45 - Math.sin(u * 14) * 0.18;
+      this.tim.parts.legL.knee.rotation.x = 0.85;
+      this.tim.parts.legR.knee.rotation.x = 0.85;
+      this.tim.body.position.y = -0.42;
+      this.tim.updateFace(1 / 60);
+      const camZ = p.z + 2.1;
+      this.camera.position.lerp(new THREE.Vector3(p.x + 1.15, 0.62, camZ), 0.18);
+      this.cameraLook.lerp(new THREE.Vector3(p.x, 0.32, p.z - 1.7), 0.2);
+      this.camera.lookAt(this.cameraLook);
+    });
+    this.tim.poseLock = false;
+    this.tim.body.position.y = 0;
+    this.tim.setCrouch(0);
+    this.state = 'active';
+    this.crawling = false;
+    this.inside = true;
+    this.onEnteredLot();
+  }
+
+  async startChaseCrawl() {
+    if (this.chaseCrawling) return;
+    this.chaseCrawling = true;
+    this.state = 'sequence';
+    this.callbacks.onPrompt?.(null);
+    document.exitPointerLock?.();
+    const p = this.player.position;
+    const from = p.clone();
+    const to = new THREE.Vector3(this.compound.holeX, 0, 12.55);
+    this.tim.poseLock = true;
+    this.tim.setCrouch(1);
+
+    // Jake closes from behind and gets Tim by the ankles
+    this.jake.poseLock = true;
+    this.jake.group.position.set(this.compound.holeX + 0.1, 0, 10.55);
+    this.jake.group.rotation.y = 0;
+    this.jake.setExpression('snarl');
+    // Mace is waiting on the far side and takes him by the wrists
+    this.mace.group.position.set(this.compound.holeX - 0.15, 0, 14.35);
+    this.mace.group.rotation.y = Math.PI;
+    this.mace.setGunRaised(false);
+    this.mace.setExpression('angry');
+    this.mace.poseLock = true;
+
+    audio.cloth();
+    audio.vent();
+    this.addShake(0.08);
+    await this.tween(1.25, (u) => {
+      p.lerpVectors(from, to, u);
+      const wob = Math.sin(u * Math.PI * 3) * 0.045;
+      this.tim.parts.torso.rotation.x = 0.95 + wob;
+      this.tim.parts.head.rotation.x = -0.4;
+      this.tim.parts.armL.shoulder.rotation.x = -1.3 + Math.sin(u * 17) * 0.25;
+      this.tim.parts.armR.shoulder.rotation.x = -1.3 - Math.sin(u * 17) * 0.25;
+      this.tim.parts.armL.elbow.rotation.x = -0.5;
+      this.tim.parts.armR.elbow.rotation.x = -0.5;
+      this.tim.parts.legL.hip.rotation.x = -0.42 + Math.sin(u * 13) * 0.2;
+      this.tim.parts.legR.hip.rotation.x = -0.42 - Math.sin(u * 13) * 0.2;
+      this.tim.parts.legL.knee.rotation.x = 0.88;
+      this.tim.parts.legR.knee.rotation.x = 0.88;
+      this.tim.body.position.y = -0.44;
+      this.tim.updateFace(1 / 60);
+      this.camera.position.lerp(new THREE.Vector3(p.x + 2.4, 0.82, 11.2), 0.16);
+      this.cameraLook.lerp(new THREE.Vector3(p.x, 0.42, 13.1), 0.2);
+      this.camera.lookAt(this.cameraLook);
+    });
+
+    // two sets of hands close at once
+    this.jake.group.position.set(this.compound.holeX + 0.05, 0, 11.65);
+    this.jake.parts.torso.rotation.x = 0.72;
+    this.jake.parts.armL.shoulder.rotation.x = -1.5;
+    this.jake.parts.armR.shoulder.rotation.x = -1.45;
+    this.jake.parts.armL.elbow.rotation.x = -0.15;
+    this.jake.parts.armR.elbow.rotation.x = -0.2;
+    this.mace.group.position.set(this.compound.holeX - 0.1, 0, 13.55);
+    this.mace.parts.torso.rotation.x = 0.6;
+    this.mace.parts.armL.shoulder.rotation.x = -1.4;
+    this.mace.parts.armR.shoulder.rotation.x = -1.35;
+    this.mace.parts.armL.elbow.rotation.x = -0.2;
+    this.mace.parts.armR.elbow.rotation.x = -0.25;
+    this.caption('JAKE', 'Got you, little man.', 2.0);
+    await this.wait(0.35);
+    this.caption('MACE', 'Take his arms. I have his legs.', 2.2);
+    audio.heartbeat();
+    this.addShake(0.2);
+    this.cameraShake = 0.1;
+    await this.wait(0.65);
+
+    const ok = await this.runQTE({
+      mode: 'tap',
+      kicker: 'CAUGHT IN THE GAP',
+      title: 'KICK FREE',
+      hint: 'Tap the dial — or press SPACE — to kick both of them off.',
+      target: 9,
+      duration: 5,
+      glyph: '!',
+    });
+    if (!ok) { this.playerDeath('stab', 'chase'); return; }
+
+    // the kick: legs snap back into Jake, then Tim rolls clear
+    this.tim.parts.legL.hip.rotation.x = -1.5;
+    this.tim.parts.legR.hip.rotation.x = -1.35;
+    this.tim.parts.legL.knee.rotation.x = 0.15;
+    this.tim.parts.legR.knee.rotation.x = 0.2;
+    this.addShake(0.28);
+    audio.step(true);
+    audio.cloth();
+    this.cameraShake = 0.22;
+    await this.tween(0.5, (u) => {
+      this.jake.group.position.z = 11.65 - u * 1.9;
+      this.jake.group.position.y = Math.sin(u * Math.PI) * 0.12;
+      this.jake.group.rotation.y = Math.PI - u * 0.6;
+      this.jake.setExpression('shock');
+      this.mace.group.position.z = 13.55 + u * 1.6;
+      this.mace.group.rotation.y = Math.PI + u * 0.4;
+      this.mace.setExpression('shock');
+      this.mace.parts.torso.rotation.x = 0.6 - u * 0.5;
+      this.mace.parts.armL.shoulder.rotation.x = -1.4 + u * 1.2;
+      this.mace.parts.armR.shoulder.rotation.x = -1.35 + u * 1.1;
+    });
+
+    // Tim pulls the rest of himself through
+    const outFrom = p.clone();
+    const outTo = new THREE.Vector3(this.compound.holeX, 0, 13.7);
+    await this.tween(1.0, (u) => {
+      p.lerpVectors(outFrom, outTo, u);
+      const wob = Math.sin(u * Math.PI * 3) * 0.04;
+      this.tim.parts.torso.rotation.x = 0.95 + wob;
+      this.tim.parts.armL.shoulder.rotation.x = -1.2 + Math.sin(u * 15) * 0.2;
+      this.tim.parts.armR.shoulder.rotation.x = -1.2 - Math.sin(u * 15) * 0.2;
+      this.tim.parts.legL.hip.rotation.x = -0.5 + Math.sin(u * 12) * 0.16;
+      this.tim.parts.legR.hip.rotation.x = -0.5 - Math.sin(u * 12) * 0.16;
+      this.tim.body.position.y = -0.44;
+      this.camera.position.lerp(new THREE.Vector3(p.x + 2.0, 0.95, 12.2), 0.12);
+      this.cameraLook.lerp(new THREE.Vector3(p.x, 0.55, 15.2), 0.16);
+      this.camera.lookAt(this.cameraLook);
+    });
+
+    this.jake.poseLock = false;
+    this.mace.poseLock = false;
+    this.tim.poseLock = false;
+    this.tim.body.position.y = 0;
+    this.tim.setCrouch(0);
+    this.crouch = false;
+    this.crouchAmt = 0;
+    this.chaseHoleCrossed = true;
+    this.chaseCrawling = false;
+    this.state = 'active';
+    this.chaseDelay = 0.9;
+    if (ok) {
+      this.caption('TIM', 'Let go of me!', 1.4);
+    } else {
+      this.caption('', 'He tore his boot free and rolled through the gap.', 2.2);
+    }
+    if (this.chaseHoleMarker) this.chaseHoleMarker.visible = false;
+    if (this.chaseTruckMarker) this.chaseTruckMarker.visible = true;
+    this.callbacks.onObjective?.('GET TO THE TRUCK', 'Run. Do not look back.');
+    audio.setMood('chase');
+    this.camera.position.set(this.compound.holeX, 1.66, 13.7);
+    this.cameraLook.set(this.compound.holeX, 1.35, 19.0);
+    this.camera.lookAt(this.cameraLook);
+    this.yaw = Math.PI;
+    this.pitch = 0.04;
+    this.addShake(0.06);
+  }
+
+  spawnTracer(from, to, color = 0xffe0a8) {
+    const geo = new THREE.BufferGeometry().setFromPoints([from.clone(), to.clone()]);
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+    const line = new THREE.Line(geo, mat);
+    line.userData.noCull = true;
+    this.scene.add(line);
+    const scene = this.scene;
+    setTimeout(() => { scene.remove(line); geo.dispose(); mat.dispose(); }, 120);
+  }
+
+  spawnBurst(pos, { color = 'rgba(255,235,180,1)', edge = 'rgba(255,140,40,0)', size = 1.2, life = 260 } = {}) {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(color, edge), transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sprite.position.copy(pos);
+    sprite.scale.setScalar(size);
+    sprite.userData.noCull = true;
+    this.scene.add(sprite);
+    const scene = this.scene;
+    setTimeout(() => { scene.remove(sprite); sprite.material.dispose(); }, life);
+  }
+
+  async beginTruckEscape() {
+    if (this.chaseEnding || this.disposed) return;
+    this.chaseEnding = true;
+    this.state = 'sequence';
+    this.chaseActive = false;
+    this.callbacks.onPrompt?.(null);
+    document.exitPointerLock?.();
+    const p = this.player.position;
+
+    // the pursuers fall back to the gate and fire from there
+    this.jake.poseLock = false;
+    this.mace.poseLock = false;
+    this.jake.group.position.set(this.compound.holeX + 1.25, 0, 13.1);
+    this.mace.group.position.set(this.compound.holeX - 1.15, 0, 13.7);
+    this.jake.group.rotation.y = 0;
+    this.mace.group.rotation.y = 0;
+    this.jake.setExpression('angry');
+    this.mace.setExpression('angry');
+    this.mace.setGunRaised(true);
+    this.jake.parts.armR.shoulder.rotation.x = -1.4;
+    this.jake.parts.armR.elbow.rotation.x = -0.2;
+
+    const truckPos = new THREE.Vector3(1.5, 0, 27.5);
+    let tirePos = new THREE.Vector3(0.55, 0.5, 25.8);
+    if (this.chaseTruck) {
+      this.chaseTruck.updateMatrixWorld(true);
+      tirePos = this.chaseTruck.localToWorld(new THREE.Vector3(-1.02, 0.47, 1.82));
+    }
+
+    // player POV: eyes on the truck, then down onto the near tire
+    this.camera.position.set(p.x, 1.62, p.z);
+    this.cameraLook.set(truckPos.x, 1.25, truckPos.z);
+    this.camera.lookAt(this.cameraLook);
+    this.caption('TIM', 'The truck. Go!', 1.2);
+    await this.tween(0.8, (u) => {
+      this.cameraLook.lerp(new THREE.Vector3(truckPos.x, 1.1, truckPos.z), 0.1);
+      this.camera.lookAt(this.cameraLook);
+      this.player.rotation.y = lerpAngle(this.player.rotation.y, 0, 0.12);
+    });
+
+    // muzzle flash at the gate, then the round crosses the lot
+    const gateGun = this.jake.group.position.clone().add(new THREE.Vector3(0.1, 1.45, 0.35));
+    this.spawnBurst(gateGun, { size: 1.6, life: 180 });
+    this.spawnTracer(gateGun, tirePos);
+    audio.shot();
+    this.addShake(0.24);
+    this.cameraShake = 0.18;
+    this.caption('JAKE', 'Tire!', 1.0);
+    await this.wait(0.28);
+
+    // the tire lets go right in front of Tim
+    await this.tween(0.45, (u) => {
+      this.cameraLook.lerp(tirePos, 0.24);
+      this.camera.lookAt(this.cameraLook);
+    });
+    this.spawnBurst(tirePos, { size: 1.9, life: 320 });
+    this.spawnBurst(tirePos, { color: 'rgba(190,190,180,1)', edge: 'rgba(80,80,76,0)', size: 2.4, life: 900 });
+    audio.noiseBurst({ dur: 0.6, freq: 800, q: 0.5, gain: 0.3, type: 'bandpass' });
+    audio.tone({ freq: 62, dur: 0.9, gain: 0.14, type: 'sawtooth', slide: 0.45 });
+    this.addShake(0.4);
+    this.cameraShake = 0.3;
+    this.caption('', 'The front tire blew apart. Smoke poured off the rim.', 3.0);
+    await this.wait(1.2);
+
+    // dive for the door
+    const doorFrom = p.clone();
+    const doorTo = new THREE.Vector3(0.35, 0, 26.1);
+    await this.tween(0.9, (u) => {
+      p.lerpVectors(doorFrom, doorTo, u);
+      this.player.rotation.y = lerpAngle(this.player.rotation.y, Math.PI, 0.16);
+      this.tim.setLocomotion(4.4, 1 / 60);
+      this.tim.update(1 / 60);
+      this.camera.position.set(p.x, 1.6 - u * 0.05, p.z);
+      this.cameraLook.lerp(new THREE.Vector3(0.2, 1.35, 27.2), 0.14);
+      this.camera.lookAt(this.cameraLook);
+    });
+    this.callbacks.onObjective?.('GET IN THE TRUCK', 'The tire is gone. Go anyway.');
+    audio.setMood('tense');
+    this.callbacks.onFade?.(1);
+    await this.wait(1.05);
+    if (!this.disposed) this.truckSequence();
+  }
+
   /* ================================================================== *
    *  ACT III — the chase
    * ================================================================== */
   async chaseSequence() {
     if (this.disposed) return;
+    this.dead = false;
+    this.chaseEnding = false;
+    this.chaseCrawling = false;
+    this.chaseActive = false;
     this.callbacks.onFade?.(1);
     await this.wait(1.0);
     const scene = new THREE.Scene();
@@ -1489,6 +2198,7 @@ export class Game {
       truck.add(glow);
     }
 
+    this.setupCulling(scene);
     this.phase = 'chase';
     this.state = 'sequence';
     this.yaw = 0;
@@ -1508,6 +2218,7 @@ export class Game {
     this.callbacks.onFade?.(0);
     this.updateHudState();
 
+    audio.setMood('encounter');
     this.caption('JAKE', 'Going somewhere, little man?', 2.8);
     await this.wait(2.4);
     this.caption('', 'The knife pressed flat against his throat.', 2.6);
@@ -1525,7 +2236,7 @@ export class Game {
     if (!ok) {
       document.getElementById('app')?.classList.add('hurt');
       setTimeout(() => document.getElementById('app')?.classList.remove('hurt'), 600);
-      this.cameraShake = 0.14;
+      this.addShake(0.18);
       this.caption('', 'The blade caught his arm. He kicked anyway.', 2.6);
     } else {
       this.caption('TIM', 'Get off me!', 1.8);
@@ -1536,43 +2247,86 @@ export class Game {
     this.tim.parts.legL.hip.rotation.x = 0.5;
     this.tim.parts.torso.rotation.x = 0.3;
     const jFrom = this.jake.group.position.clone();
-    await this.tween(0.7, (u) => {
-      this.jake.group.position.z = jFrom.z + u * 1.4;
-      this.jake.group.position.y = Math.sin(u * Math.PI) * 0.12;
+    await this.tween(0.55, (u) => {
+      this.jake.group.position.z = jFrom.z + u * 1.7;
+      this.jake.group.position.y = Math.sin(u * Math.PI) * 0.1;
       this.jake.group.rotation.y = Math.PI - u * 0.7;
       this.jake.setExpression('shock');
-      this.cameraShake = 0.1;
+      this.addShake(0.12);
       this.camera.position.lerp(new THREE.Vector3(2.5, 1.55, -14.4), 0.1);
       this.cameraLook.lerp(new THREE.Vector3(-0.3, 1.3, -15.6), 0.1);
       this.camera.lookAt(this.cameraLook);
     });
+
+    // Jake folds over his knee and needs a second to remember how to stand
+    this.jake.poseLock = true;
+    this.jake.group.position.set(1.25, 0, -13.35);
+    this.jake.group.rotation.y = Math.PI - 0.55;
+    this.jake.setExpression('shock');
+    this.jake.parts.torso.rotation.x = 0.6;
+    this.jake.parts.head.rotation.x = 0.28;
+    this.jake.parts.armL.shoulder.rotation.x = -0.35;
+    this.jake.parts.armR.shoulder.rotation.x = -0.22;
+    this.jake.parts.armL.elbow.rotation.x = -0.2;
+    this.jake.parts.armR.elbow.rotation.x = -0.2;
+    this.jake.parts.legR.hip.rotation.x = -0.45;
+    this.jake.parts.legR.knee.rotation.x = 0.75;
     this.tim.poseLock = false;
-    this.jake.poseLock = false;
+    this.tim.body.position.y = 0;
     audio.step(true);
     audio.cloth();
-    this.jake.group.position.set(1.9, 0, -13.6);
-    this.jake.parts.armR.shoulder.rotation.x = 0;
-    this.caption('TIM', 'Move!', 1.2);
-    await this.wait(0.7);
+    this.caption('', 'Jake folded over his knee.', 1.6);
+    await this.wait(1.05);
 
-    // run to the gate
-    this.state = 'sequence';
-    const from = this.tim.group.position.clone();
-    const to = new THREE.Vector3(-10.1, 0, 10.4);
-    await this.tween(3.2, (u) => {
-      this.tim.group.position.lerpVectors(from, to, u);
-      this.tim.group.rotation.y = 0;
-      this.tim.setLocomotion(4.6, 1 / 60);
-      this.stepTimer -= 1 / 60;
-      if (this.stepTimer <= 0) { this.stepTimer = 0.3; audio.step(true); }
-      this.camera.position.lerp(new THREE.Vector3(-14.9, 2.75, 7.1), 0.05);
-      this.cameraLook.lerp(new THREE.Vector3(-9.6, 1.3, 13.4), 0.06);
-      this.camera.lookAt(this.cameraLook);
-      this.jake.group.position.z += 4.8 * (1 / 60);
-      this.mace.group.position.z += 4.6 * (1 / 60);
-    });
-    this.tim.setLocomotion(0, 1 / 60);
-    this.gateChoice();
+    // he straightens, and the line lands like a door closing
+    this.jake.poseLock = false;
+    this.jake.setExpression('angry');
+    this.jake.parts.torso.rotation.x = 0;
+    this.jake.parts.head.rotation.x = 0;
+    this.jake.parts.armL.shoulder.rotation.x = 0;
+    this.jake.parts.armR.shoulder.rotation.x = 0;
+    this.jake.parts.legR.hip.rotation.x = 0;
+    this.jake.parts.legR.knee.rotation.x = 0;
+    this.jake.group.rotation.y = Math.PI;
+    this.jake.setTalking(1.6, 1);
+    this.caption('JAKE', "That's it.", 2.0);
+    this.addShake(0.14);
+    await this.wait(1.25);
+    this.caption('TIM', 'Move!', 1.0);
+    await this.wait(0.35);
+
+    // route markers
+    this.chaseHoleMarker = markerMesh();
+    this.chaseHoleMarker.position.set(this.compound.holeX, 0.1, 11.4);
+    this.chaseHoleMarker.scale.setScalar(0.7);
+    this.scene.add(this.chaseHoleMarker);
+    this.chaseTruckMarker = markerMesh();
+    this.chaseTruckMarker.position.set(1.5, 0.1, 26.0);
+    this.chaseTruckMarker.visible = false;
+    this.scene.add(this.chaseTruckMarker);
+
+    // hand control back to the player
+    this.state = 'active';
+    this.chaseActive = true;
+    this.chaseDelay = 1.35;
+    this.chaseHitCooldown = 1.6;
+    this.chaseHoleCrossed = false;
+    this.chaseCrawling = false;
+    this.chaseEnding = false;
+    this.chaseHitCooldown = 0;
+    this.crouch = false;
+    this.crouchAmt = 0;
+    this.tim.setCrouch(0);
+    this.yaw = Math.PI;
+    this.pitch = 0.06;
+    this.camera.position.set(0, 1.66, -15.9);
+    this.cameraLook.set(0, 1.35, -10.2);
+    this.camera.lookAt(this.cameraLook);
+    this.callbacks.onObjective?.('GET TO THE TRUCK', 'Run. Crouch through the fence gap.');
+    this.callbacks.onPrompt?.(null);
+    audio.setMood('chase');
+    this.addShake(0.08);
+    this.updateHudState();
   }
 
   gateChoice() {
@@ -1661,6 +2415,7 @@ export class Game {
     this.tim = this.truck.tim;
     this.mace = this.truck.mace;
     this.jake = this.truck.jake;
+    this.setupCulling(scene);
     this.phase = 'truck';
     this.state = 'sequence';
     this.camera.fov = 42;
@@ -1729,23 +2484,37 @@ export class Game {
     }
     await this.wait(1.4);
 
-    this.truck.attack(-1);
+    // Tim checks the mirror: the shooters are still back at the gate
+    this.caption('TIM', 'They are at the gate — not the road.', 2.0);
+    await this.tween(0.7, (u) => {
+      this.truckCam.look.lerp(new THREE.Vector3(0, 1.5, -7.6), 0.18);
+      this.truck.setShake(0.06 + u * 0.05);
+    });
+    this.truck.shootFromGate();
     this.callbacks.onFlash?.();
     this.cameraShake = 0.24;
-    this.caption('', 'A shotgun blast took the mirror off.', 2.4);
-    await this.wait(1.2);
+    this.addShake(0.26);
+    this.caption('', 'A round punched through the back window.', 2.2);
+    await this.wait(0.9);
     this.truck.breakSideGlass();
     this.cameraShake = 0.26;
-    this.caption('', 'Glass sprayed across the cab.', 2.2);
-    await this.wait(1.2);
-    this.truck.attack(1);
-    this.truck.hitWindshield(0.5);
-    this.caption('MACE', 'JAAKE! STOP HIM!', 2.2);
-    await this.wait(1.3);
-    this.caption('', 'A tire blew. The wheel went light in his hands.', 2.6);
-    this.truck.setShake(0.34);
+    this.addShake(0.18);
+    this.caption('', 'The next one took the mirror off.', 2.0);
+    await this.wait(0.9);
+    this.caption('MACE', 'JAAKE! STOP HIM!', 1.6);
+    await this.wait(0.7);
+
+    // the tire that was shot at the gate finally lets go
+    await this.tween(0.55, (u) => {
+      this.truckCam.look.lerp(new THREE.Vector3(0, 1.52, 5.6), 0.16);
+      this.truck.setShake(0.16 + u * 0.2);
+    });
+    this.truck.blowTire();
+    this.truck.setShake(0.36);
+    this.addShake(0.34);
     audio.shot();
-    await this.wait(1.4);
+    this.caption('', 'The shot tire let go. The wheel went light in his hands.', 2.8);
+    await this.wait(1.3);
 
     this.truck.crash();
     audio.roar();
@@ -1769,18 +2538,58 @@ export class Game {
   /* ------------------------------ helpers ------------------------------ */
   interact() {
     if (this.phase === 'store' && this.state === 'active') { this.interactStore(); return; }
-    if (this.phase !== 'lot') return;
-    if (this.branch === 'side' && this.state === 'active') {
-      const p = this.player.position;
+    if (this.phase === 'chase' && this.state === 'active') {
+      const cp = this.player.position;
+      if (this.chaseHoleCrossed && Math.hypot(cp.x - 1.5, cp.z - 26.5) < 4.2) this.beginTruckEscape();
+      return;
+    }
+    if (this.phase !== 'lot' || this.state !== 'active') return;
+    const p = this.player.position;
+    if (this.branch === 'side') {
       if (Math.hypot(p.x - this.compound.ventTrigger.x, p.z - this.compound.ventTrigger.z) < 3.6) {
         this.startVentSequence();
+        return;
       }
+    }
+    const shed = this.compound.shedTrigger;
+    if (!this.shedLooted && shed && Math.hypot(p.x - shed.x, p.z - shed.z) < 3.1) {
+      this.shedLooted = true;
+      this.compound.shedMarker.visible = false;
+      audio.canOpen();
+      this.caption('TIM', 'A flare. A coil of wire. No gun. It will have to do.', 3.4);
+      this.callbacks.onObjective?.('FIND A WAY PAST THE GATE', 'The store looks sealed. Look for a weakness.');
+      this.addShake(0.04);
     }
   }
 
   interactStore() {
     const f = this.storeFocus;
     if (!f) return;
+    if (f.kind === 'jack') {
+      this.hasJack = true;
+      this.escapePhase = 'door';
+      this.interior.takeJack();
+      this.interior.showJackMarker(false);
+      this.interior.showIronMarker(true);
+      audio.woodKnock();
+      audio.cloth();
+      this.callbacks.onObjective?.('JACK THE IRON DOOR', 'The back door. Wedge the jack under it.');
+      this.caption('TIM', 'Jack. Heavy. Good.', 2.0);
+      this.addShake(0.05);
+      return;
+    }
+    if (f.kind === 'iron') {
+      if (!this.hasJack) { this.kickIronDoor(); return; }
+      this.useJackOnDoor();
+      return;
+    }
+    if (f.kind === 'office') {
+      this.officeRead = true;
+      this.callbacks.onObjective?.('SEARCH THE STORE', 'Ten cans. Then the fuel room.');
+      this.caption('', "The foreman's log: 'They came through the vents on the 12th. We sealed the fuel room. God forgive us.'", 5.0);
+      audio.paper?.();
+      return;
+    }
     if (f.kind === 'can') {
       if (!this.interior.takeCan(f.target)) return;
       this.cansFound++;
@@ -1826,70 +2635,79 @@ export class Game {
     }
   }
 
+  addShake(amount = 0.02) {
+    this.trauma = Math.min(1, (this.trauma || 0) + amount * 3.4);
+  }
+
+  applyShake(dt, scale = 1) {
+    if (this.trauma <= 0.001) { this.trauma = 0; return; }
+    this.shakeTime += dt;
+    const t = this.shakeTime;
+    const s = this.trauma * this.trauma;
+    this.camera.position.x += shakeNoise(t * 23.0) * 0.085 * s * scale;
+    this.camera.position.y += shakeNoise(t * 27.0 + 11.0) * 0.07 * s * scale;
+    this.camera.rotation.z += shakeNoise(t * 19.0 + 5.0) * 0.03 * s * scale;
+    this.camera.rotation.x += shakeNoise(t * 21.0 + 2.0) * 0.018 * s * scale;
+    this.camera.rotation.y += shakeNoise(t * 17.0 + 7.0) * 0.018 * s * scale;
+    this.trauma = Math.max(0, this.trauma - dt * 0.9);
+  }
+
+  /* first-person: eyes in Tim's head, body visible below the camera */
+  updateFirstPersonCamera(dt) {
+    const p = this.player.position;
+    const speed = this.tim?.moveSpeed ?? 0;
+    const moving = speed > 0.2;
+    const targetAmt = moving ? Math.min(1, speed / 3.6) : 0;
+    this.fpBobAmt = damp(this.fpBobAmt, targetAmt, 7, dt);
+    this.fpBob += dt * (this.crouch ? 6.2 : (speed > 3.8 ? 11.4 : 8.6));
+    const bobY = Math.sin(this.fpBob) * 0.026 * this.fpBobAmt;
+    const bobX = Math.cos(this.fpBob * 0.5) * 0.014 * this.fpBobAmt;
+    const eye = 1.63 - this.crouchAmt * 0.52;
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
+    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    const fwdX = -sy, fwdZ = -cy;
+    this.camera.position.set(
+      p.x + fwdX * 0.05 + rx * bobX,
+      p.y + eye + bobY + Math.sin(this.time * 1.55) * 0.004,
+      p.z + fwdZ * 0.05 + rz * bobX
+    );
+    const cp = Math.cos(this.pitch);
+    this.cameraLook.set(
+      this.camera.position.x + fwdX * cp * 6,
+      this.camera.position.y - Math.sin(this.pitch) * 6,
+      this.camera.position.z + fwdZ * cp * 6
+    );
+    this.camera.lookAt(this.cameraLook);
+    if (Math.abs(this.camera.fov - 70) > 0.05) {
+      this.camera.fov = damp(this.camera.fov, 70, 6, dt);
+      this.camera.updateProjectionMatrix();
+    }
+    // the body turns with the look direction while idle, and into the stride while moving
+    const bodyTarget = moving ? Math.atan2(this.move.x, this.move.y) : this.yaw + Math.PI;
+    this.player.rotation.y = lerpAngle(this.player.rotation.y, bodyTarget, 1 - Math.exp(-11 * dt));
+    this.applyShake(dt, 1);
+  }
+
   updateCamera(dt) {
     if (this.phase === 'truck') { this.updateTruckCamera(dt); return; }
     if (this.phase === 'store') {
-      if (this.state !== 'active') {
-        if (this.cameraShake > 0) {
-          this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
-          this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
-          this.cameraShake = Math.max(0, this.cameraShake - dt * 0.35);
-        }
-        return;
-      }
-      const p = this.player.position;
-      const targetY = 1.45 - this.crouchAmt * 0.35;
-      const dist = 4.8;
-      const hd = Math.cos(this.pitch) * dist;
-      const shoulder = 0.62;
-      const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
-      const desired = new THREE.Vector3(
-        p.x + sy * hd + cy * shoulder,
-        p.y + targetY + 1.02 + Math.sin(this.pitch) * 2.3,
-        p.z + cy * hd - sy * shoulder
-      );
-      const b = this.bounds;
-      desired.x = clamp(desired.x, b.minX + 0.5, b.maxX - 0.5);
-      desired.z = clamp(desired.z, b.minZ + 0.5, b.maxZ - 0.5);
-      desired.y = clamp(desired.y, 0.85, 4.6);
-      this.camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
-      const lookTarget = new THREE.Vector3(p.x - sy * 1.8, p.y + targetY + 0.08, p.z - cy * 1.8);
-      this.cameraLook.lerp(lookTarget, 1 - Math.exp(-12 * dt));
-      this.camera.lookAt(this.cameraLook);
-      return;
-    }
-    if (this.phase === 'chase') {
-      if (this.state !== 'active') {
-        if (this.cameraShake > 0) {
-          this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
-          this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
-          this.cameraShake = Math.max(0, this.cameraShake - dt * 0.4);
-        }
-        return;
-      }
-      const p = this.player.position;
-      const targetY = 1.55;
-      const dist = 5.1;
-      const hd = Math.cos(this.pitch) * dist;
-      const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
-      const desired = new THREE.Vector3(
-        p.x + sy * hd + cy * 0.7,
-        p.y + targetY + 0.9 + Math.sin(this.pitch) * 2.4,
-        p.z + cy * hd - sy * 0.7
-      );
-      const b = this.bounds;
-      desired.x = clamp(desired.x, b.minX + 1, b.maxX - 1);
-      desired.z = clamp(desired.z, b.minZ + 1, b.maxZ - 1);
-      desired.y = clamp(desired.y, 0.8, 9);
-      this.camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
-      const lookTarget = new THREE.Vector3(p.x - sy * 1.6, p.y + targetY + 0.1, p.z - cy * 1.6);
-      this.cameraLook.lerp(lookTarget, 1 - Math.exp(-12 * dt));
-      this.camera.lookAt(this.cameraLook);
+      if (this.state === 'active') { this.updateFirstPersonCamera(dt); return; }
       if (this.cameraShake > 0) {
         this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
         this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
-        this.cameraShake = Math.max(0, this.cameraShake - dt * 0.45);
+        this.cameraShake = Math.max(0, this.cameraShake - dt * 0.35);
       }
+      this.applyShake(dt, 0.7);
+      return;
+    }
+    if (this.phase === 'chase') {
+      if (this.state === 'active') { this.updateFirstPersonCamera(dt); return; }
+      if (this.cameraShake > 0) {
+        this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
+        this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
+        this.cameraShake = Math.max(0, this.cameraShake - dt * 0.4);
+      }
+      this.applyShake(dt, 0.7);
       return;
     }
     if (this.state === 'choice') {
@@ -1898,6 +2716,7 @@ export class Game {
       this.camera.position.lerp(pos, 1 - Math.exp(-3.5 * dt));
       this.cameraLook.lerp(look, 1 - Math.exp(-4 * dt));
       this.camera.lookAt(this.cameraLook);
+      this.applyShake(dt, 0.7);
       return;
     }
     if (this.state === 'sequence') {
@@ -1906,37 +2725,10 @@ export class Game {
         this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
         this.cameraShake = Math.max(0, this.cameraShake - dt * 0.35);
       }
+      this.applyShake(dt, 0.7);
       return;
     }
-    const p = this.player.position;
-    const targetY = 1.52 - this.crouchAmt * 0.42;
-    const pitch = this.pitch;
-    const dist = 4.6 - this.crouchAmt * 0.35;
-    const hd = Math.cos(pitch) * dist;
-    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
-    const desired = new THREE.Vector3(
-      p.x + sy * hd + cy * 0.5,
-      p.y + targetY + 0.78 + Math.sin(pitch) * 3.0,
-      p.z + cy * hd - sy * 0.5
-    );
-    if (desired.x > -22.5 && desired.x < 22.5 && desired.z < -16.4) {
-      desired.z = -16.2;
-      desired.y = Math.max(desired.y, 2.2);
-    }
-    const b = this.bounds || this.compound.bounds;
-    desired.x = clamp(desired.x, b.minX - 3, b.maxX + 3);
-    desired.z = clamp(desired.z, b.minZ, b.maxZ + 4);
-    desired.y = Math.max(0.65, desired.y);
-    const k = 1 - Math.exp(-8 * dt);
-    this.camera.position.lerp(desired, k);
-    const lookTarget = new THREE.Vector3(p.x - sy * 1.3, p.y + targetY + 0.18, p.z - cy * 1.3);
-    this.cameraLook.lerp(lookTarget, 1 - Math.exp(-11 * dt));
-    this.camera.lookAt(this.cameraLook);
-    if (this.cameraShake > 0) {
-      this.camera.position.x += (Math.random() - 0.5) * this.cameraShake;
-      this.camera.position.y += (Math.random() - 0.5) * this.cameraShake;
-      this.cameraShake = Math.max(0, this.cameraShake - dt * 0.45);
-    }
+    this.updateFirstPersonCamera(dt);
   }
 
   updateTruckCamera(dt) {

@@ -120,6 +120,17 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   windshield.add(cracks);
   scene.add(windshield);
 
+  // rear window — this is what the gate shooters hit
+  const rearCrackMat = new THREE.MeshBasicMaterial({ map: crackTexture(9), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+  const rearCracks = plane(1.26, 0.52, rearCrackMat, 0, 1.6, -1.17);
+  rearCracks.rotation.y = Math.PI;
+  cab.add(rearCracks);
+
+  // dashboard warning lamp for the shot-out tire
+  const tireWarnMat = new THREE.MeshStandardMaterial({ color: 0x2a0d08, emissive: 0xff2a12, emissiveIntensity: 0, roughness: 0.4 });
+  const tireWarn = box(0.07, 0.05, 0.02, tireWarnMat, 0.27, 1.26, 1.53);
+  cab.add(tireWarn);
+
   // driver side window glass
   const sideGlassMat = new THREE.MeshPhysicalMaterial({ color: 0x8fa49b, transparent: true, opacity: 0.13, roughness: 0.06, metalness: 0.2, side: THREE.DoubleSide, depthWrite: false });
   const sideGlass = plane(0.94, 0.5, sideGlassMat, -1.075, 1.42, 0.1);
@@ -166,37 +177,51 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   };
   wheelPose();
 
-  // Mace outside the driver window for the start scene
+  // The attackers stay back at the gate and shoot at the truck from there.
   let mace = null;
+  let jake = null;
   const attackers = [];
+  let gateGroup = null;
   if (mode === 'start') {
-    // Mace stands in the headlights, blocking the road ahead
+    gateGroup = new THREE.Group();
+    gateGroup.position.set(0, 0, -15.2);
+    scene.add(gateGroup);
+    for (const s of [-1, 1]) {
+      gateGroup.add(box(0.16, 3.4, 0.16, MAT.darkMetal, s * 4.2, 1.7, 0));
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.32, 8), MAT.rust);
+      cap.position.set(s * 4.2, 3.55, 0); gateGroup.add(cap);
+    }
+    const panel = plane(8.2, 2.8, new THREE.MeshStandardMaterial({ color: 0x2c322d, roughness: 0.9, transparent: true, opacity: 0.55, side: THREE.DoubleSide }), 0, 1.4, 0);
+    gateGroup.add(panel);
+    for (let i = 0; i < 14; i++) gateGroup.add(box(0.035, 2.8, 0.035, MAT.darkMetal, -3.9 + i * 0.6, 1.4, 0.02));
+    const gateLamp = new THREE.PointLight(0xffc07a, 12, 14, 2);
+    gateLamp.position.set(-3.4, 3.1, -1.0); gateGroup.add(gateLamp);
+    const gateGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,200,140,1)', 'rgba(255,140,60,0)'), transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending }));
+    gateGlow.position.set(-3.4, 3.1, -1.0); gateGlow.scale.set(2.6, 2.6, 1); gateGroup.add(gateGlow);
+
+    // Mace holds the gate on the left
     mace = createMace();
-    mace.group.position.set(0.32, -0.02, 6.3);
-    mace.group.rotation.y = Math.PI;
-    mace.parts.armR.shoulder.rotation.x = -1.32;
-    mace.parts.armR.elbow.rotation.x = -0.62;
-    mace.parts.armL.shoulder.rotation.x = -1.12;
-    mace.parts.armL.elbow.rotation.x = -0.9;
+    mace.group.position.set(-2.7, 0, -12.1);
+    mace.group.rotation.y = 0;
+    mace.parts.armR.shoulder.rotation.x = -1.42;
+    mace.parts.armR.elbow.rotation.x = -0.18;
+    mace.parts.armL.shoulder.rotation.x = -1.2;
+    mace.parts.armL.elbow.rotation.x = -0.5;
     mace.holdingGun = true;
     scene.add(mace.group);
     attackers.push(mace);
-    // cold rim light so the masked man reads against the dark
-    const maceRim = new THREE.PointLight(0xa9c4bc, 16, 12, 2);
-    maceRim.position.set(-1.6, 3.4, 8.6);
-    scene.add(maceRim);
-  }
-  let jake = null;
-  if (mode === 'start') {
-    // Jake flanks the driver's window, just out of the camera's forward view
+    // Jake takes the right side of the gate
     jake = createJake();
-    jake.group.position.set(-2.45, -0.02, 1.55);
-    jake.group.rotation.y = Math.PI / 2;
-    jake.parts.armR.shoulder.rotation.x = -1.2;
-    jake.parts.armR.elbow.rotation.x = -0.55;
+    jake.group.position.set(2.9, 0, -11.4);
+    jake.group.rotation.y = 0;
+    jake.parts.armR.shoulder.rotation.x = -1.3;
+    jake.parts.armR.elbow.rotation.x = -0.32;
     jake.holdingGun = true;
     scene.add(jake.group);
     attackers.push(jake);
+    const rim = new THREE.PointLight(0xa9c4bc, 13, 16, 2);
+    rim.position.set(0.4, 4.2, -9.0);
+    scene.add(rim);
   }
 
   // dust / rain
@@ -215,6 +240,7 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   const update = (dt, t) => {
     tim.updateFace(dt);
     mace?.update(dt);
+    jake?.update(dt);
     ash.update(dt, t);
     wheelPose();
     // keep Tim's head and shoulders alive
@@ -261,16 +287,21 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
   const muzzleLights = [];
   const muzzleFlash = (side = -1) => {
     const g = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,235,180,1)', 'rgba(255,140,40,0)'), transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }));
-    g.position.set(side < 0 ? -2.1 : 0.4, 1.45, side < 0 ? 0.9 : 5.1);
-    g.scale.set(1.4, 1.4, 1);
+    if (mace && jake) {
+      const shooter = side < 0 ? mace : jake;
+      g.position.copy(shooter.group.position).add(new THREE.Vector3(side < 0 ? 0.12 : -0.1, 1.48, 0.34));
+    } else {
+      g.position.set(side < 0 ? -2.1 : 0.4, 1.45, side < 0 ? 0.9 : 5.1);
+    }
+    g.scale.set(1.5, 1.5, 1);
     scene.add(g);
-    const light = new THREE.PointLight(0xffd7a0, 26, 12, 2);
+    const light = new THREE.PointLight(0xffd7a0, 30, 16, 2);
     light.position.copy(g.position);
     scene.add(light);
     muzzleLights.push({ g, light, t: 0.1 });
   };
   return {
-    cab, tim, mace, jake, attackers, windshield, cracks, crackMat, sideGlass, windMat, beams, get speed() { return speed; }, update, trees, rails, lines, road, roadTex, smoke, smokeMat,
+    cab, tim, mace, jake, attackers, windshield, cracks, crackMat, rearCrackMat, tireWarn, sideGlass, windMat, beams, get speed() { return speed; }, update, trees, rails, lines, road, roadTex, smoke, smokeMat,
     setSpeed(v) { speed = v; },
     setShake(v) { shake = v; },
     startEngine() {
@@ -304,6 +335,21 @@ export function buildTruckScene(scene, { mode = 'start' } = {}) {
         m.g.material.opacity *= 0.7;
         if (m.t <= 0) { scene.remove(m.g, m.light); muzzleLights.splice(i, 1); }
       }
+    },
+    shootFromGate() {
+      muzzleFlash(-1);
+      rearCrackMat.opacity = Math.min(1, rearCrackMat.opacity + 0.8);
+      shake = 0.22;
+      audio.shot();
+    },
+    blowTire() {
+      tireWarnMat.emissiveIntensity = 2.2;
+      shake = 0.4;
+      audio.noiseBurst({ dur: 0.55, freq: 900, q: 0.6, gain: 0.28, type: 'bandpass' });
+      audio.tone({ freq: 70, dur: 0.8, gain: 0.12, type: 'sawtooth', slide: 0.4 });
+      const burst = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,235,180,1)', 'rgba(255,140,40,0)'), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+      burst.position.set(-1.35, 0.62, -1.9); burst.scale.set(1.8, 1.8, 1); scene.add(burst);
+      setTimeout(() => { burst.material.opacity = 0; }, 140);
     },
     crash() {
       crashT = 2;

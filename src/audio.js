@@ -8,6 +8,8 @@ const SCALES = {
   sad: [43.65, 55, 65.41, 87.31, 110, 130.81, 174.61],
   calm: [65.41, 82.41, 98, 130.81, 164.81, 196],
   dark: [41.2, 43.65, 61.74, 82.41, 103.83, 123.47, 164.81],
+  encounter: [41.2, 49, 55, 61.74, 82.41, 98, 103.83],
+  chase: [36.71, 43.65, 49, 55, 65.41, 73.42, 87.31],
 };
 
 export class AudioEngine {
@@ -20,6 +22,9 @@ export class AudioEngine {
     this.musicTimer = 0;
     this.ambient = {};
     this.volume = 0.85;
+    this.bgmMode = null;
+    this.beatTimer = 0;
+    this.beatIndex = 0;
   }
 
   ensure() {
@@ -125,6 +130,9 @@ export class AudioEngine {
 
   setMood(mood) {
     this.mood = mood;
+    this.bgmMode = mood === 'encounter' || mood === 'chase' ? mood : null;
+    this.beatTimer = 0;
+    this.beatIndex = 0;
     if (!this.ready) return;
     this.startDrone();
     if (this.ambient.drone) {
@@ -133,10 +141,85 @@ export class AudioEngine {
       nodes[0].frequency.setTargetAtTime(base, this.ctx.currentTime, 2);
       nodes[1].frequency.setTargetAtTime(base * 1.5, this.ctx.currentTime, 2);
       nodes[2].frequency.setTargetAtTime(base * 2, this.ctx.currentTime, 2);
-      this.ambient.drone.g.gain.setTargetAtTime(mood === 'tense' || mood === 'dark' ? 0.05 : 0.03, this.ctx.currentTime, 2);
+      this.ambient.drone.g.gain.setTargetAtTime(
+        mood === 'encounter' ? 0.07 : mood === 'chase' ? 0.06 : mood === 'tense' || mood === 'dark' ? 0.05 : 0.03,
+        this.ctx.currentTime, 2
+      );
     }
     this.musicTimer = 0;
     this.noteTimer = 1.5;
+  }
+
+  /* ---------------- layered encounter / chase score ---------------- */
+  musicTone({ freq = 110, dur = 0.3, gain = 0.05, type = 'triangle', slide = 0, delay = 0, attack = 0.005, pan = 0 } = {}) {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime + delay;
+    const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(18, freq * slide), t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const p = ctx.createStereoPanner(); p.pan.value = pan;
+    o.connect(g); g.connect(p); p.connect(this.musicBus); p.connect(this.musicSend);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  musicNoise({ dur = 0.1, freq = 1800, q = 0.8, gain = 0.04, type = 'bandpass', pan = 0 } = {}) {
+    if (!this.ready) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    const src = ctx.createBufferSource(); src.buffer = this.noise; src.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const p = ctx.createStereoPanner(); p.pan.value = pan;
+    src.connect(f); f.connect(g); g.connect(p); p.connect(this.musicBus); p.connect(this.musicSend);
+    src.start(t); src.stop(t + dur + 0.04);
+  }
+
+  encounterBeat() {
+    const i = this.beatIndex++;
+    // a slow, wrong heartbeat
+    this.musicTone({ freq: 43.65, dur: 0.26, gain: 0.12, type: 'sine', slide: 0.55 });
+    this.musicTone({ freq: 36.71, dur: 0.32, gain: 0.09, type: 'sine', slide: 0.5, delay: 0.2 });
+    if (i % 4 === 0) {
+      this.musicTone({ freq: 82.41, dur: 2.6, gain: 0.022, type: 'sawtooth', slide: 0.985, attack: 0.4, pan: -0.2 });
+      this.musicTone({ freq: 87.31, dur: 2.6, gain: 0.018, type: 'sawtooth', slide: 1.01, attack: 0.5, pan: 0.25 });
+    }
+    if (i % 8 === 3) {
+      this.musicNoise({ dur: 0.5, freq: 3200, q: 0.5, gain: 0.025, type: 'highpass', pan: 0.3 });
+    }
+    if (i % 16 === 12) {
+      this.musicTone({ freq: 123.47, dur: 1.4, gain: 0.025, type: 'triangle', slide: 0.5, pan: -0.3 });
+    }
+  }
+
+  chaseBeat() {
+    const i = this.beatIndex++;
+    const step = i % 8;
+    // kick
+    if (step === 0 || step === 3 || step === 6) {
+      this.musicTone({ freq: 52, dur: 0.16, gain: 0.13, type: 'sine', slide: 0.5 });
+    }
+    // snare
+    if (step === 2 || step === 6) {
+      this.musicNoise({ dur: 0.13, freq: 1900, q: 0.7, gain: 0.055 });
+      this.musicTone({ freq: 180, dur: 0.07, gain: 0.025, type: 'triangle', slide: 0.6 });
+    }
+    // hats
+    this.musicNoise({ dur: 0.035, freq: 6200, q: 1.1, gain: step % 2 ? 0.012 : 0.02, type: 'highpass', pan: 0.18 });
+    // driving bass
+    const bass = [36.71, 36.71, 43.65, 36.71, 32.7, 36.71, 49, 43.65][step];
+    this.musicTone({ freq: bass, dur: 0.26, gain: 0.075, type: 'sawtooth', slide: 0.995, pan: -0.05 });
+    if (step === 0) {
+      this.musicTone({ freq: 73.42, dur: 0.9, gain: 0.018, type: 'triangle', slide: 0.99, pan: 0.25 });
+      this.musicTone({ freq: 77.78, dur: 0.9, gain: 0.014, type: 'triangle', slide: 1.0, pan: -0.25 });
+    }
+    if (i % 32 === 24) {
+      this.musicTone({ freq: 98, dur: 1.6, gain: 0.025, type: 'sawtooth', slide: 0.5, pan: 0.3 });
+    }
   }
 
   setAmbientScene(name) {
@@ -256,6 +339,14 @@ export class AudioEngine {
 
   update(dt) {
     if (!this.ready) return;
+    if (this.bgmMode) {
+      this.beatTimer -= dt;
+      if (this.beatTimer <= 0) {
+        this.beatTimer = this.bgmMode === 'chase' ? 0.285 : 0.74;
+        if (this.bgmMode === 'chase') this.chaseBeat();
+        else this.encounterBeat();
+      }
+    }
     this.noteTimer -= dt;
     this.musicTimer -= dt;
     if (this.noteTimer <= 0) {

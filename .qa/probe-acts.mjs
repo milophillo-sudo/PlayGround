@@ -6,7 +6,7 @@ const { chromium } = require('playwright');
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 960, height: 540 } });
 page.setDefaultTimeout(120000);
-page.on('console', (m) => { if (m.type() === 'error') console.log('CONSOLE', m.text()); });
+page.on('console', (m) => { console.log('CONSOLE', m.text()); });
 page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
 const adv = (s) => page.evaluate((s) => window.__lastCan.advance(s), s);
 const state = () => page.evaluate(() => {
