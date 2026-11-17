@@ -103,7 +103,10 @@ function renderBest() {
   for (const card of dom.trackCards) {
     const best = bestMap[card.dataset.track];
     const tag = card.querySelector('.tc-best');
-    if (tag) tag.textContent = best ? best.rank || '—' : '';
+    if (tag) {
+      tag.textContent = best ? `PB ${best.rank || '—'}` : '';
+      tag.title = best ? `Personal best ${best.score} · ${(best.acc || 0).toFixed(2)}%` : '';
+    }
   }
 }
 
@@ -606,9 +609,10 @@ function showResults(data) {
   dom.bestNote.innerHTML = best
     ? `${String(best.score).padStart(7, '0')} · ${best.rank || '—'}`
     : 'FIRST RUN';
+  const gap = Math.max(0, (best?.score || 0) - data.score);
   dom.scoreDelta.textContent = isBest
     ? (prevBest ? `NEW BEST +${String(Math.max(0, data.score - prevBest.score)).padStart(5, '0')}` : 'FIRST CLEAR')
-    : `PB GAP ${String(Math.max(0, (best?.score || 0) - data.score)).padStart(5, '0')}`;
+    : gap > 0 ? `PB GAP ${String(gap).padStart(5, '0')}` : 'PB MATCHED';
 
   dom.result.classList.remove('show');
   void dom.result.offsetWidth;

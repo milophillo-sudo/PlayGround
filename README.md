@@ -19,18 +19,35 @@
 
 ## CRYOUT — Dynamic 3D Rhythm
 
-A browser rhythm game built around a flat, bold 2D hit-circle language placed inside a moving 3D field.
+A browser rhythm game built around a flat, bold hit-circle language placed inside a moving 3D field. Two fully charted tracks are included, each with its own section map, lane motion, effects, and difficulty curve.
 
-- **Dynamic lane count:** the chart moves through 4, 6, and 8-lane sections; the field spacing, ring scale, hit rule, note scale, and tap zones re-frame themselves around the playable lanes while the authored camera zoom still sweeps between sections.
-- **Unused lanes disappear:** dormant lanes fade fully out instead of sitting there dimly. The chart still gives them visual-only `sweep` and `bounce` flourishes on the beat, so the edges of the field keep breathing without adding fake notes.
-- **Tap where you hit:** the touch targets are invisible zones sitting exactly on the glowing 3D rings. The ring is the hit position; there is no detached button row below the field.
-- **Camera-facing hit positions:** each lane's circle, centre line, hit rule, and falling notes are billboards, so they stay crisp and circular while the stage tilts, floats, and rotates in 3D.
-- **Full chart:** 331 notes, 6 holds, and 45 lane flourishes generated from beat/onset analysis of the supplied `Cryout.mp3` (100 BPM grid), running from the first phrase to the outro.
-- **Controls:** `A S D F J K L ;`, numpad, or tap/click a lane's ring. Hold notes must be held until the tail passes the ring. `Esc` pauses.
-- **Feedback:** perfect/great/good/bad/miss windows, combo, score, accuracy, sync meter, hit bursts, shockwaves, rank screen, retry.
-- **Personal best:** score, accuracy, rank, max combo, and full-combo status are saved in `localStorage` and surfaced on the start and result screens with a NEW BEST badge.
+### Tracks
+
+| Track | BPM | Difficulty | Lanes | Notes |
+| --- | --- | --- | --- | --- |
+| **CRYOUT** | 100 | Advanced | 4 · 6 · 8 | 328 notes · 6 holds |
+| **WORLD YEARNING FOR AN END** | 120 | Hard | 4 · 6 | 448 notes · 5 holds |
+
+Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. Track metadata lives in `src/tracks.js`.
+
+### Gameplay
+
+- **Track selection:** pick either song from the start screen. Audio decodes per track and is cached, and personal bests are stored per track in `localStorage`.
+- **Dynamic lane count:** charts move through 4, 6, and 8-lane sections; the field spacing, ring scale, note scale, camera and hit zones re-frame themselves around the playable lanes.
+- **Tap the whole lane:** invisible tap strips start at the hit circle, run straight up the lane along its projected angle, and extend slightly below the ring for thumbs. Pressing never draws an overlay — all feedback is in the 3D field.
+- **Incoming lanes unlock early:** a lane with a note on the way becomes tappable before its section officially starts, so notes never arrive on a hidden lane.
+- **Holds:** keep at least one finger anywhere on the screen to sustain every active hold. Releasing one thumb won't break another lane's hold.
+- **Moving lanes:** lanes fan, wave, slope, zigzag, and orbit with each section; notes and hold bodies are parented to the lane frame so they follow the same diagonal.
+- **Unused-lane echoes:** dormant lanes emit directional beat echoes that drift sideways, slow down, and fade.
+- **City intro:** the second track layers a two-plane parallax skyline behind the field during its intro, break, and outro.
+- **Feedback:** perfect/great/good/bad/miss windows, combo, score, accuracy, sync meter, hit bursts, shockwaves, screen flashes, and rank screen.
+- **Results:** animated “COMPILING RESULTS” transition followed by a full results layout with score, accuracy ring, judgement bars, combo trace, rank, and new-best delta.
 - **Pause safely:** `Esc` or the pause button freezes both the transport and the chart; switching tabs/windows pauses automatically.
 - **Responsive:** landscape and portrait layouts, safe-area padding, multi-touch pointer capture, no page scrolling during play.
+
+### Controls
+
+`A S D F J K L ;`, numpad `1–8`, or tap/click anywhere along a lane. `Esc` pauses.
 
 ### Development
 
@@ -41,3 +58,13 @@ npm run build   # static bundle in dist/
 ```
 
 The playfield is Three.js with an Unreal Bloom pass; audio transport is Web Audio so pause/resume freezes the chart and the music together.
+
+### Chart tooling
+
+```bash
+node tools/analyze-audio.mjs input.wav analysis.json
+node tools/build-charts.mjs cryout-analysis.json world-analysis.json
+```
+
+The original Cryout chart is preserved in `tools/source/cryout-legacy.json`.
+
