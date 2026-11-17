@@ -6,6 +6,7 @@ export class AudioEngine {
     this.source = null;
     this.gain = null;
     this.startAt = 0;
+    this.offset = 0;
     this.duration = 0;
     this.loaded = false;
     this.muted = false;
@@ -60,12 +61,15 @@ export class AudioEngine {
     this.source.connect(this.gain);
     const when = this.ctx.currentTime + 0.12;
     this.startAt = when;
+    this.offset = at;
     // fade the long silent tail so results arrive without dead air
     try {
+      const fadeStart = Math.max(0, 131.4 - at);
+      const fadeEnd = Math.max(0.05, 133.4 - at);
       this.gain.gain.cancelScheduledValues(this.ctx.currentTime);
       this.gain.gain.setValueAtTime(0.92, this.ctx.currentTime);
-      this.gain.gain.setValueAtTime(0.92, when + 131.4);
-      this.gain.gain.linearRampToValueAtTime(0.0, when + 133.4);
+      this.gain.gain.setValueAtTime(0.92, when + fadeStart);
+      this.gain.gain.linearRampToValueAtTime(0.0, when + fadeEnd);
     } catch { /* noop */ }
     this.source.start(when, at);
   }
@@ -88,7 +92,7 @@ export class AudioEngine {
 
   get time() {
     if (!this.ctx) return 0;
-    return this.ctx.currentTime - this.startAt;
+    return this.ctx.currentTime - this.startAt + this.offset;
   }
 
   get paused() {

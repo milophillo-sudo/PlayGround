@@ -49,6 +49,7 @@ const stats = {
 const held = new Array(8).fill(false);
 const holdNote = new Array(8).fill(null);
 let toastTimer = 0;
+let ghostCursor = 0;
 
 // ---------------------------------------------------------------- personal best
 function readBest() {
@@ -111,6 +112,8 @@ function resetGame() {
   });
   held.fill(false);
   holdNote.fill(null);
+  ghostCursor = 0;
+  scene.clearGhosts();
   sectionIndex = 0;
   currentSection = null;
   updateSection(CHART.sections[0], true);
@@ -184,8 +187,11 @@ function updateSection(sec, force = false) {
   const active = new Set(activeLanesFor(sec.keys));
   for (const pad of dom.pads) {
     const lane = Number(pad.dataset.lane);
-    pad.classList.toggle('active', active.has(lane));
-    pad.classList.toggle('sleep', !active.has(lane));
+    const live = active.has(lane);
+    pad.classList.toggle('active', live);
+    pad.classList.toggle('sleep', !live);
+    pad.setAttribute('aria-hidden', String(!live));
+    pad.tabIndex = live ? 0 : -1;
   }
   document.documentElement.style.setProperty('--cyan', sec.color);
   document.documentElement.style.setProperty('--magenta', sec.accent);
@@ -313,6 +319,7 @@ function releaseLane(lane) {
 const SPEED = 8.4;
 
 function updateNotes(t) {
+  const ns = scene.noteScale;
   for (const n of noteObjects) {
     if (n.state === 'pending') {
       const y = (n.data.t - t) * SPEED;
@@ -320,12 +327,14 @@ function updateNotes(t) {
       const z = scene.laneZ(n.lane) + 0.24;
       n.group.position.set(x, y, z);
       n.group.visible = y < 14.5 && y > -1.3;
+      n.head.scale.set(1.04 * ns, 1.04 * ns, 1);
       if (n.body) {
         const len = n.data.dur * SPEED;
         n.body.visible = n.group.visible;
         n.tail.visible = n.group.visible;
-        n.body.scale.set(0.52, len, 1);
+        n.body.scale.set(0.52 * ns, len, 1);
         n.body.position.y = len / 2;
+        n.tail.scale.set(0.68 * ns, 0.68 * ns, 1);
         n.tail.position.y = len;
       }
       if (t > n.data.t + HIT_WINDOW) missNote(n);
@@ -341,9 +350,10 @@ function updateNotes(t) {
       n.head.visible = false;
       if (n.body) {
         n.body.visible = remain > 0.03;
-        n.body.scale.set(0.52, remain, 1);
+        n.body.scale.set(0.52 * ns, remain, 1);
         n.body.position.y = remain / 2;
         n.tail.visible = remain > 0.4;
+        n.tail.scale.set(0.68 * ns, 0.68 * ns, 1);
         n.tail.position.y = remain;
       }
       if (t > n.tickAt) {
@@ -411,6 +421,8 @@ function quitToMenu() {
   for (const n of noteObjects) n.group.visible = false;
   held.fill(false);
   holdNote.fill(null);
+  ghostCursor = 0;
+  scene.clearGhosts();
   for (const p of dom.pads) p.classList.remove('pressed', 'active', 'sleep');
   document.documentElement.style.setProperty('--cyan', '#5ee7ff');
   document.documentElement.style.setProperty('--magenta', '#ff5fd2');
@@ -474,15 +486,25 @@ function retryGame() {
 }
 
 function alignPads() {
-  const xs = scene.laneScreenXs();
+  // Tap zones sit exactly on the glowing lane rings, so the place you hit is
+  // the place you press - there is no detached button row below the field.
+  const points = scene.laneScreenPoints();
+  const active = currentSection ? new Set(activeLanesFor(currentSection.keys)) : null;
   for (let i = 0; i < 8; i++) {
-    const left = i > 0 ? xs[i] - xs[i - 1] : xs[1] - xs[0];
-    const right = i < 7 ? xs[i + 1] - xs[i] : xs[7] - xs[6];
-    const gap = Math.min(left, right);
-    const w = Math.max(34, Math.min(96, gap * 0.9));
+    const left = i > 0 ? points[i].x - points[i - 1].x : points[1].x - points[0].x;
+    const right = i < 7 ? points[i + 1].x - points[i].x : points[7].x - points[6].x;
+    const gap = Math.min(Math.abs(left), Math.abs(right));
+    const size = Math.max(44, Math.min(148, gap * 1.02));
     const p = dom.pads[i];
-    p.style.left = xs[i].toFixed(1) + 'px';
-    p.style.width = w.toFixed(1) + 'px';
+    p.style.left = points[i].x.toFixed(1) + 'px';
+    p.style.top = points[i].y.toFixed(1) + 'px';
+    p.style.width = size.toFixed(1) + 'px';
+    p.style.height = size.toFixed(1) + 'px';
+    if (active) {
+      const live = active.has(i);
+      p.classList.toggle('sleep', !live);
+      p.setAttribute('aria-hidden', String(!live));
+    }
   }
 }
 
@@ -491,6 +513,14 @@ function refreshSection(t) {
   if (found.index !== sectionIndex || currentSection === null) {
     sectionIndex = found.index;
     updateSection(found.sec);
+  }
+}
+
+function updateGhostEvents(t) {
+  const list = CHART.ghosts || [];
+  while (ghostCursor < list.length && list[ghostCursor].t <= t) {
+    const g = list[ghostCursor++];
+    scene.ghostFx(g.lane, g.type);
   }
 }
 
@@ -605,6 +635,7 @@ function frame(now) {
   if (gameState === 'playing') {
     const t = audio.time;
     refreshSection(t);
+    updateGhostEvents(t);
     updateNotes(t);
     updateHUD(t);
     scene.animate(dt, t, true);

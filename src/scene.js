@@ -9,7 +9,7 @@ const LANE_COLORS = [
   '#c477ff', '#ff79dc', '#ff7fb5', '#ffb06e',
 ];
 
-const SPACING = 1.66;
+const SPACING = 1.75;
 const ARC = 0.015;
 
 // ---------------------------------------------------------------- textures
@@ -375,10 +375,23 @@ export function createScene(canvasEl) {
     glow.renderOrder = 2;
     g.add(glow);
 
+    // a soft light packet that climbs a hidden lane during a charted flourish
+    const ghostMat = new THREE.SpriteMaterial({
+      map: TEX.glow, color: color.clone().lerp(new THREE.Color(0xffffff), 0.25),
+      transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+      blending: THREE.AdditiveBlending, fog: false,
+    });
+    const ghost = new THREE.Sprite(ghostMat);
+    ghost.position.set(0, 0.2, 0.08);
+    ghost.scale.set(1.1, 1.1, 1);
+    ghost.renderOrder = 4;
+    ghost.visible = false;
+    g.add(ghost);
+
     lanes.push({
-      group: g, beam, line, ring, glow, color: color.clone(),
-      targetColor: color.clone(), flash: 0, active: 1, baseX: x,
-      ringScale: 1.65,
+      group: g, beam, line, ring, glow, ghost, color: color.clone(),
+      targetColor: color.clone(), flash: 0, active: 0, baseX: x,
+      ghostFx: null,
     });
   }
 
@@ -495,10 +508,12 @@ export function createScene(canvasEl) {
     view: {
       rotY: 0, rotZ: 0, tilt: 0, spread: 1, y: 0,
       camZ: 17.2, camY: 6.7, bloom: 0.8, spin: 0.04,
+      spacing: SPACING, ring: 1.65,
     },
     target: {
       rotY: 0, rotZ: 0, tilt: 0, spread: 1, y: 0,
       camZ: 17.2, camY: 6.7, bloom: 0.8, spin: 0.04,
+      spacing: SPACING, ring: 1.65,
     },
     section: null,
     energy: 0.4,
@@ -506,37 +521,64 @@ export function createScene(canvasEl) {
     active: new Set([0, 1, 2, 3, 4, 5, 6, 7]),
     pulse: 0,
     shake: 0,
+    zoomKick: 0,
     noteSpeed: 8.2,
     time: 0,
     playing: false,
     spacing: SPACING,
+    ringScale: 1.65,
     portrait: false,
     mouse: new THREE.Vector2(),
     laneXNow: baseX.slice(),
-    ringScaleNow: 1.65,
   };
+
+  // The field is re-framed from the number of playable lanes: fewer lanes get
+  // wider spacing and larger rings, so a 4-lane section still owns the screen.
+  function frameFor(keys) {
+    const aspect = innerWidth / Math.max(1, innerHeight);
+    if (state.portrait) {
+      if (keys <= 4) return { spacing: 1.72, ring: 1.62 };
+      if (keys <= 6) return { spacing: 1.3, ring: 1.24 };
+      return { spacing: 1.02, ring: 1.04 };
+    }
+    const wide = aspect > 1.9 ? 1.08 : 1;
+    if (keys <= 4) return { spacing: 3.15 * wide, ring: 2.35 * wide };
+    if (keys <= 6) return { spacing: 2.16 * wide, ring: 1.95 * wide };
+    return { spacing: 1.75 * wide, ring: 1.65 * wide };
+  }
+
+  function rememberFrame(keys, snap = false) {
+    const f = frameFor(keys);
+    state.spacing = f.spacing;
+    state.ringScale = f.ring;
+    state.target.spacing = f.spacing;
+    state.target.ring = f.ring;
+    if (snap) {
+      state.view.spacing = f.spacing;
+      state.view.ring = f.ring;
+    }
+  }
 
   function layout() {
     const w = innerWidth, h = innerHeight;
     const aspect = w / h;
     state.portrait = aspect < 0.92;
-    state.spacing = state.portrait ? 1.0 : (aspect > 1.9 ? 2.35 : 1.78);
-    state.ringScaleNow = state.portrait ? 1.08 : 1.65;
+    rememberFrame(state.keyCount, true);
     for (let i = 0; i < 8; i++) {
       const x = (i - 3.5) * state.spacing;
       lanes[i].baseX = x;
       lanes[i].group.position.x = x;
       lanes[i].group.position.z = ARC * x * x;
-      lanes[i].ring.scale.set(state.ringScaleNow, state.ringScaleNow, 1);
-      lanes[i].glow.scale.set(state.ringScaleNow * 1.35, state.ringScaleNow * 1.35, 1);
+      lanes[i].ring.scale.set(state.view.ring, state.view.ring, 1);
+      lanes[i].glow.scale.set(state.view.ring * 1.35, state.view.ring * 1.35, 1);
       state.laneXNow[i] = x;
     }
-    hitLine.scale.set(state.portrait ? 9.4 : 13.2, 0.9, 1);
+    hitLine.scale.set((state.keyCount - 1) * state.spacing + state.ring * 1.5, 0.9, 1);
     camera.aspect = aspect;
     camera.fov = state.portrait ? 52 : 46;
     camera.updateProjectionMatrix();
-    if (state.section) state.target.camZ = state.section.camZ + (state.portrait ? 6.4 : 0);
-    else state.target.camZ = state.portrait ? 23.6 : 17.2;
+    const base = state.section ? state.section.camZ : 17.2;
+    state.target.camZ = base + (state.portrait ? 6.4 : 0);
     state.view.camZ = state.target.camZ;
     renderer.setSize(w, h);
     composer.setSize(w, h);
@@ -552,9 +594,11 @@ export function createScene(canvasEl) {
 
   function setSection(sec) {
     if (!sec) return;
+    const changed = !!state.section && state.section.keys !== sec.keys;
     state.section = sec;
     state.energy = sec.energy;
     state.keyCount = sec.keys;
+    rememberFrame(sec.keys);
     state.target.rotY = sec.rotY;
     state.target.rotZ = sec.rotZ;
     state.target.tilt = sec.tilt;
@@ -564,12 +608,17 @@ export function createScene(canvasEl) {
     state.target.camY = sec.camY;
     state.target.bloom = sec.bloom * 0.82;
     state.target.spin = sec.spin;
+    // the zoom kick keeps the section change feeling like a camera move,
+    // never a hard cut, while the lane spacing eases into its new width
+    if (changed) state.zoomKick = Math.min(1.4, state.zoomKick + 0.85);
     const sets = { 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7] };
     state.active = new Set(sets[sec.keys] || sets[8]);
     for (let i = 0; i < 8; i++) {
-      lanes[i].active = state.active.has(i) ? 1 : 0.16;
+      const live = state.active.has(i);
+      lanes[i].active = live ? 1 : 0;
+      if (!live) lanes[i].ghostFx = null;
       lanes[i].targetColor.copy(lanes[i].color).lerp(new THREE.Color(sec.color), 0.24);
-      if (state.active.has(i)) lanes[i].flash = Math.max(lanes[i].flash, 0.22);
+      if (live) lanes[i].flash = Math.max(lanes[i].flash, 0.22);
     }
     hitLineMat.color.set(sec.accent);
   }
@@ -583,23 +632,50 @@ export function createScene(canvasEl) {
   }
 
   const screenV = new THREE.Vector3();
-  function laneScreenXs() {
+  function laneScreenPoints() {
     camera.updateMatrixWorld();
-    laneRoot.updateMatrixWorld(true);
+    stage.updateMatrixWorld(true);
     const out = [];
     for (let i = 0; i < 8; i++) {
-      screenV.set(laneX(i), 0.05, laneZ(i) + 0.22);
+      screenV.set(laneX(i), 0.04, laneZ(i) + 0.22);
       laneRoot.localToWorld(screenV);
       screenV.project(camera);
-      out.push((screenV.x * 0.5 + 0.5) * innerWidth);
+      out.push({
+        x: (screenV.x * 0.5 + 0.5) * innerWidth,
+        y: (-screenV.y * 0.5 + 0.5) * innerHeight,
+      });
     }
     return out;
+  }
+
+  function laneScreenXs() {
+    return laneScreenPoints().map((p) => p.x);
   }
 
   function pressFx(lane) {
     const l = lanes[lane];
     l.flash = Math.max(l.flash, 0.55);
-    l.ring.scale.setScalar(state.ringScaleNow * 1.1);
+    l.ring.scale.setScalar(state.view.ring * 1.1);
+  }
+
+  // Visual-only flourishes for lanes that are not part of the current section.
+  // `sweep` sends a light packet up the lane, `bounce` thumps the hidden ring.
+  function ghostFx(lane, type = 'sweep') {
+    const l = lanes[lane];
+    if (!l) return;
+    l.ghostFx = { type, t: 0, dur: type === 'bounce' ? 0.85 : 1.15 };
+    if (type === 'bounce') {
+      l.flash = Math.max(l.flash, 0.65);
+      spawnShock(worldPoint(lane, 0.05), l.color.getHex(), 1.7);
+    }
+  }
+
+  function clearGhosts() {
+    for (const l of lanes) {
+      l.ghostFx = null;
+      l.ghost.visible = false;
+      l.ghost.material.opacity = 0;
+    }
   }
   function hitFx(lane, quality) {
     const l = lanes[lane];
@@ -639,7 +715,10 @@ export function createScene(canvasEl) {
     v.camZ += (tg.camZ - v.camZ) * k;
     v.camY += (tg.camY - v.camY) * k;
     v.spin += (tg.spin - v.spin) * k;
+    v.spacing += (tg.spacing - v.spacing) * (1 - Math.exp(-dt * 3.1));
+    v.ring += (tg.ring - v.ring) * (1 - Math.exp(-dt * 3.1));
     bloom.strength += (tg.bloom - bloom.strength) * k;
+    state.zoomKick *= Math.exp(-dt * 2.6);
 
     const beatPhase = ((t - 0.535) / 0.6 + 8) % 1;
     const pulse = Math.exp(-beatPhase * 5.2);
@@ -651,30 +730,65 @@ export function createScene(canvasEl) {
     stage.rotation.z = v.rotZ + Math.sin(t * 0.37) * 0.006;
     stage.rotation.x = v.tilt + Math.sin(t * 0.29) * 0.006;
 
-    // lane positions respond to spread
+    // lane positions respond to spread and to the active lane count
     for (let i = 0; i < 8; i++) {
       const l = lanes[i];
-      const x = (i - 3.5) * state.spacing * v.spread;
+      const x = (i - 3.5) * v.spacing * v.spread;
       l.baseX = x;
       l.group.position.x = x;
       l.group.position.z = ARC * x * x;
       state.laneXNow[i] = x;
 
-      const targetOpacity = l.active * (i % 2 ? 0.86 : 0.96);
-      l.line.material.opacity += (targetOpacity * 0.58 - l.line.material.opacity) * (1 - Math.exp(-dt * 3.5));
-      l.beam.material.opacity += (l.active * (0.065 + pulse * 0.03) - l.beam.material.opacity) * (1 - Math.exp(-dt * 3.5));
-      l.ring.material.opacity += ((state.active.has(i) ? 0.95 : 0.085) - l.ring.material.opacity) * (1 - Math.exp(-dt * 3.5));
-      l.glow.material.opacity += ((state.active.has(i) ? 0.14 : 0.008) + l.flash * 0.3 - l.glow.material.opacity) * (1 - Math.exp(-dt * 8));
+      const live = state.active.has(i);
+      let ghostAmp = 0;
+      let bounceAmp = 0;
+      if (l.ghostFx) {
+        const g = l.ghostFx;
+        g.t += dt;
+        const p = g.t / g.dur;
+        if (p >= 1) {
+          l.ghostFx = null;
+          l.ghost.visible = false;
+          l.ghost.material.opacity = 0;
+        } else {
+          ghostAmp = Math.sin(Math.PI * p);
+          if (g.type === 'sweep') {
+            l.ghost.visible = true;
+            l.ghost.position.set(0, 0.25 + p * 10.5, 0.08);
+            const s = 0.85 + 0.55 * ghostAmp;
+            l.ghost.scale.set(s, s, 1);
+            l.ghost.material.opacity = ghostAmp * 0.8;
+            l.ghost.material.color.copy(l.targetColor).lerp(white, 0.3 + ghostAmp * 0.4);
+          } else {
+            bounceAmp = ghostAmp;
+            l.ghost.visible = false;
+          }
+        }
+      }
+
+      const lineTarget = live
+        ? (i % 2 ? 0.86 : 0.96) * 0.58
+        : ghostAmp * 0.34;
+      const beamTarget = live
+        ? (0.065 + pulse * 0.03)
+        : ghostAmp * 0.04;
+      const ringTarget = live
+        ? 0.95
+        : bounceAmp * 0.78 + ghostAmp * 0.035;
+      l.line.material.opacity += (lineTarget - l.line.material.opacity) * (1 - Math.exp(-dt * 3.5));
+      l.beam.material.opacity += (beamTarget - l.beam.material.opacity) * (1 - Math.exp(-dt * 3.5));
+      l.ring.material.opacity += (ringTarget - l.ring.material.opacity) * (1 - Math.exp(-dt * 3.5));
+      l.glow.material.opacity += ((live ? 0.14 : ghostAmp * 0.07) + l.flash * 0.3 - l.glow.material.opacity) * (1 - Math.exp(-dt * 8));
 
       l.flash = Math.max(0, l.flash - dt * 3.4);
-      const rs = state.ringScaleNow * (1 + pulse * 0.045 * (0.4 + state.energy) + l.flash * 0.22);
+      const rs = v.ring * (1 + pulse * 0.045 * (0.4 + state.energy) + l.flash * 0.22 + bounceAmp * 0.5);
       l.ring.scale.set(rs, rs, 1);
       l.ring.material.color.copy(l.targetColor).lerp(white, l.flash * 0.8);
       l.glow.material.color.copy(l.targetColor).lerp(white, l.flash * 0.5);
       l.line.material.color.copy(l.targetColor).lerp(white, 0.14 + l.flash * 0.32);
       l.beam.material.color.copy(l.targetColor);
     }
-    hitLine.scale.x = (state.spacing * 7 + 2.35) * v.spread;
+    hitLine.scale.x = (v.spacing * (state.keyCount - 1) + v.ring * 1.5) * v.spread;
     hitLine.material.opacity = 0.45 + pulse * 0.3 + state.energy * 0.15;
 
     // camera
@@ -682,7 +796,7 @@ export function createScene(canvasEl) {
     const camY = v.camY + state.mouse.y * 0.18;
     camera.position.x += (camX - camera.position.x) * (1 - Math.exp(-dt * 2));
     camera.position.y += (camY - camera.position.y) * (1 - Math.exp(-dt * 2));
-    camera.position.z += (v.camZ - camera.position.z) * (1 - Math.exp(-dt * 2));
+    camera.position.z += (v.camZ - state.zoomKick * 1.05 - camera.position.z) * (1 - Math.exp(-dt * 3.4));
     if (state.shake > 0.0005) {
       camera.position.x += (Math.random() - .5) * state.shake;
       camera.position.y += (Math.random() - .5) * state.shake;
@@ -747,10 +861,6 @@ export function createScene(canvasEl) {
       if (s.life <= 0) s.sprite.visible = false;
     }
 
-    // tiny idle shimmer
-    for (let i = 0; i < 8; i++) {
-      if (!state.active.has(i) && Math.random() < dt * 0.5) lanes[i].flash = Math.max(lanes[i].flash, 0.15);
-    }
   }
 
   function render() {
@@ -763,9 +873,11 @@ export function createScene(canvasEl) {
 
   return {
     scene, camera, stage, noteRoot, state,
-    makeNote, setSection, animate, render, laneX, laneZ, worldPoint, laneScreenXs,
-    pressFx, hitFx, missFx, layout, dispose,
+    makeNote, setSection, animate, render, laneX, laneZ, worldPoint,
+    laneScreenXs, laneScreenPoints,
+    pressFx, hitFx, missFx, ghostFx, clearGhosts, layout, dispose,
     get noteSpeed() { return state.noteSpeed; },
     set noteSpeed(v) { state.noteSpeed = v; },
+    get noteScale() { return Math.max(1, Math.min(1.3, state.view.ring / 1.65)); },
   };
 }
