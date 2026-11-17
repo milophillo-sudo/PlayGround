@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#04040c" />
+  <title>CRYOUT — Dynamic 3D Rhythm</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
+  <script type="module" crossorigin src="./assets/index-C6eVa8qq.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Dtt6BqcU.css">
+</head>
+<body>
+  <canvas id="scene"></canvas>
+  <div id="vignette"></div>
+
+  <main id="app">
+    <!-- ======================= HUD ======================= -->
+    <section id="hud" class="hidden" aria-hidden="true">
+      <div class="topbar">
+        <div class="brand">
+          <div class="brand-title">CRYOUT</div>
+          <div class="brand-sub"><em>DYNAMIC RHYTHM</em> <span class="slash">//</span> 100 BPM</div>
+        </div>
+        <div class="track-wrap">
+          <div class="progress"><b id="progressFill"></b><span id="progressGlow"></span></div>
+          <div class="trackmeta">
+            <span id="sectionName">SIGNAL</span>
+            <span id="timeLabel">0:00 / 2:18</span>
+          </div>
+        </div>
+        <div class="scoreblock">
+          <div class="score" id="score">0000000</div>
+          <div class="acc"><span id="acc">100.00%</span><span class="dot">·</span><span id="maxCombo">0</span> MAX</div>
+        </div>
+      </div>
+
+      <div class="left-hud">
+        <div class="lane-count"><span id="keysCount">8</span><small>LANES</small></div>
+        <div class="sync">
+          <div class="sync-label">SYNC</div>
+          <div class="energy"><i id="energyFill"></i></div>
+        </div>
+      </div>
+
+      <div id="comboHud"><b id="comboNum">0</b><span>COMBO</span></div>
+      <div id="judge" aria-live="polite"></div>
+
+      <button id="pauseBtn" aria-label="Pause">❚❚</button>
+
+      <div id="pads" aria-label="Hit pads">
+        <button class="pad" data-lane="0"><span class="pk">A</span><i></i></button>
+        <button class="pad" data-lane="1"><span class="pk">S</span><i></i></button>
+        <button class="pad" data-lane="2"><span class="pk">D</span><i></i></button>
+        <button class="pad" data-lane="3"><span class="pk">F</span><i></i></button>
+        <button class="pad" data-lane="4"><span class="pk">J</span><i></i></button>
+        <button class="pad" data-lane="5"><span class="pk">K</span><i></i></button>
+        <button class="pad" data-lane="6"><span class="pk">L</span><i></i></button>
+        <button class="pad" data-lane="7"><span class="pk">;</span></button>
+      </div>
+    </section>
+
+    <!-- ======================= START ======================= -->
+    <section id="startScreen" class="overlay show">
+      <div class="start-grid">
+        <div class="start-copy">
+          <div class="eyebrow"><i></i> ORBIT SYSTEM / ONLINE</div>
+          <h1>CRY<br>OUT</h1>
+          <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
+          <div class="specs">
+            <div><span>TRACK</span><b>CRYOUT</b></div>
+            <div><span>LENGTH</span><b>2:18</b></div>
+            <div><span>LANES</span><b id="startLanes">4 → 8</b></div>
+            <div><span>LEVEL</span><b>ADVANCED</b></div>
+          </div>
+          <button id="startBtn" class="cta" disabled>
+            <span id="startBtnLabel">SYNCING AUDIO</span>
+            <i>→</i>
+          </button>
+          <div class="loadbar"><b id="loadFill"></b></div>
+          <p class="hint">A S D F · J K L ; — hit keys or touch pads. Headphones recommended.</p>
+        </div>
+
+        <div class="start-side">
+          <div class="panel">
+            <div class="panel-title">CONTROLS</div>
+            <div class="keyrow"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><kbd>;</kbd></div>
+            <p>Hit the lane as a note crosses its glowing ring. Hold long notes.</p>
+            <div class="touchline"><span class="touchicon"></span> TOUCH PADS ON MOBILE</div>
+          </div>
+          <div class="panel">
+            <div class="panel-title">SYSTEM</div>
+            <ul class="syslist">
+              <li><span>FIELD</span><b>DYNAMIC / 360°</b></li>
+              <li><span>KEYS</span><b>4 · 6 · 8</b></li>
+              <li><span>JUDGE</span><b>±185 MS</b></li>
+            </ul>
+          </div>
+          <div class="credit">CHART SYNTHESIZED FROM THE AUDIO<br>BUILT WITH THREE.JS / WEBGL</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= PAUSE ======================= -->
+    <section id="pauseScreen" class="overlay">
+      <div class="modal">
+        <div class="eyebrow"><i></i> SESSION SUSPENDED</div>
+        <h2>PAUSED</h2>
+        <p class="modal-sub">Take a breath. The field will wait.</p>
+        <div class="btnrow">
+          <button id="resumeBtn" class="cta small">RESUME <i>→</i></button>
+          <button id="restartBtn" class="ghost">RESTART</button>
+          <button id="quitBtn" class="ghost">QUIT</button>
+        </div>
+        <p class="hint">Pause freezes the field and the music together.</p>
+      </div>
+    </section>
+
+    <!-- ======================= RESULTS ======================= -->
+    <section id="resultScreen" class="overlay">
+      <div class="results">
+        <div class="result-head">
+          <div>
+            <div class="eyebrow"><i></i> SESSION COMPLETE</div>
+            <h2>RESULT</h2>
+            <p class="modal-sub" id="resultTag">CLEARED</p>
+          </div>
+          <div id="rank">S</div>
+        </div>
+        <div class="result-stats">
+          <div class="bigstat"><span>SCORE</span><b id="finalScore">0</b></div>
+          <div class="bigstat"><span>ACCURACY</span><b id="finalAcc">0%</b></div>
+          <div><span>PERFECT</span><b id="cPerfect">0</b></div>
+          <div><span>GREAT</span><b id="cGreat">0</b></div>
+          <div><span>GOOD</span><b id="cGood">0</b></div>
+          <div><span>BAD</span><b id="cBad">0</b></div>
+          <div class="wide"><span>MISS</span><b id="cMiss">0</b></div>
+          <div class="wide"><span>MAX COMBO</span><b id="fMaxCombo">0</b></div>
+        </div>
+        <div class="result-foot">
+          <div id="fcBadge" class="fc">FULL COMBO</div>
+          <div class="btnrow">
+            <button id="retryBtn" class="cta small">RETRY <i>↻</i></button>
+            <button id="menuBtn" class="ghost">MENU</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="toast"></div>
+    <div id="rotateHint"><span>↻</span> ROTATE FOR THE FULL FIELD</div>
+  </main>
+
+</body>
+</html>
