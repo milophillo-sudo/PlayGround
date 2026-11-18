@@ -471,6 +471,9 @@ kbd{
 .result-foot .btnrow{flex-wrap:nowrap}
 
 /* ---------------- results transition ---------------- */
+/* The compile screen is purely decorative: it fades out over the results card,
+   and must never swallow clicks aimed at RETRY / MENU. */
+#resultLoading,#resultLoading *{pointer-events:none}
 #resultLoading.transition{
   z-index:30;background:
     radial-gradient(ellipse at 50% 46%,rgba(12,24,54,.55),transparent 62%),
@@ -548,6 +551,18 @@ kbd{
   #judge{top:52%}
 }
 
+/* short desktop/laptop windows: keep the whole start screen on one page */
+@media (max-height:860px) and (min-width:721px){
+  .start-copy h1{font-size:clamp(80px,12vw,150px);margin:12px 0 8px}
+  .tagline{margin-bottom:18px}
+  .specs{padding:11px 0;margin-bottom:18px}
+  .start-side{gap:11px}
+  .panel{padding:16px 18px 14px}
+  .panel-title{margin-bottom:11px}
+  .touchline{margin-top:10px}
+  .hint{margin-top:10px}
+}
+
 @media (max-width:620px){
   .start-side{display:none}
   .credit{text-align:left;display:none}
@@ -611,6 +626,7 @@ kbd{
   .compile-orbit{width:120px}
   .compile-bars{bottom:-58px;height:30px;gap:4px}
 }
+
 @media (max-width:620px){
   .results{padding:16px}
   .result-hero{grid-template-columns:1fr auto;padding:12px 0;margin:12px 0}
@@ -654,8 +670,8 @@ kbd{
 
 /* short landscape phones: keep the start screen on one screen */
 @media (max-height:540px) and (orientation:landscape){
-  .overlay{align-items:center;padding:12px 4vw}
-  .start-grid{gap:26px;align-items:center}
+  .overlay{align-items:center;padding:8px 4vw}
+  .start-grid{gap:24px;align-items:center}
   .start-side{display:none}
   .start-copy h1{font-size:clamp(52px,17vh,78px);line-height:.82;margin:8px 0 10px}
   .specs{padding:8px 0;margin-bottom:12px}
@@ -665,7 +681,7 @@ kbd{
   .cta{width:100%;min-width:0;padding:11px 16px}
   .loadbar{margin-top:8px}
   .best-line{display:block}
-  .start-copy .hint{display:block;margin-top:9px;font-size:8px;letter-spacing:.05em;line-height:1.4}
+  .start-copy .hint{display:block;margin-top:7px;font-size:8px;letter-spacing:.04em;line-height:1.35}
 }
 
 /* short landscape result: compress the card so the action row stays on screen */
@@ -674,7 +690,7 @@ kbd{
   .results{width:min(100%,980px);padding:10px 16px}
   .result-head{align-items:center;gap:12px}
   .result-title .eyebrow{display:none}
-  .result-title h2{font-size:28px;margin:0 0 2px}
+  .result-title h2{font-size:28px;margin:0 0 4px}
   .result-meta{font-size:7px;gap:6px}
   .result-title .modal-sub{margin:4px 0 0;font-size:8px}
   .rank-wrap{min-width:96px;min-height:66px;gap:2px}
@@ -758,8 +774,11 @@ kbd{
   animation:cp-spin 9s linear infinite;
 }
 .cp-label{
-  font-family:var(--mono);font-size:11px;letter-spacing:.3em;color:#fff3cf;
-  text-shadow:0 0 16px rgba(255,209,102,1),0 0 4px rgba(255,240,200,.9);pointer-events:none;
+  font-family:var(--mono);font-size:10px;letter-spacing:.28em;color:#fff6dc;
+  padding:5px 11px 4px;border-radius:999px;pointer-events:none;
+  background:rgba(6,9,20,.62);border:1px solid rgba(255,209,102,.34);
+  box-shadow:0 0 18px rgba(255,209,102,.28),inset 0 0 10px rgba(255,209,102,.12);
+  text-shadow:0 0 12px rgba(255,209,102,1),0 0 3px rgba(255,240,200,.9);
 }
 @keyframes cp-spin{to{transform:rotate(360deg)}}
 body.pendulum .pad{opacity:.2}

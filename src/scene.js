@@ -795,11 +795,12 @@ export function createScene(canvasEl) {
   // Anchor at the texture's bottom (the pivot) so the arm rotates from the clock hub.
   pendRod.center.set(0.5, 0);
   const pendPivot = swingSprite(TEX.glow, goldPale, 6, 1.5);
-  const pendBobGlow = swingSprite(TEX.glow, goldColor, 7, 2.6);
-  const pendBob = swingSprite(TEX.ring, goldPale, 8, 2.2);
-  const pendTargetGlow = swingSprite(TEX.glow, goldColor, 6, 3.6);
-  const pendTarget = swingSprite(TEX.ring, goldPale, 7, 2.9);
-  const pendTargetInner = swingSprite(TEX.glow, goldPale, 6, 1.5);
+  const pendBobGlow = swingSprite(TEX.glow, goldColor, 7, 2.2);
+  const pendBob = swingSprite(TEX.ring, goldPale, 8, 2.0);
+  const pendTargetGlow = swingSprite(TEX.glow, goldColor, 6, 3.2);
+  // Draw the target over the bob so its ring stays readable at the crossing.
+  const pendTarget = swingSprite(TEX.ring, goldPale, 10, 2.9);
+  const pendTargetInner = swingSprite(TEX.glow, goldPale, 9, 1.5);
 
   // Loose notes drifting around the dial while the gimmick runs.
   const floaters = [];
@@ -926,8 +927,8 @@ export function createScene(canvasEl) {
 
     const crossing = Math.max(0, 1 - Math.abs(theta) / Math.max(0.001, amp));
     const bobPulse = 1 + pendulum.kick * 0.22 + crossing * 0.05;
-    pendBobGlow.scale.set(2.6 * bobPulse, 2.6 * bobPulse, 1);
-    pendBob.scale.set(2.2 * bobPulse, 2.2 * bobPulse, 1);
+    pendBobGlow.scale.set(2.2 * bobPulse, 2.2 * bobPulse, 1);
+    pendBob.scale.set(2.0 * bobPulse, 2.0 * bobPulse, 1);
     pendRod.visible = true;
     pendPivot.visible = true;
     pendBob.visible = true;
@@ -937,17 +938,17 @@ export function createScene(canvasEl) {
     const flash = pendulum.missFlash;
     pendRod.material.opacity = cf * 0.62;
     pendPivot.material.opacity = cf * (0.55 + crossing * 0.3);
-    pendBobGlow.material.opacity = cf * (0.3 + crossing * 0.2 + pendulum.kick * 0.18);
+    pendBobGlow.material.opacity = cf * (0.24 + crossing * 0.16 + pendulum.kick * 0.14);
     pendBob.material.opacity = cf * (0.78 + pendulum.kick * 0.2);
     pendBob.material.color.copy(goldPale).lerp(redColor, flash);
     pendBobGlow.material.color.copy(goldColor).lerp(redColor, flash);
 
     const tPulse = 1 + crossing * 0.08 + pendulum.kick * 0.14;
     pendTarget.scale.set(2.9 * tPulse, 2.9 * tPulse, 1);
-    pendTargetGlow.scale.set(3.6 * tPulse, 3.6 * tPulse, 1);
+    pendTargetGlow.scale.set(3.2 * tPulse, 3.2 * tPulse, 1);
     pendTargetInner.scale.set(1.5 * tPulse, 1.5 * tPulse, 1);
     pendTarget.material.opacity = cf * (0.5 + crossing * 0.3 + pendulum.kick * 0.18);
-    pendTargetGlow.material.opacity = cf * (0.07 + crossing * 0.05 + pendulum.kick * 0.08);
+    pendTargetGlow.material.opacity = cf * (0.05 + crossing * 0.04 + pendulum.kick * 0.06);
     pendTargetInner.material.opacity = cf * (0.16 + crossing * 0.12);
     pendTarget.material.color.copy(goldPale).lerp(redColor, flash * 0.7);
 
