@@ -1812,6 +1812,99 @@ export function createScene(canvasEl) {
     bossCam.rate = 5.2 / Math.max(0.18, Math.min(2.2, dur));
   }
 
+  // ------------------------------------------------------ gameplay framing
+  // The camera score above is authored for looks. This guard keeps the playable
+  // field honest: during the clock stage every live lane ring has to sit in the
+  // lower part of the screen (where the player hits) and the clock crown has to
+  // stay under the top edge, on any aspect ratio. It leaves the authored shot
+  // alone whenever that shot already complies, so the direction survives.
+  const RING_TARGET_Y = 0.785;
+  const RING_EDGE_NDC = 0.84;   // outer rings stay inside 8%..92% of the width
+  const CROWN_EDGE_NDC = 0.93;  // crown stays below the top 3.5% of the frame
+  const frameProj = new THREE.Vector3();
+  const frameCrown = new THREE.Vector3();
+  const frameForward = new THREE.Vector3();
+  const frameLook = new THREE.Vector3();
+  const frameRings = Array.from({ length: 8 }, () => new THREE.Vector3());
+
+  // The rings hang off the stage, which lifts, tilts and rotates with the
+  // section. Read their real world position so the guard measures what the
+  // player actually sees, not an idealised lane.
+  function collectBossRings() {
+    stage.updateWorldMatrix(true, false);
+    laneRoot.updateWorldMatrix(false, false);
+    for (let i = 0; i < 8; i++) {
+      lanes[i].group.updateWorldMatrix(false, false);
+      frameRings[i].set(0, 0.02, 0.22).applyMatrix4(lanes[i].group.matrixWorld);
+    }
+  }
+
+  function bossPlayFraming(roll = 0) {
+    const crown = bossClockGroup.position.y + 10.5 * bossClockGroup.scale.y;
+    const live = state.active;
+    const fovCap = state.portrait ? 66 : 57;
+    const rollX = Math.sin(roll) / camera.aspect;
+    let fov = Math.max(46, camera.fov);
+
+    if (state.portrait) {
+      // A phone cannot afford the wide lateral swings the desktop score uses:
+      // the field would leave the narrow frame. Drop the parallax and aim
+      // straight down the nave; the loop below sets the pitch.
+      camera.position.x = 0;
+      frameLook.set(0, camera.position.y, camera.position.z - 40);
+      camera.lookAt(frameLook);
+    }
+
+    collectBossRings();
+    for (let pass = 0; pass < 14; pass++) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
+      const T = Math.tan((fov * Math.PI) / 360);
+
+      // Pitch the camera until the lowest live ring sits on the hit target.
+      let low = Infinity;
+      for (const i of live) {
+        frameProj.copy(frameRings[i]).project(camera);
+        if (frameProj.y < low) low = frameProj.y;
+      }
+      if (low !== Infinity) {
+        camera.rotateX(Math.atan(low * T) - Math.atan((1 - 2 * RING_TARGET_Y) * T));
+        camera.updateMatrixWorld();
+      }
+
+      // Widen the lens if the crown or an outer ring broke the frame.
+      let factor = 1;
+      frameCrown.set(0, crown, bossClockGroup.position.z).project(camera);
+      if (frameCrown.y > CROWN_EDGE_NDC) factor = frameCrown.y / CROWN_EDGE_NDC;
+      for (const i of live) {
+        frameProj.copy(frameRings[i]).project(camera);
+        const edge = Math.abs(frameProj.x + frameProj.y * rollX) / RING_EDGE_NDC;
+        if (edge > factor) factor = edge;
+      }
+      if (factor > 1.002) {
+        const widened = 2 * Math.atan(T * Math.min(factor * 1.02, 1.6)) * 180 / Math.PI;
+        if (widened <= fovCap + 0.01) {
+          fov = Math.max(fov, widened);
+          continue;
+        }
+        if (fov < fovCap) {
+          fov = fovCap;
+          continue;
+        }
+        // Wide as allowed and still clipped: step back along the view axis.
+        camera.getWorldDirection(frameForward);
+        camera.position.addScaledVector(frameForward, -1.1);
+        frameLook.copy(camera.position).addScaledVector(frameForward, 40);
+        camera.lookAt(frameLook);
+        continue;
+      }
+      break;
+    }
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }
+
   function bossGlitch(power = 1) {
     boss.glitch = Math.min(1.5, boss.glitch + power);
     boss.windBoost = Math.min(2.4, boss.windBoost + power * 0.7);
@@ -2485,6 +2578,9 @@ export function createScene(canvasEl) {
       camera.fov = bc.fov;
       camera.updateProjectionMatrix();
       camera.lookAt(bc.look);
+      // Gameplay shots are re-framed so the hit rings never fall off the
+      // bottom; the overture keeps its pure cinematic framing.
+      if (!boss.intro) bossPlayFraming(bc.roll);
       camera.rotation.z += bc.roll;
       if (boss.glitch > 0.01) {
         camera.position.x += (Math.random() - .5) * boss.glitch * 0.24;

@@ -2482,10 +2482,10 @@ export const CHART = {
       ],
       "look": [
         0,
-        4.8,
+        4.87,
         -2
       ],
-      "fov": 46,
+      "fov": 48.62,
       "roll": 0,
       "dur": 0.6
     },
@@ -2556,10 +2556,10 @@ export const CHART = {
       ],
       "look": [
         0,
-        5.4,
+        4.88,
         -3
       ],
-      "fov": 47,
+      "fov": 51.58,
       "roll": 0,
       "dur": 0.8
     },
@@ -2605,7 +2605,7 @@ export const CHART = {
         5.2,
         -4
       ],
-      "fov": 48,
+      "fov": 52.07,
       "roll": 0.02,
       "dur": 1
     },
@@ -2659,10 +2659,10 @@ export const CHART = {
       ],
       "look": [
         2,
-        6,
+        4.38,
         -6
       ],
-      "fov": 48,
+      "fov": 52.36,
       "roll": -0.02,
       "dur": 0.9
     },
@@ -2723,15 +2723,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         5,
-        8.4,
+        8.05,
         16.4
       ],
       "look": [
         -2,
-        6.4,
+        4.43,
         -6
       ],
-      "fov": 49,
+      "fov": 54,
       "roll": 0.03,
       "dur": 0.9
     },
@@ -2785,10 +2785,10 @@ export const CHART = {
       ],
       "look": [
         4,
-        7,
+        3.81,
         -10
       ],
-      "fov": 52,
+      "fov": 51,
       "roll": -0.04,
       "dur": 0.7
     },
@@ -2815,15 +2815,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        8.8,
+        7.32,
         16.2
       ],
       "look": [
         0,
-        6.4,
+        3.91,
         -7
       ],
-      "fov": 50,
+      "fov": 54,
       "roll": 0.03,
       "dur": 0.6
     },
@@ -2914,15 +2914,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        7.6,
+        6.7,
         15.4
       ],
       "look": [
         0,
-        6.8,
+        3.46,
         -9
       ],
-      "fov": 49,
+      "fov": 54,
       "roll": 0,
       "dur": 0.7
     },
@@ -2981,15 +2981,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         -6,
-        8.4,
+        6.9,
         14.6
       ],
       "look": [
         3,
-        6,
+        3.61,
         -10
       ],
-      "fov": 50,
+      "fov": 54,
       "roll": 0.035,
       "dur": 0.85
     },
@@ -3033,15 +3033,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         6,
-        9.2,
+        7.19,
         15
       ],
       "look": [
         -3,
-        6.2,
+        3.67,
         -10
       ],
-      "fov": 51,
+      "fov": 54,
       "roll": -0.04,
       "dur": 0.85
     },
@@ -3100,15 +3100,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        10.2,
+        5.55,
         13.8
       ],
       "look": [
         0,
-        4.6,
+        3.27,
         -8
       ],
-      "fov": 53,
+      "fov": 54,
       "roll": 0.02,
       "dur": 0.85
     },
@@ -3157,15 +3157,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         -8,
-        8.2,
+        7.23,
         14.2
       ],
       "look": [
         4,
-        6,
+        4,
         -9
       ],
-      "fov": 50,
+      "fov": 54,
       "roll": -0.03,
       "dur": 0.65
     },
@@ -3201,10 +3201,10 @@ export const CHART = {
       ],
       "look": [
         0,
-        5,
+        5.34,
         -2
       ],
-      "fov": 48,
+      "fov": 49.91,
       "roll": 0,
       "dur": 0.9
     },
@@ -3286,10 +3286,10 @@ export const CHART = {
       ],
       "look": [
         4,
-        5.6,
+        5.19,
         -6
       ],
-      "fov": 49,
+      "fov": 51.91,
       "roll": 0.025,
       "dur": 1.1
     },
@@ -3356,15 +3356,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        8,
+        7.16,
         16
       ],
       "look": [
         0,
-        6,
+        4.01,
         -6
       ],
-      "fov": 48,
+      "fov": 54,
       "roll": -0.03,
       "dur": 0.55
     },
@@ -3400,15 +3400,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        9.4,
+        6.7,
         15.4
       ],
       "look": [
         0,
-        7,
+        3.6,
         -8
       ],
-      "fov": 49,
+      "fov": 54,
       "roll": 0.02,
       "dur": 0.6
     },
@@ -3444,15 +3444,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         -7,
-        10.2,
+        6.9,
         14.2
       ],
       "look": [
         0,
-        5.2,
+        3.82,
         -9
       ],
-      "fov": 51,
+      "fov": 54,
       "roll": -0.04,
       "dur": 0.9
     },
@@ -3496,15 +3496,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         5,
-        8.2,
+        5.7,
         13.2
       ],
       "look": [
         0,
-        7,
+        3.26,
         -10
       ],
-      "fov": 50,
+      "fov": 54,
       "roll": 0.045,
       "dur": 0.9
     },
@@ -3535,15 +3535,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        11.2,
+        4.78,
         12.6
       ],
       "look": [
         0,
-        5.8,
+        2.7,
         -12
       ],
-      "fov": 52,
+      "fov": 54,
       "roll": -0.02,
       "dur": 0.9
     },
@@ -3579,15 +3579,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        9.8,
+        5.69,
         14
       ],
       "look": [
         0,
-        5.4,
+        3.1,
         -10
       ],
-      "fov": 49,
+      "fov": 54,
       "roll": 0.03,
       "dur": 0.7
     },
@@ -3623,15 +3623,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         -8,
-        9.2,
+        6.41,
         13
       ],
       "look": [
         0,
-        6.2,
+        3.68,
         -10
       ],
-      "fov": 51,
+      "fov": 54,
       "roll": -0.045,
       "dur": 0.95
     },
@@ -3707,15 +3707,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         8,
-        10,
+        6.03,
         12.4
       ],
       "look": [
         0,
-        6,
+        3.59,
         -10
       ],
-      "fov": 50,
+      "fov": 54,
       "roll": 0.05,
       "dur": 0.95
     },
@@ -3746,15 +3746,15 @@ export const CHART = {
       "type": "bossCamera",
       "pos": [
         0,
-        7.4,
+        3.96,
         11.2
       ],
       "look": [
         0,
-        7,
+        2.53,
         -12
       ],
-      "fov": 52,
+      "fov": 54,
       "roll": -0.03,
       "dur": 0.9
     },
@@ -3801,10 +3801,10 @@ export const CHART = {
       ],
       "look": [
         0,
-        5,
+        5.69,
         0
       ],
-      "fov": 47,
+      "fov": 52.39,
       "roll": 0,
       "dur": 1.2
     },
