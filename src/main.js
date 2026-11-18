@@ -42,7 +42,8 @@ const dom = {
   comboLine: $('comboLine'), comboFill: $('comboFill'), accRing: $('accRing'),
   scoreDelta: $('scoreDelta'), resultLoading: $('resultLoading'), loadTrack: $('loadTrack'),
   loadProgress: $('loadProgress'), loadPct: $('loadPct'), loadRank: $('loadRank'),
-  flash: $('flash'),
+  flash: $('flash'), bossGlitch: $('bossGlitch'), bossCaption: $('bossCaption'),
+  bcKicker: $('bcKicker'), bcTitle: $('bcTitle'), bcSub: $('bcSub'),
 };
 
 // ---------------------------------------------------------------- state
@@ -64,6 +65,9 @@ let lastPrefetch = null;
 let comboHistory = [];
 let comboClock = 0;
 let vibeTimer = 0;
+let bossIntro = false;
+let captionTimer = 0;
+let glitchTimer = 0;
 
 const stats = {
   score: 0, combo: 0, maxCombo: 0, judged: 0, weight: 0,
@@ -118,6 +122,7 @@ function renderBest() {
 scene.setSection(chart.sections[0]);
 scene.setTempo(chart.song.bpm, chart.song.beatOffset);
 scene.setCity(chart.sections[0].city || 0);
+scene.setBoss(selectedTrack.boss ? 'preview' : 'off');
 
 function clearNoteObjects() {
   for (const n of noteObjects) {
@@ -134,11 +139,12 @@ function buildNotes() {
   swingNotes = (chart.swings || []).map((data, index) => ({
     t: data.t, index, state: 'pending',
   }));
+  const freeNotes = !!chart.song.freeNotes;
   noteObjects = chart.notes.map((data, index) => {
-    const created = scene.makeNote(data.lane, data.type);
+    const created = scene.makeNote(data.lane, data.type, freeNotes);
     created.group.visible = false;
     return {
-      data, index, lane: data.lane, type: data.type,
+      data, index, lane: data.lane, type: data.type, free: freeNotes,
       state: 'pending', endTime: data.t + (data.dur || 0),
       group: created.group, head: created.head, body: created.body, tail: created.tail,
       color: created.color, tickAt: data.t,
@@ -262,12 +268,55 @@ function toast(text, duration = 1300) {
   toastTimer = setTimeout(() => dom.toast.classList.remove('on'), duration);
 }
 
+function setBossIntro(on) {
+  bossIntro = on;
+  document.body.classList.toggle('boss-intro', on);
+  if (!on) hideCaption();
+}
+
+function hideCaption() {
+  clearTimeout(captionTimer);
+  if (!dom.bossCaption) return;
+  dom.bossCaption.classList.remove('on');
+  dom.bossCaption.setAttribute('aria-hidden', 'true');
+}
+
+function showCaption(ev) {
+  if (!dom.bossCaption) return;
+  clearTimeout(captionTimer);
+  dom.bcKicker.textContent = ev.kicker || '';
+  dom.bcTitle.textContent = ev.title || '';
+  dom.bcSub.textContent = ev.sub || '';
+  dom.bossCaption.setAttribute('aria-hidden', 'false');
+  dom.bossCaption.classList.remove('on');
+  void dom.bossCaption.offsetWidth;
+  dom.bossCaption.classList.add('on');
+  const hold = ev.hold ?? 3.4;
+  if (hold > 0) {
+    captionTimer = setTimeout(() => {
+      dom.bossCaption.classList.remove('on');
+      dom.bossCaption.setAttribute('aria-hidden', 'true');
+    }, hold * 1000);
+  }
+}
+
+function glitchScreen(power = 1) {
+  if (!dom.bossGlitch) return;
+  dom.bossGlitch.classList.remove('on');
+  void dom.bossGlitch.offsetWidth;
+  dom.bossGlitch.classList.add('on');
+  clearTimeout(glitchTimer);
+  glitchTimer = setTimeout(() => dom.bossGlitch.classList.remove('on'), 340);
+}
+
 function updateSection(sec, force = false) {
   if (!sec || (!force && sec === currentSection)) return;
   currentSection = sec;
   scene.setSection(sec);
+  if (sec.bpm) scene.setTempo(sec.bpm, sec.beatOffset ?? 0);
   dom.section.textContent = sec.name;
   dom.keys.textContent = sec.keys;
+  if (dom.hudBpm && sec.bpm) dom.hudBpm.textContent = `${Number(sec.bpm).toFixed(1).replace(/\.0$/, '')} BPM`;
   const active = new Set(activeLanesFor(sec.keys));
   for (const pad of dom.pads) {
     const lane = Number(pad.dataset.lane);
@@ -280,7 +329,8 @@ function updateSection(sec, force = false) {
   document.documentElement.style.setProperty('--cyan', sec.color);
   document.documentElement.style.setProperty('--magenta', sec.accent);
   if (!force) {
-    toast(`${sec.name} // ${sec.keys} LANES`, 1100);
+    // The boss overture uses full-screen title cards instead of lane toasts.
+    if (!(selectedTrack.boss && sec.intro)) toast(`${sec.name} // ${sec.keys} LANES`, 1100);
     scene.state.shake = Math.min(0.12, scene.state.shake + 0.035);
   }
 }
@@ -510,8 +560,15 @@ function updateNotes(t) {
   for (const n of noteObjects) {
     if (n.state === 'pending') {
       const y = (n.data.t - t) * SPEED;
-      // local lane space: the lane frame supplies the diagonal world position
-      n.group.position.set(0, y, 0.24);
+      if (n.free) {
+        // Boss notes fly along a curved stage-space path and converge on the
+        // lane ring exactly at the hit line.
+        const pose = scene.freeNotePose(n.lane, y, n.index);
+        n.group.position.set(pose.x, pose.y, pose.z);
+      } else {
+        // local lane space: the lane frame supplies the diagonal world position
+        n.group.position.set(0, y, 0.24);
+      }
       n.group.visible = y < 14.5 && y > -1.3;
       n.head.scale.set(1.04 * ns, 1.04 * ns, 1);
       if (n.body) {
@@ -520,7 +577,7 @@ function updateNotes(t) {
         n.tail.visible = n.group.visible;
         n.body.scale.set(0.52 * ns, len, 1);
         n.body.position.y = len / 2;
-        n.body.material.rotation = -scene.laneScreenAngle(n.lane);
+        n.body.material.rotation = n.free ? 0 : -scene.laneScreenAngle(n.lane);
         n.tail.scale.set(0.68 * ns, 0.68 * ns, 1);
         n.tail.position.y = len;
       }
@@ -533,13 +590,18 @@ function updateNotes(t) {
       }
       const remain = Math.max(0, (n.endTime - t) * SPEED);
       n.group.visible = true;
-      n.group.position.set(0, 0.02, 0.24);
+      if (n.free) {
+        const pose = scene.freeNotePose(n.lane, 0, n.index);
+        n.group.position.set(pose.x, 0.02, pose.z);
+      } else {
+        n.group.position.set(0, 0.02, 0.24);
+      }
       n.head.visible = false;
       if (n.body) {
         n.body.visible = remain > 0.03;
         n.body.scale.set(0.52 * ns, remain, 1);
         n.body.position.y = remain / 2;
-        n.body.material.rotation = -scene.laneScreenAngle(n.lane);
+        n.body.material.rotation = n.free ? 0 : -scene.laneScreenAngle(n.lane);
         n.tail.visible = remain > 0.4;
         n.tail.scale.set(0.68 * ns, 0.68 * ns, 1);
         n.tail.position.y = remain;
@@ -566,12 +628,21 @@ async function startGame() {
   dom.hud.classList.remove('hidden');
   dom.hud.setAttribute('aria-hidden', 'false');
   document.body.classList.add('playing');
+  hideCaption();
+  dom.bossGlitch?.classList.remove('on');
+  if (selectedTrack.boss) {
+    scene.setBoss('intro');
+    setBossIntro(true);
+  } else {
+    scene.setBoss('off');
+    setBossIntro(false);
+  }
   resetGame();
   gameState = 'starting';
   try {
     await audio.start(0, { fadeStart: selectedTrack.fadeStart, fadeEnd: selectedTrack.fadeEnd });
     gameState = 'playing';
-    toast(`LISTEN // ${chart.sections[0].keys} LANES`, 1500);
+    if (!selectedTrack.boss) toast(`LISTEN // ${chart.sections[0].keys} LANES`, 1500);
   } catch (err) {
     console.error(err);
     gameState = 'menu';
@@ -612,7 +683,11 @@ function quitToMenu() {
   scene.setSection(chart.sections[0]);
   scene.setTempo(chart.song.bpm, chart.song.beatOffset);
   scene.setCity(chart.sections[0].city || 0);
+  scene.setBoss(selectedTrack.boss ? 'preview' : 'off');
   scene.setPreviewLanes(new Set());
+  setBossIntro(false);
+  hideCaption();
+  dom.bossGlitch?.classList.remove('on');
   for (const n of noteObjects) n.group.visible = false;
   held.fill(false);
   holdNote.fill(null);
@@ -712,7 +787,7 @@ function showResults(data) {
 
   dom.resultTrack.textContent = selectedTrack.title;
   dom.resultDiff.textContent = selectedTrack.difficulty;
-  dom.resultBpm.textContent = `${selectedTrack.bpm} BPM`;
+  dom.resultBpm.textContent = selectedTrack.bpmLabel || `${selectedTrack.bpm} BPM`;
   dom.footTrack.textContent = selectedTrack.shortTitle;
   dom.footLanes.textContent = selectedTrack.laneLabel;
   dom.resultTag.textContent = full ? 'FULL COMBO // FIELD MASTERED'
@@ -874,6 +949,32 @@ function updateChartEvents(t) {
         if (ev.mode === 'start') startPendulum(ev);
         else endPendulum();
         break;
+      case 'bossCamera':
+        scene.bossCameraEvent(ev.pos, ev.look, ev.fov, ev.roll, ev.dur);
+        break;
+      case 'bossGlitch':
+        scene.bossGlitch(ev.power ?? 1);
+        glitchScreen(ev.power ?? 1);
+        flashScreen((ev.power ?? 1) * 0.6);
+        break;
+      case 'bossTick':
+        scene.bossTick(ev.hand, ev.power ?? 1);
+        break;
+      case 'bossPhase':
+        scene.setBoss(ev.mode === 'play' ? 'play' : 'outro');
+        if (ev.mode === 'play') {
+          setBossIntro(false);
+          toast('CLOCK STAGE // FREE FIELD', 1700);
+        } else {
+          hideCaption();
+        }
+        break;
+      case 'wind':
+        scene.windFx(ev.power ?? 1);
+        break;
+      case 'caption':
+        showCaption(ev);
+        break;
       default: break;
     }
   }
@@ -1006,8 +1107,9 @@ function applyTrackUI() {
   if (dom.startLevel) dom.startLevel.textContent = t.difficulty;
   if (dom.startLanes) dom.startLanes.textContent = t.laneLabel;
   if (dom.hudTrack) dom.hudTrack.textContent = t.shortTitle;
-  if (dom.hudBpm) dom.hudBpm.textContent = `${t.bpm} BPM`;
+  if (dom.hudBpm) dom.hudBpm.textContent = t.bpmLabel || `${t.bpm} BPM`;
   if (dom.loadTrack) dom.loadTrack.textContent = `${t.shortTitle} // ${t.difficulty}`;
+  document.body.classList.toggle('boss-track', !!t.boss);
   for (const card of dom.trackCards) {
     const meta = TRACK_BY_ID[card.dataset.track];
     if (meta) card.style.setProperty('--card-accent', meta.accent);
@@ -1027,6 +1129,10 @@ async function selectTrack(id, { autoLoad = true } = {}) {
   chartEnd = chart.song.chartEnd;
   trackDuration = next.duration;
   applyTrackUI();
+  setBossIntro(false);
+  hideCaption();
+  dom.bossGlitch?.classList.remove('on');
+  scene.setBoss(next.boss ? 'preview' : 'off');
   scene.setSection(chart.sections[0]);
   scene.setTempo(chart.song.bpm, chart.song.beatOffset);
   scene.setCity(chart.sections[0].city || 0);

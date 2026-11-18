@@ -9,6 +9,13 @@ const LANE_COLORS = [
   '#c477ff', '#ff79dc', '#ff7fb5', '#ffb06e',
 ];
 
+// The boss field trades the neon palette for candlelight: mirror-symmetric
+// crimson edges, gold inner lanes, and bone-white centres.
+const BOSS_LANE_COLORS = [
+  '#ff2d55', '#ff5e78', '#ff8a3d', '#ffd166',
+  '#ffd166', '#ff8a3d', '#ff5e78', '#ff2d55',
+];
+
 const SPACING = 1.75;
 const ARC = 0.015;
 
@@ -431,6 +438,250 @@ function pendulumRodTexture() {
   return tex(c);
 }
 
+// ---------------------------------------------------------------- gothic set
+// The boss stage is a procedural gothic nave. Everything is drawn with canvas
+// textures or low-poly primitives so the whole cathedral stays inside the same
+// draw-call budget as the neon tracks.
+function gothicWindowTexture(seed = 1) {
+  const [c, x] = canvas(256, 512);
+  let s = seed >>> 0;
+  const rand = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  x.clearRect(0, 0, 256, 512);
+  // pointed arch silhouette
+  x.save();
+  x.beginPath();
+  x.moveTo(12, 512); x.lineTo(12, 206);
+  x.bezierCurveTo(18, 104, 82, 38, 128, 10);
+  x.bezierCurveTo(174, 38, 238, 104, 244, 206);
+  x.lineTo(244, 512); x.closePath();
+  x.clip();
+
+  x.fillStyle = 'rgba(4,5,14,.96)'; x.fillRect(0, 0, 256, 512);
+  // jewel panes: tall lancets and diamond quarries
+  const palette = ['#ff4d6d', '#ff9a5e', '#ffd27a', '#4ff2ff', '#9b6bff', '#ff6fb5'];
+  for (let col = 0; col < 4; col++) {
+    for (let row = 0; row < 8; row++) {
+      const hue = palette[(col + row + seed) % palette.length];
+      x.globalAlpha = 0.32 + rand() * 0.28;
+      x.fillStyle = hue;
+      const x0 = 20 + col * 56 + (row % 2) * 12;
+      const y0 = 160 + row * 44;
+      x.beginPath();
+      x.moveTo(x0 + 22, y0);
+      x.lineTo(x0 + 44, y0 + 20);
+      x.lineTo(x0 + 22, y0 + 40);
+      x.lineTo(x0, y0 + 20);
+      x.closePath(); x.fill();
+    }
+  }
+  // glowing lancet at the centre
+  const glass = x.createLinearGradient(0, 40, 0, 512);
+  glass.addColorStop(0, 'rgba(255,240,190,.9)');
+  glass.addColorStop(0.35, 'rgba(255,150,120,.55)');
+  glass.addColorStop(1, 'rgba(120,70,190,.32)');
+  x.globalAlpha = 1;
+  x.fillStyle = glass;
+  x.beginPath();
+  x.moveTo(102, 512); x.lineTo(102, 190);
+  x.quadraticCurveTo(108, 118, 128, 92);
+  x.quadraticCurveTo(148, 118, 154, 190);
+  x.lineTo(154, 512); x.closePath(); x.fill();
+
+  // lead tracery
+  x.strokeStyle = 'rgba(8,8,18,.92)'; x.lineWidth = 7;
+  for (let col = 1; col < 4; col++) { x.beginPath(); x.moveTo(20 + col * 56, 150); x.lineTo(20 + col * 56, 512); x.stroke(); }
+  for (let row = 1; row < 8; row++) { x.beginPath(); x.moveTo(14, 160 + row * 44); x.lineTo(242, 160 + row * 44); x.stroke(); }
+  x.lineWidth = 5;
+  x.beginPath(); x.arc(128, 182, 58, 0, Math.PI * 2); x.stroke();
+  x.beginPath(); x.arc(128, 182, 30, 0, Math.PI * 2); x.stroke();
+
+  // bright stone rim
+  x.restore();
+  x.save();
+  x.strokeStyle = 'rgba(255,226,160,.92)';
+  x.lineWidth = 7;
+  x.shadowColor = '#ffd27a'; x.shadowBlur = 18;
+  x.beginPath();
+  x.moveTo(12, 512); x.lineTo(12, 206);
+  x.bezierCurveTo(18, 104, 82, 38, 128, 10);
+  x.bezierCurveTo(174, 38, 238, 104, 244, 206);
+  x.lineTo(244, 512);
+  x.stroke();
+  x.restore();
+  return tex(c);
+}
+
+function roseWindowTexture() {
+  const [c, x] = canvas(1024, 1024);
+  x.translate(512, 512);
+  const palette = ['#ff4d6d', '#ffb45e', '#ffd27a', '#4ff2ff', '#9b6bff', '#ff6fb5'];
+  // outer halo
+  const halo = x.createRadialGradient(0, 0, 260, 0, 0, 500);
+  halo.addColorStop(0, 'rgba(255,255,255,0)');
+  halo.addColorStop(0.82, 'rgba(255,210,122,.12)');
+  halo.addColorStop(1, 'rgba(255,210,122,0)');
+  x.fillStyle = halo;
+  x.beginPath(); x.arc(0, 0, 500, 0, Math.PI * 2); x.fill();
+
+  // 12 petals
+  for (let i = 0; i < 12; i++) {
+    x.save();
+    x.rotate(i * Math.PI / 6);
+    const g = x.createRadialGradient(0, -210, 20, 0, -300, 150);
+    g.addColorStop(0, palette[i % palette.length]);
+    g.addColorStop(0.62, 'rgba(255,235,190,.75)');
+    g.addColorStop(1, 'rgba(20,12,40,0)');
+    x.fillStyle = g;
+    x.beginPath();
+    x.moveTo(0, -118);
+    x.bezierCurveTo(116, -206, 96, -356, 0, -414);
+    x.bezierCurveTo(-96, -356, -116, -206, 0, -118);
+    x.closePath(); x.fill();
+    x.strokeStyle = 'rgba(10,8,20,.9)'; x.lineWidth = 7;
+    x.stroke();
+    x.strokeStyle = 'rgba(255,226,160,.75)'; x.lineWidth = 3;
+    x.beginPath();
+    x.moveTo(0, -148); x.quadraticCurveTo(50, -250, 0, -380);
+    x.stroke();
+    x.restore();
+  }
+  // concentric rings
+  x.strokeStyle = 'rgba(255,226,160,.9)';
+  x.shadowColor = '#ffd27a'; x.shadowBlur = 18;
+  for (const r of [414, 286, 168, 82]) {
+    x.lineWidth = r === 414 ? 12 : 7;
+    x.beginPath(); x.arc(0, 0, r, 0, Math.PI * 2); x.stroke();
+  }
+  // 24 small oculi between rings
+  for (let i = 0; i < 24; i++) {
+    x.save(); x.rotate(i * Math.PI / 12);
+    x.fillStyle = palette[i % palette.length];
+    x.shadowColor = palette[i % palette.length]; x.shadowBlur = 16;
+    x.beginPath(); x.arc(0, -352, 22, 0, Math.PI * 2); x.fill();
+    x.restore();
+  }
+  // central eye
+  const core = x.createRadialGradient(0, 0, 0, 0, 0, 78);
+  core.addColorStop(0, 'rgba(255,255,255,1)');
+  core.addColorStop(0.4, 'rgba(255,220,150,.8)');
+  core.addColorStop(1, 'rgba(255,90,120,0)');
+  x.fillStyle = core;
+  x.beginPath(); x.arc(0, 0, 78, 0, Math.PI * 2); x.fill();
+  return tex(c);
+}
+
+function bossClockTexture() {
+  const [c, x] = canvas(2048, 2048);
+  const cx = 1024;
+  x.translate(cx, cx);
+  const numerals = ['XII', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+  // deep face wash
+  const wash = x.createRadialGradient(0, 0, 80, 0, 0, 980);
+  wash.addColorStop(0, 'rgba(60,24,44,.18)');
+  wash.addColorStop(0.72, 'rgba(18,8,26,.32)');
+  wash.addColorStop(0.95, 'rgba(255,190,100,.1)');
+  wash.addColorStop(1, 'rgba(255,190,100,0)');
+  x.fillStyle = wash;
+  x.beginPath(); x.arc(0, 0, 980, 0, Math.PI * 2); x.fill();
+
+  // rings
+  x.save();
+  x.strokeStyle = 'rgba(255,226,170,.92)';
+  x.shadowColor = '#ffcf6e'; x.shadowBlur = 34;
+  for (const [r, w] of [[944, 10], [888, 3], [720, 3], [510, 2], [300, 2]]) {
+    x.lineWidth = w;
+    x.beginPath(); x.arc(0, 0, r, 0, Math.PI * 2); x.stroke();
+  }
+  x.restore();
+
+  // 60 ticks
+  for (let i = 0; i < 60; i++) {
+    const hour = i % 5 === 0;
+    x.save(); x.rotate(i * Math.PI / 30);
+    x.strokeStyle = hour ? 'rgba(255,240,200,.95)' : 'rgba(255,210,130,.45)';
+    x.lineWidth = hour ? 13 : 4;
+    x.shadowColor = '#ffcf6e'; x.shadowBlur = hour ? 22 : 8;
+    x.beginPath(); x.moveTo(0, -936); x.lineTo(0, -(hour ? 836 : 892)); x.stroke();
+    x.restore();
+  }
+
+  // gothic tracery arcs between hours
+  x.save();
+  x.strokeStyle = 'rgba(255,210,130,.4)';
+  x.lineWidth = 4;
+  x.shadowColor = '#ffcf6e'; x.shadowBlur = 10;
+  for (let i = 0; i < 24; i++) {
+    x.save(); x.rotate(i * Math.PI / 12);
+    x.beginPath();
+    x.moveTo(-86, -748);
+    x.quadraticCurveTo(0, -880, 86, -748);
+    x.stroke();
+    x.restore();
+  }
+  x.restore();
+
+  // roman numerals
+  x.fillStyle = 'rgba(255,244,215,.97)';
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.shadowColor = '#ffcf6e';
+  x.shadowBlur = 30;
+  x.font = '700 148px Georgia, "Times New Roman", serif';
+  numerals.forEach((n, i) => {
+    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    x.save();
+    x.translate(Math.cos(a) * 678, Math.sin(a) * 678);
+    x.rotate(a + Math.PI / 2);
+    x.fillText(n, 0, 0);
+    x.restore();
+  });
+
+  // central rose
+  x.save();
+  x.strokeStyle = 'rgba(255,226,170,.7)';
+  x.lineWidth = 5;
+  x.shadowColor = '#ffcf6e'; x.shadowBlur = 22;
+  for (let i = 0; i < 12; i++) {
+    x.save(); x.rotate(i * Math.PI / 6);
+    x.beginPath();
+    x.moveTo(0, -40);
+    x.bezierCurveTo(90, -100, 92, -236, 0, -278);
+    x.bezierCurveTo(-92, -236, -90, -100, 0, -40);
+    x.stroke();
+    x.restore();
+  }
+  x.beginPath(); x.arc(0, 0, 72, 0, Math.PI * 2); x.stroke();
+  x.restore();
+  return tex(c);
+}
+
+function bossFloorTexture() {
+  const [c, x] = canvas(512, 512);
+  x.fillStyle = '#07070d'; x.fillRect(0, 0, 512, 512);
+  x.strokeStyle = 'rgba(160,140,120,.22)'; x.lineWidth = 3;
+  for (let i = 0; i <= 4; i++) {
+    x.beginPath(); x.moveTo(i * 128, 0); x.lineTo(i * 128, 512); x.stroke();
+    x.beginPath(); x.moveTo(0, i * 128); x.lineTo(512, i * 128); x.stroke();
+  }
+  x.strokeStyle = 'rgba(255,202,120,.14)';
+  x.lineWidth = 1;
+  for (let i = -4; i < 8; i++) {
+    x.beginPath(); x.moveTo(i * 128, 0); x.lineTo(i * 128 + 512, 512); x.stroke();
+    x.beginPath(); x.moveTo(i * 128 + 512, 0); x.lineTo(i * 128, 512); x.stroke();
+  }
+  for (let i = 0; i < 70; i++) {
+    x.fillStyle = `rgba(255,220,150,${0.015 + Math.random() * 0.03})`;
+    x.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 3, 1 + Math.random() * 3);
+  }
+  const t = tex(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(6, 14);
+  return t;
+}
+
 // ---------------------------------------------------------------- scene
 export function createScene(canvasEl) {
   const isMobile = matchMedia('(pointer: coarse)').matches;
@@ -463,6 +714,8 @@ export function createScene(canvasEl) {
     cityFar: cityTexture(0x1f3c5a, false), cityNear: cityTexture(0x6b2a44, true),
     clockFace: clockFaceTexture(), clockHand: clockHandTexture(), clockDial: clockDialTexture(),
     floatNote: floatNoteTexture(), pendulumRod: pendulumRodTexture(),
+    gothicA: gothicWindowTexture(1), gothicB: gothicWindowTexture(2),
+    rose: roseWindowTexture(), bossClock: bossClockTexture(), bossFloor: bossFloorTexture(),
   };
 
   // ------------------------------------------------------------ background
@@ -569,6 +822,164 @@ export function createScene(canvasEl) {
   cityLayers[1].speed = 0.0062;
   cityGroup.visible = false;
 
+  // ------------------------------------------------------------ gothic nave
+  // The boss track's intro is staged inside a cathedral that spans the whole
+  // depth of the scene. The nave is built from dark stone planes, emissive
+  // stained glass and candle glows, so it reads as 3D while the camera flies
+  // through it without adding lights or shadow maps.
+  const church = new THREE.Group();
+  church.name = 'bossChurch';
+  church.visible = false;
+  bg.add(church);
+  const churchMats = [];
+  function churchMat(mat, base = 1) {
+    mat.transparent = true;
+    mat.opacity = 0;
+    mat.depthWrite = false;
+    churchMats.push({ mat, base });
+    return mat;
+  }
+
+  const churchFloorMat = churchMat(new THREE.MeshBasicMaterial({
+    map: TEX.bossFloor, color: 0xb9a98e, fog: false,
+  }), 0.95);
+  const churchFloor = new THREE.Mesh(new THREE.PlaneGeometry(48, 116), churchFloorMat);
+  churchFloor.rotation.x = -Math.PI / 2;
+  churchFloor.position.set(0, -3.64, -26);
+  churchFloor.renderOrder = -9;
+  church.add(churchFloor);
+
+  // Stone piers and their gold ribs silhouette the nave on both sides.
+  const stoneMat = churchMat(new THREE.MeshBasicMaterial({ color: 0x140f1d, fog: false }), 1);
+  const pierGeo = new THREE.BoxGeometry(1.35, 18, 1.35);
+  for (let bay = 0; bay < 6; bay++) {
+    const z = 4 - bay * 11;
+    for (const side of [-1, 1]) {
+      const pier = new THREE.Mesh(pierGeo, stoneMat);
+      pier.position.set(side * 11.4, 4.2, z);
+      pier.renderOrder = -7;
+      church.add(pier);
+    }
+  }
+
+  // Stained-glass lancets alternate textures and glow additively.
+  const lancetGeo = new THREE.PlaneGeometry(4.7, 11.4);
+  for (let bay = 0; bay < 5; bay++) {
+    const z = -1.5 - bay * 11.4;
+    for (const side of [-1, 1]) {
+      const mat = churchMat(new THREE.MeshBasicMaterial({
+        map: bay % 2 ? TEX.gothicB : TEX.gothicA,
+        color: side < 0 ? 0xffe2bb : 0xffc4ca,
+        transparent: true, depthWrite: false, blending: THREE.NormalBlending, fog: false,
+      }), 0.96);
+      const windowMesh = new THREE.Mesh(lancetGeo, mat);
+      windowMesh.position.set(side * 11.34, 7.4, z);
+      windowMesh.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+      windowMesh.renderOrder = -5;
+      church.add(windowMesh);
+    }
+  }
+
+  // Rose window above the altar, and the giant clock that becomes the stage.
+  const roseMat = churchMat(new THREE.SpriteMaterial({
+    map: TEX.rose, color: 0xfff1c8, transparent: true, depthWrite: false,
+    depthTest: false, blending: THREE.NormalBlending, fog: false,
+  }), 0.78);
+  const roseWindow = new THREE.Sprite(roseMat);
+  roseWindow.position.set(0, 29, -62);
+  roseWindow.scale.set(17, 17, 1);
+  roseWindow.renderOrder = -4;
+  church.add(roseWindow);
+
+  const roseAuraMat = churchMat(new THREE.SpriteMaterial({
+    map: TEX.glow, color: 0xff4d6d, transparent: true, depthWrite: false,
+    depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  }), 0.045);
+  const roseAura = new THREE.Sprite(roseAuraMat);
+  roseAura.position.set(0, 29, -63);
+  roseAura.scale.set(30, 30, 1);
+  roseAura.renderOrder = -5;
+  church.add(roseAura);
+
+  const bossClockGroup = new THREE.Group();
+  bossClockGroup.name = 'bossClock';
+  bossClockGroup.position.set(0, 10.4, -39);
+  church.add(bossClockGroup);
+
+  const bossFaceMat = churchMat(new THREE.SpriteMaterial({
+    map: TEX.bossClock, color: 0xfff3d0, transparent: true, depthWrite: false,
+    depthTest: false, blending: THREE.NormalBlending, fog: false,
+  }), 0.74);
+  const bossFace = new THREE.Sprite(bossFaceMat);
+  bossFace.scale.set(21, 21, 1);
+  bossFace.renderOrder = -3;
+  bossClockGroup.add(bossFace);
+
+  const bossAuraMat = churchMat(new THREE.SpriteMaterial({
+    map: TEX.glow, color: 0xff9a5e, transparent: true, depthWrite: false,
+    depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  }), 0.055);
+  const bossAura = new THREE.Sprite(bossAuraMat);
+  bossAura.scale.set(29, 29, 1);
+  bossAura.renderOrder = -4;
+  bossClockGroup.add(bossAura);
+
+  function bossHand(map, color, scale, base) {
+    const mat = churchMat(new THREE.SpriteMaterial({
+      map, color, transparent: true, depthWrite: false, depthTest: false,
+      blending: THREE.AdditiveBlending, fog: false,
+    }), base);
+    const s = new THREE.Sprite(mat);
+    s.center.set(0.5, 0.06);
+    s.position.set(0, 0, 0.4);
+    s.scale.set(scale, scale * 7.1, 1);
+    s.renderOrder = -2;
+    bossClockGroup.add(s);
+    return s;
+  }
+  const bossHandSlow = bossHand(TEX.clockHand, 0xffd166, 1.1, 0.72);
+  const bossHandFast = bossHand(TEX.clockHand, 0xff4d6d, 0.8, 0.86);
+  const bossHubMat = churchMat(new THREE.SpriteMaterial({
+    map: TEX.glow, color: 0xfff3d0, transparent: true, depthWrite: false,
+    depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+  }), 0.38);
+  const bossHub = new THREE.Sprite(bossHubMat);
+  bossHub.scale.set(2.2, 2.2, 1);
+  bossHub.position.z = 0.5;
+  bossHub.renderOrder = -1;
+  bossClockGroup.add(bossHub);
+
+  // Candles along the aisle: cheap additive sprites with a slow flicker.
+  const candles = [];
+  for (let i = 0; i < 22; i++) {
+    const side = i % 2 ? 1 : -1;
+    const z = 2 - Math.floor(i / 2) * 5.4;
+    const mat = churchMat(new THREE.SpriteMaterial({
+      map: TEX.glow, color: 0xffca7a, transparent: true, depthWrite: false,
+      depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    }), 0.15);
+    const candle = new THREE.Sprite(mat);
+    candle.position.set(side * (3.6 + (i % 3) * 1.6), -2.7 + (i % 2) * 0.5, z);
+    candle.scale.set(0.62, 0.62, 1);
+    candle.renderOrder = -4;
+    church.add(candle);
+    candles.push({ sprite: candle, mat, base: 0.15, phase: i * 1.7 });
+  }
+
+  const mistSprites = [];
+  for (let i = 0; i < 5; i++) {
+    const mat = churchMat(new THREE.SpriteMaterial({
+      map: TEX.glow, color: i % 2 ? 0x9b6bff : 0xff9a5e, transparent: true,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    }), 0.018);
+    const mist = new THREE.Sprite(mat);
+    mist.position.set((i % 2 ? 1 : -1) * (6 + i * 2.2), 1.6 + i * 1.3, -10 - i * 9);
+    mist.scale.set(16 + i * 3, 9 + i * 1.5, 1);
+    mist.renderOrder = -6;
+    church.add(mist);
+    mistSprites.push({ sprite: mist, mat, base: 0.018, phase: i * 2.1 });
+  }
+
   // ------------------------------------------------------------ stage
   const stage = new THREE.Group();
   scene.add(stage);
@@ -662,6 +1073,47 @@ export function createScene(canvasEl) {
       targetColor: color.clone(), flash: 0, active: 0, baseX: x,
       ghostFx: null, angle: 0, pitch: 0, screenAngle: 0, screen: null,
     });
+  }
+
+  // ------------------------------------------------------------ wind
+  // In the boss stage any lane that is not playable becomes a stream of wind:
+  // ribbons that travel up in Y while sweeping through X and Z and spinning in
+  // screen space. During the intro all eight lanes are free, so the empty
+  // church fills with moving light instead of a static playfield.
+  const windRoot = new THREE.Group();
+  windRoot.name = 'bossWind';
+  stage.add(windRoot);
+  const windStreams = [];
+  for (let i = 0; i < 8; i++) {
+    const color = new THREE.Color(BOSS_LANE_COLORS[i]);
+    const ribbons = [];
+    for (let k = 0; k < 9; k++) {
+      const mat = new THREE.SpriteMaterial({
+        map: TEX.beam, color: color.clone().lerp(new THREE.Color(0xffffff), 0.18 + k * 0.03),
+        transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+        blending: THREE.AdditiveBlending, fog: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.center.set(0.5, 0.5);
+      sprite.renderOrder = 4;
+      sprite.visible = false;
+      windRoot.add(sprite);
+      ribbons.push(sprite);
+    }
+    const glows = [];
+    for (let k = 0; k < 3; k++) {
+      const mat = new THREE.SpriteMaterial({
+        map: TEX.glow, color: color.clone(),
+        transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+        blending: THREE.AdditiveBlending, fog: false,
+      });
+      const sprite = new THREE.Sprite(mat);
+      sprite.renderOrder = 5;
+      sprite.visible = false;
+      windRoot.add(sprite);
+      glows.push(sprite);
+    }
+    windStreams.push({ lane: i, ribbons, glows, power: 0, seed: i * 2.399963 });
   }
 
   // ------------------------------------------------------------ clock
@@ -993,13 +1445,16 @@ export function createScene(canvasEl) {
   }
 
   // ------------------------------------------------------------ notes
-  function makeNote(lane, type) {
-    const color = new THREE.Color(LANE_COLORS[lane]);
+  function makeNote(lane, type, free = false) {
+    const palette = boss.active ? BOSS_LANE_COLORS : LANE_COLORS;
+    const color = new THREE.Color(palette[lane]);
     const group = new THREE.Group();
     group.renderOrder = 5;
-    // Notes live inside their lane's moving frame: when the lane fans or
-    // tilts, the note positions (and hold bodies) follow the diagonal path.
-    lanes[lane].group.add(group);
+    // Normal notes live inside their lane's moving frame: when the lane fans
+    // or tilts, the note positions (and hold bodies) follow the diagonal path.
+    // Boss notes are stage-space and follow a curved free-flight path instead.
+    if (free) noteRoot.add(group);
+    else lanes[lane].group.add(group);
 
     const headMat = new THREE.SpriteMaterial({
       map: TEX.note, color, transparent: true, opacity: 1,
@@ -1031,7 +1486,25 @@ export function createScene(canvasEl) {
       tail.renderOrder = 5;
       group.add(tail);
     }
-    return { group, head, body, tail, color };
+    return { group, head, body, tail, color, free: !!free };
+  }
+
+  // Free-flight path for boss notes. The note still lands on its lane ring at
+  // y = 0, but its approach sweeps through X and Z, so the chart reads as notes
+  // crossing the whole clock face instead of falling down eight static wires.
+  function freeNotePose(lane, y, seed = 0) {
+    const g = lanes[lane].group;
+    const f = Math.max(0, Math.min(1, y / 12.2));
+    const curve = Math.pow(f, 0.82);
+    const sway = Math.sin(seed * 2.17 + y * 0.37) * (1.05 + (seed % 3) * 0.18)
+      + Math.sin(seed * 0.73 + y * 0.19) * 0.5;
+    const depth = Math.cos(seed * 1.31 + y * 0.29) * 1.15;
+    return {
+      x: g.position.x + sway * curve,
+      y,
+      z: g.position.z + 0.24 + depth * curve,
+      sway: sway * curve,
+    };
   }
 
   // ------------------------------------------------------------ fx
@@ -1159,6 +1632,214 @@ export function createScene(canvasEl) {
     live: new Set([0, 1, 2, 3, 4, 5, 6, 7]),
   };
 
+  // ------------------------------------------------------------ boss stage
+  const boss = {
+    active: false, mode: 'off', intro: false,
+    fieldFade: 1, fieldTarget: 1,
+    churchFade: 0, churchTarget: 0,
+    clockFade: 0, clockTarget: 0,
+    windBoost: 0, glitch: 0,
+    slowAngle: 0, fastAngle: 0, handKick: 0, hubKick: 0,
+    palette: 'normal',
+  };
+  const bossCam = {
+    lock: false,
+    pos: new THREE.Vector3(0, 6.7, 17.2),
+    look: new THREE.Vector3(0, 4.05, 0),
+    targetPos: new THREE.Vector3(0, 6.7, 17.2),
+    targetLook: new THREE.Vector3(0, 4.05, 0),
+    fov: 46, targetFov: 46, roll: 0, targetRoll: 0, rate: 3,
+  };
+
+  function applyBossPalette(on) {
+    const palette = on ? BOSS_LANE_COLORS : LANE_COLORS;
+    boss.palette = on ? 'boss' : 'normal';
+    const secColor = state.section?.color;
+    for (let i = 0; i < 8; i++) {
+      lanes[i].color.set(palette[i]);
+      lanes[i].targetColor.copy(lanes[i].color);
+      if (secColor) lanes[i].targetColor.lerp(new THREE.Color(secColor), 0.24);
+    }
+  }
+
+  function setBoss(mode = 'off') {
+    const next = mode || 'off';
+    boss.mode = next;
+    boss.active = next !== 'off';
+    boss.intro = next === 'intro' || next === 'preview';
+    boss.fieldTarget = next === 'play' || next === 'outro' ? 1 : 0;
+    boss.churchTarget = next === 'off' ? 0 : next === 'intro' ? 1 : next === 'preview' ? 0.66 : 0.46;
+    boss.clockTarget = next === 'off' ? 0 : next === 'intro' ? 1 : 0.94;
+    if (next === 'off' || next === 'preview') boss.cameraLock = false;
+    if (next === 'intro') {
+      // Start the cinematic from a wide nave shot; the chart's first camera
+      // event takes over on the opening downbeat.
+      boss.cameraLock = true;
+      bossCam.pos.set(0, 12, 34);
+      bossCam.look.set(0, 14, -60);
+      bossCam.targetPos.copy(bossCam.pos);
+      bossCam.targetLook.copy(bossCam.look);
+      bossCam.fov = bossCam.targetFov = 54;
+      bossCam.roll = bossCam.targetRoll = 0;
+      boss.slowAngle = 0;
+      boss.fastAngle = 0;
+      boss.glitch = 0;
+      boss.windBoost = 0;
+      boss.handKick = 0;
+      boss.hubKick = 0;
+    }
+    if (next === 'off') {
+      bossCam.fov = bossCam.targetFov = state.portrait ? 52 : 46;
+      bossCam.roll = bossCam.targetRoll = 0;
+      bossCam.lock = false;
+      camera.fov = bossCam.fov;
+      camera.updateProjectionMatrix();
+    }
+    applyBossPalette(boss.active);
+  }
+
+  function bossCameraEvent(pos, look, fov = 49, roll = 0, dur = 0.8) {
+    boss.cameraLock = true;
+    bossCam.targetPos.set(pos[0], pos[1], pos[2]);
+    bossCam.targetLook.set(look[0], look[1], look[2]);
+    bossCam.targetFov = fov;
+    bossCam.targetRoll = roll;
+    bossCam.rate = 5.2 / Math.max(0.18, Math.min(2.2, dur));
+  }
+
+  function bossGlitch(power = 1) {
+    boss.glitch = Math.min(1.5, boss.glitch + power);
+    boss.windBoost = Math.min(2.4, boss.windBoost + power * 0.7);
+    state.shake = Math.min(0.24, state.shake + power * 0.035);
+    state.zoomKick = Math.min(1.5, state.zoomKick + power * 0.3);
+  }
+
+  function windFx(power = 1) {
+    boss.windBoost = Math.min(2.6, boss.windBoost + power * 0.9);
+    boss.glitch = Math.min(1.4, boss.glitch + power * 0.12);
+    for (let n = 0; n < 3; n++) {
+      const lane = Math.floor(Math.random() * 8);
+      const pos = worldPoint(lane, 1 + Math.random() * 7);
+      spawnBurst(pos, new THREE.Color(BOSS_LANE_COLORS[lane]).getHex(), 4, 1.4 + power);
+    }
+  }
+
+  function bossTick(hand = 'fast', power = 1) {
+    boss.handKick = Math.max(boss.handKick, 0.35 + power * 0.55);
+    boss.hubKick = Math.max(boss.hubKick, 0.25 + power * 0.4);
+    if (power > 0.9 && boss.clockFade > 0.3) {
+      const pos = bossClockGroup.localToWorld(new THREE.Vector3(0, 0, 0.8));
+      spawnShock(pos, hand === 'slow' ? 0xffd166 : 0xff4d6d, 1.1 + power * 0.4);
+    }
+  }
+
+  function updateWind(dt, t) {
+    const gust = 1 + boss.windBoost * 0.85;
+    for (const stream of windStreams) {
+      const wanted = boss.active
+        ? boss.intro ? 1 : state.active.has(stream.lane) ? 0 : 0.95
+        : 0;
+      stream.power += (wanted - stream.power) * (1 - Math.exp(-dt * 2.1));
+      const power = stream.power;
+      const visible = power > 0.012;
+      const laneX = lanes[stream.lane].group.position.x;
+      for (let k = 0; k < stream.ribbons.length; k++) {
+        const ribbon = stream.ribbons[k];
+        ribbon.visible = visible;
+        if (!visible) continue;
+        const phase = t * 1.15 * gust + stream.seed + k * 1.71;
+        const cycle = ((t * 1.05 * gust + k * 1.9 + stream.seed * 0.8) % 13 + 13) % 13;
+        const y = -1.4 + cycle;
+        const edge = Math.max(0, Math.min(1, (y + 1.4) / 2.6)) * Math.max(0, Math.min(1, (12.6 - y) / 3.2));
+        ribbon.position.set(
+          laneX + Math.sin(phase * 1.07) * (0.75 + cycle * 0.09) + Math.sin(phase * 0.43) * 0.5,
+          y,
+          0.3 + Math.cos(phase * 0.91) * 1.15 + Math.sin(phase * 0.37) * 0.55,
+        );
+        ribbon.material.rotation = phase * 1.55;
+        const len = 2.8 + 1.8 * Math.abs(Math.sin(phase * 1.3));
+        const width = 0.22 + 0.1 * Math.abs(Math.cos(phase * 0.8));
+        ribbon.scale.set(width, len, 1);
+        ribbon.material.opacity = power * edge * (0.16 + 0.12 * Math.pow(Math.sin(phase * 2.1), 2));
+      }
+      for (let k = 0; k < stream.glows.length; k++) {
+        const glow = stream.glows[k];
+        glow.visible = visible;
+        if (!visible) continue;
+        const phase = t * 0.85 * gust + stream.seed * 1.7 + k * 2.3;
+        const y = -0.4 + ((t * 1.35 * gust + k * 4.3 + stream.seed) % 13);
+        glow.position.set(
+          laneX + Math.sin(phase * 0.83) * 1.5,
+          y,
+          0.45 + Math.cos(phase * 0.71) * 1.3,
+        );
+        const sc = 0.26 + 0.13 * Math.sin(phase * 1.6);
+        glow.scale.set(sc, sc, 1);
+        glow.material.rotation = phase;
+        glow.material.opacity = power * 0.04 * (0.55 + 0.45 * Math.sin(phase * 1.3));
+      }
+    }
+  }
+
+  function updateBoss(dt, t) {
+    boss.fieldFade += (boss.fieldTarget - boss.fieldFade) * (1 - Math.exp(-dt * 4.2));
+    boss.churchFade += (boss.churchTarget - boss.churchFade) * (1 - Math.exp(-dt * 1.5));
+    boss.clockFade += (boss.clockTarget - boss.clockFade) * (1 - Math.exp(-dt * 1.7));
+    boss.windBoost *= Math.exp(-dt * 1.8);
+    boss.glitch *= Math.exp(-dt * 6.2);
+    boss.handKick *= Math.exp(-dt * 3.3);
+    boss.hubKick *= Math.exp(-dt * 2.8);
+
+    // The neon skyline dressing belongs to the other tracks. In the nave only
+    // the cathedral and the distant stars remain.
+    const churchMode = boss.active && boss.churchFade > 0.02;
+    for (const obj of [neb1, neb2, neb3, grid, ...bgRings, ...shards]) obj.visible = !churchMode;
+
+    const cf = boss.churchFade;
+    church.visible = cf > 0.008;
+    if (church.visible) {
+      for (const entry of churchMats) entry.mat.opacity = entry.base * cf;
+      // The clock owns the stage, so its face breathes slightly above the nave.
+      const kf = boss.clockFade;
+      bossFaceMat.opacity = kf * (0.72 + boss.hubKick * 0.08);
+      bossAuraMat.opacity = kf * (0.05 + boss.hubKick * 0.045);
+      bossHubMat.opacity = kf * (0.36 + boss.hubKick * 0.2);
+      bossHandSlow.material.opacity = kf * (0.62 + boss.handKick * 0.18);
+      bossHandFast.material.opacity = kf * (0.76 + boss.handKick * 0.14);
+      bossClockGroup.visible = kf > 0.01;
+      const pulse = 1 + boss.hubKick * 0.035 + Math.sin(t * 1.8) * 0.004;
+      bossFace.scale.set(21 * pulse, 21 * pulse, 1);
+      bossAura.scale.set(29 * pulse, 29 * pulse, 1);
+      bossHub.scale.set(1.9 * (1 + boss.hubKick * 0.22), 1.9 * (1 + boss.hubKick * 0.22), 1);
+
+      // The hands keep cathedral time: the long hand creeps, the short hand
+      // snaps forward whenever the chart plays a bossTick.
+      boss.slowAngle += dt * 0.075;
+      boss.fastAngle += dt * 0.62;
+      bossHandSlow.material.rotation = -boss.slowAngle;
+      bossHandFast.material.rotation = -boss.fastAngle;
+      bossHandSlow.material.color.set(0xffd166).lerp(white, boss.handKick * 0.65);
+      bossHandFast.material.color.set(0xff4d6d).lerp(white, boss.handKick * 0.65);
+      bossHandSlow.scale.set(1.1, 1.1 * 7.1, 1);
+      bossHandFast.scale.set(0.8, 0.8 * 7.1, 1);
+
+      for (const c of candles) {
+        c.mat.opacity = c.base * cf * (0.58 + 0.3 * Math.sin(t * 3.1 + c.phase)
+          + 0.12 * Math.sin(t * 9.7 + c.phase * 2.3));
+      }
+      for (const m of mistSprites) {
+        m.mat.opacity = m.base * cf * (0.7 + 0.3 * Math.sin(t * 0.24 + m.phase));
+        m.sprite.position.x += Math.sin(t * 0.11 + m.phase) * dt * 0.08;
+        m.sprite.position.y += Math.cos(t * 0.09 + m.phase) * dt * 0.05;
+      }
+      churchFloorMat.map.offset.y = (t * 0.0035) % 1;
+    } else {
+      bossClockGroup.visible = false;
+    }
+
+    updateWind(dt, t);
+  }
+
   // The field is re-framed from the number of playable lanes: fewer lanes get
   // wider spacing and larger rings, so a 4-lane section still owns the screen.
   function frameFor(keys) {
@@ -1228,6 +1909,8 @@ export function createScene(canvasEl) {
     state.section = sec;
     state.energy = sec.energy;
     state.keyCount = sec.keys;
+    if (sec.bpm) setTempo(sec.bpm, sec.beatOffset ?? 0);
+    if (boss.active) applyBossPalette(true);
     rememberFrame(sec.keys);
     state.target.rotY = sec.rotY;
     state.target.rotZ = sec.rotZ;
@@ -1236,7 +1919,9 @@ export function createScene(canvasEl) {
     state.target.y = sec.y;
     state.target.camZ = sec.camZ + (state.portrait ? 6.4 : 0);
     state.target.camY = sec.camY;
-    state.target.bloom = sec.bloom * 0.82;
+    state.target.bloom = boss.active
+      ? (boss.intro ? Math.min(0.38, sec.bloom * 0.45) : Math.min(0.28, sec.bloom * 0.3))
+      : sec.bloom * 0.82;
     state.target.spin = sec.spin;
     state.targetMotion = {
       style: sec.motion || 'fan',
@@ -1404,6 +2089,9 @@ export function createScene(canvasEl) {
   function ghostFx(lane, type = 'sweep') {
     const l = lanes[lane];
     if (!l) return;
+    // In the nave the unused lanes are already living wind; a lane-bound
+    // ghost packet would fight that effect, so the flourish becomes a gust.
+    if (boss.active) { windFx(type === 'bounce' ? 0.35 : 0.2); return; }
     l.ghostFx = { type, t: 0, dur: type === 'bounce' ? 0.85 : 1.15 };
     if (type === 'bounce') {
       l.flash = Math.max(l.flash, 0.65);
@@ -1422,6 +2110,9 @@ export function createScene(canvasEl) {
   function echoFx(lane, dir = 1, power = 1) {
     const l = lanes[lane];
     if (!l) return;
+    // In the nave the idle-lane echo becomes another turn of the wind instead
+    // of a ring packet, so the outer lanes read as one continuous effect.
+    if (boss.active) { windFx(power * 0.28); return; }
     const pos = worldPoint(lane, 0.1 + Math.random() * 0.12);
     const n = 3;
     for (let k = 0; k < n; k++) {
@@ -1536,12 +2227,18 @@ export function createScene(canvasEl) {
     m.pitch += (mt.pitch - m.pitch) * mk;
     m.style = mt.style;
     const clickPulse = state.energyPulse;
-    bloom.strength += clickPulse * 0.32;
+    bloom.strength += clickPulse * (boss.active ? 0.1 : 0.32);
+    // The boss chart fires many more accents than the lane tracks. Cap the
+    // additive bloom so the cathedral stays readable instead of clipping.
+    if (boss.active) bloom.strength = Math.min(bloom.strength, boss.intro ? 0.5 : 0.38);
+    updateBoss(dt, t);
 
     // stage motion
     stage.position.y = v.y + Math.sin(t * 0.65) * 0.035 + pulse * 0.03;
-    stage.rotation.y = v.rotY + Math.sin(t * 0.22) * 0.02 + Math.sin(t * 0.09) * v.spin;
-    stage.rotation.z = v.rotZ + Math.sin(t * 0.37) * 0.006;
+    stage.rotation.y = v.rotY + Math.sin(t * 0.22) * 0.02 + Math.sin(t * 0.09) * v.spin
+      + (boss.glitch > 0.01 ? (Math.random() - 0.5) * boss.glitch * 0.012 : 0);
+    stage.rotation.z = v.rotZ + Math.sin(t * 0.37) * 0.006
+      + (boss.glitch > 0.01 ? (Math.random() - 0.5) * boss.glitch * 0.01 : 0);
     stage.rotation.x = v.tilt + Math.sin(t * 0.29) * 0.006;
 
     // lane positions respond to spread and to the active lane count
@@ -1609,19 +2306,22 @@ export function createScene(canvasEl) {
         }
       }
 
-      const lineTarget = live
+      const field = boss.active ? boss.fieldFade : 1;
+      const lineTarget = (live
         ? (i % 2 ? 0.86 : 0.96) * 0.58
-        : ghostAmp * 0.34;
-      const beamTarget = live
+        : ghostAmp * 0.34) * field;
+      const beamTarget = (live
         ? (0.065 + pulse * 0.03)
-        : ghostAmp * 0.04;
-      const ringTarget = live
+        : ghostAmp * 0.04) * field * (boss.active ? 0.55 : 1);
+      const ringTarget = (live
         ? 0.95
-        : bounceAmp * 0.78 + ghostAmp * 0.035;
+        : bounceAmp * 0.78 + ghostAmp * 0.035) * field;
+      const glowK = boss.active ? 0.48 : 1;
       l.line.material.opacity += (lineTarget - l.line.material.opacity) * (1 - Math.exp(-dt * 3.5));
       l.beam.material.opacity += (beamTarget - l.beam.material.opacity) * (1 - Math.exp(-dt * 3.5));
       l.ring.material.opacity += (ringTarget - l.ring.material.opacity) * (1 - Math.exp(-dt * 3.5));
-      l.glow.material.opacity += ((live ? 0.14 : ghostAmp * 0.07) + l.flash * 0.3 - l.glow.material.opacity) * (1 - Math.exp(-dt * 8));
+      l.glow.material.opacity += (((live ? 0.14 : ghostAmp * 0.07) + l.flash * 0.3) * field * glowK
+        - l.glow.material.opacity) * (1 - Math.exp(-dt * 8));
 
       l.flash = Math.max(0, l.flash - dt * 3.4);
       const rs = v.ring * (1 + pulse * 0.045 * (0.4 + state.energy) + l.flash * 0.22 + bounceAmp * 0.5);
@@ -1631,6 +2331,9 @@ export function createScene(canvasEl) {
       l.line.material.color.copy(l.targetColor).lerp(white, 0.14 + l.flash * 0.32);
       l.beam.material.color.copy(l.targetColor);
     }
+    const showField = !boss.active || boss.fieldFade > 0.03;
+    laneRoot.visible = showField;
+    hitLine.visible = showField;
     updateLaneScreen();
     for (let i = 0; i < 8; i++) {
       const l = lanes[i];
@@ -1638,20 +2341,47 @@ export function createScene(canvasEl) {
       l.beam.material.rotation = -l.screenAngle;
     }
     hitLine.scale.x = (v.spacing * (state.keyCount - 1) + v.ring * 1.5) * v.spread;
-    hitLine.material.opacity = 0.45 + pulse * 0.3 + state.energy * 0.15 + clickPulse * 0.16;
+    hitLine.material.opacity = (0.45 + pulse * 0.3 + state.energy * 0.15 + clickPulse * 0.16)
+      * (boss.active ? boss.fieldFade : 1);
 
     // camera
-    const camX = state.mouse.x * 0.55;
-    const camY = v.camY + state.mouse.y * 0.18;
-    camera.position.x += (camX - camera.position.x) * (1 - Math.exp(-dt * 2));
-    camera.position.y += (camY - camera.position.y) * (1 - Math.exp(-dt * 2));
-    camera.position.z += (v.camZ - state.zoomKick * 1.05 - camera.position.z) * (1 - Math.exp(-dt * 3.4));
-    if (state.shake > 0.0005) {
-      camera.position.x += (Math.random() - .5) * state.shake;
-      camera.position.y += (Math.random() - .5) * state.shake;
-      state.shake *= Math.exp(-dt * 10);
+    if (boss.active && boss.cameraLock) {
+      // Cinematic camera score: each chart event is a short, fast move that
+      // eases out on its own beat, so cuts feel smooth and never drift.
+      const bc = bossCam;
+      const rate = 1 - Math.exp(-dt * bc.rate);
+      bc.pos.lerp(bc.targetPos, rate);
+      bc.look.lerp(bc.targetLook, rate);
+      bc.fov += (bc.targetFov - bc.fov) * rate;
+      bc.roll += (bc.targetRoll - bc.roll) * rate;
+      camera.position.copy(bc.pos);
+      camera.fov = bc.fov;
+      camera.updateProjectionMatrix();
+      camera.lookAt(bc.look);
+      camera.rotation.z += bc.roll;
+      if (boss.glitch > 0.01) {
+        camera.position.x += (Math.random() - .5) * boss.glitch * 0.24;
+        camera.position.y += (Math.random() - .5) * boss.glitch * 0.2;
+        camera.rotation.z += (Math.random() - .5) * boss.glitch * 0.022;
+      }
+      if (state.shake > 0.0005) {
+        camera.position.x += (Math.random() - .5) * state.shake;
+        camera.position.y += (Math.random() - .5) * state.shake;
+        state.shake *= Math.exp(-dt * 10);
+      }
+    } else {
+      const camX = state.mouse.x * 0.55;
+      const camY = v.camY + state.mouse.y * 0.18;
+      camera.position.x += (camX - camera.position.x) * (1 - Math.exp(-dt * 2));
+      camera.position.y += (camY - camera.position.y) * (1 - Math.exp(-dt * 2));
+      camera.position.z += (v.camZ - state.zoomKick * 1.05 - camera.position.z) * (1 - Math.exp(-dt * 3.4));
+      if (state.shake > 0.0005) {
+        camera.position.x += (Math.random() - .5) * state.shake;
+        camera.position.y += (Math.random() - .5) * state.shake;
+        state.shake *= Math.exp(-dt * 10);
+      }
+      camera.lookAt(0, 4.05, 0);
     }
-    camera.lookAt(0, 4.05, 0);
 
     // background
     stars.rotation.y += dt * 0.006;
@@ -1804,11 +2534,12 @@ export function createScene(canvasEl) {
   }
 
   return {
-    scene, camera, stage, noteRoot, state, clock,
+    scene, camera, stage, noteRoot, state, clock, boss, bloom, laneRoot, windRoot, church,
     makeNote, setSection, animate, render, laneX, laneZ, worldPoint,
     laneScreenXs, laneScreenPoints, laneScreenGeometry, laneScreenAngle,
     setPreviewLanes, setCity, setTempo,
     setClock, clockTick, clockReset,
+    setBoss, bossCameraEvent, bossGlitch, bossTick, windFx, freeNotePose,
     startPendulum, stopPendulum, swingResolve, swingWhiff, pendulumReset, pendulumTargetScreen,
     pendulum,
     pressFx, hitFx, missFx, ghostFx, echoFx, pulseFx, burstFx, vibeFx, motionEvent,

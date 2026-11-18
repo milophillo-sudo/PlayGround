@@ -71,7 +71,7 @@
           <h1>CRY<br>OUT</h1>
           <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
           <div class="track-picker" id="trackPicker" role="tablist" aria-label="Track selection">
-            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">03</b></div>
+            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">04</b></div>
             <button class="track-card active" data-track="cryout" role="tab" aria-selected="true">
               <span class="tc-num">01</span>
               <span class="tc-copy"><b>CRYOUT</b><em>ORIGINAL TRACK</em></span>
@@ -86,6 +86,11 @@
               <span class="tc-num">03</span>
               <span class="tc-copy"><b>CHRONOSTASIS</b><em>ORIGINAL TRACK</em></span>
               <span class="tc-tags"><span>99 BPM</span><span>EXPERT</span><span class="thumb">CLOCK</span><span class="tc-best"></span></span>
+            </button>
+            <button class="track-card boss" data-track="untouchable" role="tab" aria-selected="false">
+              <span class="tc-num">04</span>
+              <span class="tc-copy"><b>THE UNTOUCHABLE</b><em>OF f RA IA'S LAND</em></span>
+              <span class="tc-tags"><span>111 BPM</span><span>BOSS</span><span class="thumb">NAVE</span><span class="tc-best"></span></span>
             </button>
           </div>
           <div class="specs">
@@ -245,6 +250,12 @@
 
     <div id="toast"></div>
     <div id="flash"></div>
+    <div id="bossGlitch" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div id="bossCaption" aria-hidden="true">
+      <span id="bcKicker">OVERTURE</span>
+      <b id="bcTitle">THE UNTOUCHABLE</b>
+      <em id="bcSub">OF f RA IA'S LAND</em>
+    </div>
     <div id="rotateHint"><span>↻</span> ROTATE FOR THE FULL FIELD</div>
   </main>
 

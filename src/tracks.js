@@ -1,6 +1,7 @@
 import { CHART as cryout } from './charts/cryout.js';
 import { CHART as world } from './charts/world.js';
 import { CHART as chronostasis } from './charts/chronostasis.js';
+import { CHART as untouchable } from './charts/untouchable.js';
 
 // Track metadata is intentionally separate from the generated chart: the menu
 // can show a track before its audio has been decoded.
@@ -52,6 +53,24 @@ export const TRACKS = [
     chart: chronostasis,
     fadeStart: 138.4,
     fadeEnd: 140.0,
+  },
+  {
+    id: 'untouchable',
+    title: "THE UNTOUCHABLE OF f RA IA'S LAND",
+    shortTitle: 'THE UNTOUCHABLE',
+    artist: 'f RA IA',
+    bpm: 111.1,
+    bpmLabel: '111 / 96 BPM',
+    duration: 147.54,
+    audio: './audio/untouchable.mp3',
+    difficulty: 'BOSS',
+    laneLabel: '4 · 6 · 8',
+    blurb: 'Gothic nave • cathedral clock • free-flying notes',
+    accent: '#ff3b5c',
+    chart: untouchable,
+    boss: true,
+    fadeStart: 139.8,
+    fadeEnd: 141.8,
   },
 ];
 

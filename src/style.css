@@ -785,3 +785,66 @@ body.pendulum .pad{opacity:.2}
 body.pendulum .pad.pressed{opacity:.32}
 /* Keep hit feedback clear of the centre target while the pendulum runs. */
 body.pendulum #judge{color:#ffe6a3;top:33%}
+
+/* ---------------- THE UNTOUCHABLE boss stage ---------------- */
+.track-card.boss{
+  border-color:rgba(255,59,92,.28);
+  background:linear-gradient(90deg,rgba(255,59,92,.08),rgba(255,209,102,.03));
+}
+.track-card.boss .tc-copy b{letter-spacing:.1em}
+.track-card.boss .tc-tags .thumb{
+  color:#ffe6a3;border-color:rgba(255,209,102,.38);
+  box-shadow:0 0 12px rgba(255,209,102,.16);
+}
+
+/* During the cinematic the field and HUD are deliberately empty. */
+body.boss-intro #hud{opacity:0;pointer-events:none}
+body.boss-intro #hud .pad{pointer-events:none}
+#hud{transition:opacity .55s ease}
+
+/* Chart-synced title cards */
+#bossCaption{
+  position:fixed;left:50%;top:54%;z-index:4;
+  width:min(900px,88vw);transform:translate(-50%,-42%);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  text-align:center;pointer-events:none;opacity:0;visibility:hidden;
+  transition:opacity .4s ease, transform .55s cubic-bezier(.2,.7,.2,1), visibility .4s;
+  text-shadow:0 0 30px rgba(255,59,92,.55),0 0 8px rgba(255,240,200,.35);
+}
+#bossCaption.on{opacity:1;visibility:visible;transform:translate(-50%,-50%)}
+#bossCaption span{
+  font-family:var(--mono);font-size:10px;letter-spacing:.52em;color:#ffd166;
+  padding-left:.52em;
+}
+#bossCaption b{
+  font-family:var(--sans);font-size:clamp(36px,7.2vw,94px);font-weight:700;
+  letter-spacing:.12em;line-height:.94;color:#fff6e2;
+}
+#bossCaption em{
+  font-family:var(--mono);font-style:normal;font-size:clamp(9px,1.2vw,13px);
+  letter-spacing:.44em;color:#ffb0b8;padding-left:.44em;
+}
+
+/* Beat-synced glitch bands. JS toggles .on from chart events. */
+#bossGlitch{
+  position:fixed;inset:0;z-index:5;pointer-events:none;opacity:0;
+  mix-blend-mode:screen;overflow:hidden;
+}
+#bossGlitch i{
+  position:absolute;left:-4%;right:-4%;height:9%;
+  background:
+    linear-gradient(90deg,rgba(255,59,92,.5),rgba(255,209,102,.08) 42%,rgba(79,242,255,.34) 72%,transparent);
+  filter:blur(.5px);transform:translateX(0);
+}
+#bossGlitch i:nth-child(1){top:18%;height:3%}
+#bossGlitch i:nth-child(2){top:43%;height:11%;background:linear-gradient(90deg,rgba(79,242,255,.32),transparent 28%,rgba(255,59,92,.46))}
+#bossGlitch i:nth-child(3){top:68%;height:5%}
+#bossGlitch i:nth-child(4){top:86%;height:14%;background:linear-gradient(90deg,transparent,rgba(255,209,102,.34),rgba(255,59,92,.25))}
+#bossGlitch.on{animation:boss-glitch-flash .3s steps(2,end)}
+#bossGlitch.on i:nth-child(1){animation:boss-glitch-a .3s steps(2,end)}
+#bossGlitch.on i:nth-child(2){animation:boss-glitch-b .3s steps(2,end)}
+#bossGlitch.on i:nth-child(3){animation:boss-glitch-a .3s steps(2,end) reverse}
+#bossGlitch.on i:nth-child(4){animation:boss-glitch-b .3s steps(2,end) reverse}
+@keyframes boss-glitch-flash{0%{opacity:.8}35%{opacity:.25}60%{opacity:.65}100%{opacity:0}}
+@keyframes boss-glitch-a{0%{transform:translateX(-3%)}50%{transform:translateX(2.4%)}100%{transform:translateX(-1%)}}
+@keyframes boss-glitch-b{0%{transform:translateX(4%)}50%{transform:translateX(-3.2%)}100%{transform:translateX(1.5%)}}
