@@ -729,7 +729,7 @@ kbd{
   .compile-bars{bottom:-34px;height:20px}
 }
 
-/* three-track start menu: keep phones on one screen */
+/* four-track start menu: keep phones on one screen */
 @media (max-width:620px) and (orientation:portrait){
   .start-grid{gap:16px;padding-bottom:56px}
   .start-copy h1{font-size:clamp(62px,19vw,88px);margin:10px 0 8px}
@@ -809,7 +809,11 @@ body.boss-intro #hud .pad{pointer-events:none}
   display:flex;flex-direction:column;align-items:center;gap:8px;
   text-align:center;pointer-events:none;opacity:0;visibility:hidden;
   transition:opacity .4s ease, transform .55s cubic-bezier(.2,.7,.2,1), visibility .4s;
-  text-shadow:0 0 30px rgba(255,59,92,.55),0 0 8px rgba(255,240,200,.35);
+  text-shadow:0 2px 18px rgba(2,1,6,.9),0 0 30px rgba(255,59,92,.45),0 0 8px rgba(255,240,200,.3);
+}
+#bossCaption::before{
+  content:'';position:absolute;inset:-14% -8%;z-index:-1;border-radius:50%;
+  background:radial-gradient(ellipse at center,rgba(3,2,9,.74) 0%,rgba(3,2,9,.4) 48%,rgba(3,2,9,0) 74%);
 }
 #bossCaption.on{opacity:1;visibility:visible;transform:translate(-50%,-50%)}
 #bossCaption span{

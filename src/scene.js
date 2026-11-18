@@ -658,6 +658,31 @@ function bossClockTexture() {
   return tex(c);
 }
 
+// Dark dial backing for the cathedral clock. The face texture is mostly
+// transparent tracery, so without this the rose window reads through the
+// numerals; a smoky disk keeps the clock legible while the petals frame it.
+function bossClockBackTexture() {
+  const [c, x] = canvas(1024, 1024);
+  const g = x.createRadialGradient(512, 512, 80, 512, 512, 512);
+  g.addColorStop(0, 'rgba(13,8,22,.92)');
+  g.addColorStop(0.6, 'rgba(10,6,18,.92)');
+  g.addColorStop(0.8, 'rgba(26,13,26,.86)');
+  g.addColorStop(0.94, 'rgba(88,43,34,.5)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g;
+  x.beginPath(); x.arc(512, 512, 512, 0, Math.PI * 2); x.fill();
+  // faint embers inside the dial
+  for (let i = 0; i < 90; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 180 + Math.random() * 300;
+    x.fillStyle = `rgba(255,205,140,${0.02 + Math.random() * 0.05})`;
+    x.beginPath();
+    x.arc(512 + Math.cos(a) * r, 512 + Math.sin(a) * r, 0.6 + Math.random() * 1.8, 0, Math.PI * 2);
+    x.fill();
+  }
+  return tex(c);
+}
+
 function bossFloorTexture() {
   const [c, x] = canvas(512, 512);
   x.fillStyle = '#07070d'; x.fillRect(0, 0, 512, 512);
@@ -715,7 +740,8 @@ export function createScene(canvasEl) {
     clockFace: clockFaceTexture(), clockHand: clockHandTexture(), clockDial: clockDialTexture(),
     floatNote: floatNoteTexture(), pendulumRod: pendulumRodTexture(),
     gothicA: gothicWindowTexture(1), gothicB: gothicWindowTexture(2),
-    rose: roseWindowTexture(), bossClock: bossClockTexture(), bossFloor: bossFloorTexture(),
+    rose: roseWindowTexture(), bossClock: bossClockTexture(), bossBack: bossClockBackTexture(),
+    bossFloor: bossFloorTexture(),
   };
 
   // ------------------------------------------------------------ background
@@ -884,10 +910,12 @@ export function createScene(canvasEl) {
   const roseMat = churchMat(new THREE.SpriteMaterial({
     map: TEX.rose, color: 0xfff1c8, transparent: true, depthWrite: false,
     depthTest: false, blending: THREE.NormalBlending, fog: false,
-  }), 0.78);
+  }), 0.6);
+  // The rose window is mounted behind the clock so the clock reads as the eye
+  // of the cathedral instead of a second dial stacked above the first one.
   const roseWindow = new THREE.Sprite(roseMat);
-  roseWindow.position.set(0, 29, -62);
-  roseWindow.scale.set(17, 17, 1);
+  roseWindow.position.set(0, 12.6, -56);
+  roseWindow.scale.set(38, 38, 1);
   roseWindow.renderOrder = -4;
   church.add(roseWindow);
 
@@ -896,8 +924,8 @@ export function createScene(canvasEl) {
     depthTest: false, blending: THREE.AdditiveBlending, fog: false,
   }), 0.045);
   const roseAura = new THREE.Sprite(roseAuraMat);
-  roseAura.position.set(0, 29, -63);
-  roseAura.scale.set(30, 30, 1);
+  roseAura.position.set(0, 12.6, -57);
+  roseAura.scale.set(54, 54, 1);
   roseAura.renderOrder = -5;
   church.add(roseAura);
 
@@ -905,6 +933,16 @@ export function createScene(canvasEl) {
   bossClockGroup.name = 'bossClock';
   bossClockGroup.position.set(0, 10.4, -39);
   church.add(bossClockGroup);
+
+  const bossBackMat = churchMat(new THREE.SpriteMaterial({
+    map: TEX.bossBack, color: 0xffffff, transparent: true, depthWrite: false,
+    depthTest: false, blending: THREE.NormalBlending, fog: false,
+  }), 0.92);
+  const bossBack = new THREE.Sprite(bossBackMat);
+  bossBack.scale.set(21.6, 21.6, 1);
+  bossBack.position.z = -0.06;
+  bossBack.renderOrder = -3.5;
+  bossClockGroup.add(bossBack);
 
   const bossFaceMat = churchMat(new THREE.SpriteMaterial({
     map: TEX.bossClock, color: 0xfff3d0, transparent: true, depthWrite: false,
@@ -1087,9 +1125,9 @@ export function createScene(canvasEl) {
   for (let i = 0; i < 8; i++) {
     const color = new THREE.Color(BOSS_LANE_COLORS[i]);
     const ribbons = [];
-    for (let k = 0; k < 9; k++) {
+    for (let k = 0; k < 6; k++) {
       const mat = new THREE.SpriteMaterial({
-        map: TEX.beam, color: color.clone().lerp(new THREE.Color(0xffffff), 0.18 + k * 0.03),
+        map: TEX.beam, color: color.clone().lerp(new THREE.Color(0xffffff), 0.24 + k * 0.03),
         transparent: true, opacity: 0, depthWrite: false, depthTest: false,
         blending: THREE.AdditiveBlending, fog: false,
       });
@@ -1496,9 +1534,9 @@ export function createScene(canvasEl) {
     const g = lanes[lane].group;
     const f = Math.max(0, Math.min(1, y / 12.2));
     const curve = Math.pow(f, 0.82);
-    const sway = Math.sin(seed * 2.17 + y * 0.37) * (1.05 + (seed % 3) * 0.18)
-      + Math.sin(seed * 0.73 + y * 0.19) * 0.5;
-    const depth = Math.cos(seed * 1.31 + y * 0.29) * 1.15;
+    const sway = Math.sin(seed * 2.17 + y * 0.37) * (1.45 + (seed % 3) * 0.22)
+      + Math.sin(seed * 0.73 + y * 0.19) * 0.7;
+    const depth = Math.cos(seed * 1.31 + y * 0.29) * 1.4;
     return {
       x: g.position.x + sway * curve,
       y,
@@ -1752,15 +1790,15 @@ export function createScene(canvasEl) {
         const y = -1.4 + cycle;
         const edge = Math.max(0, Math.min(1, (y + 1.4) / 2.6)) * Math.max(0, Math.min(1, (12.6 - y) / 3.2));
         ribbon.position.set(
-          laneX + Math.sin(phase * 1.07) * (0.75 + cycle * 0.09) + Math.sin(phase * 0.43) * 0.5,
+          laneX + Math.sin(phase * 1.07) * (1.15 + cycle * 0.14) + Math.sin(phase * 0.43) * 0.8,
           y,
-          0.3 + Math.cos(phase * 0.91) * 1.15 + Math.sin(phase * 0.37) * 0.55,
+          0.3 + Math.cos(phase * 0.91) * 1.5 + Math.sin(phase * 0.37) * 0.8,
         );
         ribbon.material.rotation = phase * 1.55;
-        const len = 2.8 + 1.8 * Math.abs(Math.sin(phase * 1.3));
-        const width = 0.22 + 0.1 * Math.abs(Math.cos(phase * 0.8));
+        const len = 4.2 + 2.8 * Math.abs(Math.sin(phase * 1.3));
+        const width = 0.85 + 0.5 * Math.abs(Math.cos(phase * 0.8));
         ribbon.scale.set(width, len, 1);
-        ribbon.material.opacity = power * edge * (0.16 + 0.12 * Math.pow(Math.sin(phase * 2.1), 2));
+        ribbon.material.opacity = power * edge * (0.21 + 0.12 * Math.pow(Math.sin(phase * 2.1), 2));
       }
       for (let k = 0; k < stream.glows.length; k++) {
         const glow = stream.glows[k];
@@ -1773,10 +1811,10 @@ export function createScene(canvasEl) {
           y,
           0.45 + Math.cos(phase * 0.71) * 1.3,
         );
-        const sc = 0.26 + 0.13 * Math.sin(phase * 1.6);
+        const sc = 0.42 + 0.2 * Math.sin(phase * 1.6);
         glow.scale.set(sc, sc, 1);
         glow.material.rotation = phase;
-        glow.material.opacity = power * 0.04 * (0.55 + 0.45 * Math.sin(phase * 1.3));
+        glow.material.opacity = power * 0.19 * (0.55 + 0.45 * Math.sin(phase * 1.3));
       }
     }
   }
@@ -1801,6 +1839,7 @@ export function createScene(canvasEl) {
       for (const entry of churchMats) entry.mat.opacity = entry.base * cf;
       // The clock owns the stage, so its face breathes slightly above the nave.
       const kf = boss.clockFade;
+      bossBackMat.opacity = kf * 0.92;
       bossFaceMat.opacity = kf * (0.72 + boss.hubKick * 0.08);
       bossAuraMat.opacity = kf * (0.05 + boss.hubKick * 0.045);
       bossHubMat.opacity = kf * (0.36 + boss.hubKick * 0.2);
@@ -1874,6 +1913,14 @@ export function createScene(canvasEl) {
     rememberFrame(state.keyCount, true);
     clock.group.position.set(0, state.portrait ? 15.2 : 13.2, -28);
     clock.group.scale.setScalar(state.portrait ? 0.86 : 1);
+    // Portrait screens need the cathedral clock pulled back and lifted so the
+    // lane rings and incoming notes keep the lower half of the screen.
+    bossClockGroup.position.set(0, state.portrait ? 13.4 : 10.4, state.portrait ? -46 : -39);
+    bossClockGroup.scale.setScalar(state.portrait ? 0.76 : 1);
+    roseWindow.position.set(0, state.portrait ? 15 : 12.6, state.portrait ? -62 : -56);
+    roseWindow.scale.set(state.portrait ? 29 : 38, state.portrait ? 29 : 38, 1);
+    roseAura.position.set(0, state.portrait ? 15 : 12.6, state.portrait ? -63 : -57);
+    roseAura.scale.set(state.portrait ? 40 : 54, state.portrait ? 40 : 54, 1);
     pendulumLayout();
     for (let i = 0; i < 8; i++) {
       const x = (i - 3.5) * state.spacing;

@@ -1,7 +1,7 @@
 {
   "name": "playground",
   "version": "1.0.0",
-  "description": "CRYOUT — a dynamic 3D rhythm game built with Three.js and three generated audio charts",
+  "description": "CRYOUT — a dynamic 3D rhythm game built with Three.js and four generated audio charts",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3002",
     "build": "vite build --base ./",
