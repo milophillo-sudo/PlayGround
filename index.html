@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#04040c" />
   <title>CRYOUT — Dynamic 3D Rhythm</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
-  <script type="module" crossorigin src="./assets/index-DAtSpRTD.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BwkU819d.css">
+  <script type="module" crossorigin src="./assets/index-Cp1F5jtu.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-BkcOfsU-.css">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -72,7 +72,7 @@
           <h1>CRY<br>OUT</h1>
           <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
           <div class="track-picker" id="trackPicker" role="tablist" aria-label="Track selection">
-            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">03</b></div>
+            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">04</b></div>
             <button class="track-card active" data-track="cryout" role="tab" aria-selected="true">
               <span class="tc-num">01</span>
               <span class="tc-copy"><b>CRYOUT</b><em>ORIGINAL TRACK</em></span>
@@ -87,6 +87,11 @@
               <span class="tc-num">03</span>
               <span class="tc-copy"><b>CHRONOSTASIS</b><em>ORIGINAL TRACK</em></span>
               <span class="tc-tags"><span>99 BPM</span><span>EXPERT</span><span class="thumb">CLOCK</span><span class="tc-best"></span></span>
+            </button>
+            <button class="track-card boss" data-track="untouchable" role="tab" aria-selected="false">
+              <span class="tc-num">04</span>
+              <span class="tc-copy"><b>THE UNTOUCHABLE</b><em>OF f RA IA'S LAND</em></span>
+              <span class="tc-tags"><span>111 BPM</span><span>BOSS</span><span class="thumb">NAVE</span><span class="tc-best"></span></span>
             </button>
           </div>
           <div class="specs">
@@ -246,6 +251,12 @@
 
     <div id="toast"></div>
     <div id="flash"></div>
+    <div id="bossGlitch" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+    <div id="bossCaption" aria-hidden="true">
+      <span id="bcKicker">OVERTURE</span>
+      <b id="bcTitle">THE UNTOUCHABLE</b>
+      <em id="bcSub">OF f RA IA'S LAND</em>
+    </div>
     <div id="rotateHint"><span>↻</span> ROTATE FOR THE FULL FIELD</div>
   </main>
 
