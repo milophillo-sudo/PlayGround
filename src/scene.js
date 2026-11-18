@@ -573,6 +573,49 @@ function roseWindowTexture() {
   return tex(c);
 }
 
+// Dark ashlar stone for the nave walls. The blocks are deliberately low
+// contrast: the walls should frame the stained glass, not compete with it.
+function naveWallTexture(seed = 1) {
+  const [c, x] = canvas(512, 512);
+  let s = seed >>> 0;
+  const rand = () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  x.fillStyle = '#090711';
+  x.fillRect(0, 0, 512, 512);
+  const rows = 8, cols = 5;
+  const bw = 512 / cols, bh = 512 / rows;
+  for (let r = 0; r < rows; r++) {
+    const off = (r % 2) * bw * 0.5;
+    for (let col = -1; col <= cols; col++) {
+      const v = 16 + rand() * 14;
+      x.fillStyle = `rgb(${Math.round(v + 4)},${Math.round(v + 1)},${Math.round(v + 12)})`;
+      x.fillRect(col * bw + off + 1.5, r * bh + 1.5, bw - 3, bh - 3);
+      // a faint warm edge catches the candlelight
+      x.strokeStyle = `rgba(190,160,190,${0.035 + rand() * 0.04})`;
+      x.lineWidth = 1;
+      x.strokeRect(col * bw + off + 2, r * bh + 2, bw - 4, bh - 4);
+    }
+  }
+  // tall pilaster shadows break up the tiling
+  for (let i = 0; i < 4; i++) {
+    const g = x.createLinearGradient(i * 128, 0, i * 128 + 128, 0);
+    g.addColorStop(0, 'rgba(0,0,0,.34)');
+    g.addColorStop(0.5, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,.22)');
+    x.fillStyle = g;
+    x.fillRect(i * 128, 0, 128, 512);
+  }
+  for (let i = 0; i < 80; i++) {
+    x.fillStyle = `rgba(255,210,150,${0.01 + rand() * 0.025})`;
+    x.fillRect(rand() * 512, rand() * 512, 1 + rand() * 2, 1 + rand() * 2);
+  }
+  const t = tex(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
 function bossClockTexture() {
   const [c, x] = canvas(2048, 2048);
   const cx = 1024;
@@ -664,10 +707,10 @@ function bossClockTexture() {
 function bossClockBackTexture() {
   const [c, x] = canvas(1024, 1024);
   const g = x.createRadialGradient(512, 512, 80, 512, 512, 512);
-  g.addColorStop(0, 'rgba(13,8,22,.92)');
-  g.addColorStop(0.6, 'rgba(10,6,18,.92)');
-  g.addColorStop(0.8, 'rgba(26,13,26,.86)');
-  g.addColorStop(0.94, 'rgba(88,43,34,.5)');
+  g.addColorStop(0, 'rgba(12,7,20,.99)');
+  g.addColorStop(0.6, 'rgba(10,6,18,.99)');
+  g.addColorStop(0.8, 'rgba(24,12,24,.96)');
+  g.addColorStop(0.94, 'rgba(88,43,34,.6)');
   g.addColorStop(1, 'rgba(0,0,0,0)');
   x.fillStyle = g;
   x.beginPath(); x.arc(512, 512, 512, 0, Math.PI * 2); x.fill();
@@ -741,8 +784,10 @@ export function createScene(canvasEl) {
     floatNote: floatNoteTexture(), pendulumRod: pendulumRodTexture(),
     gothicA: gothicWindowTexture(1), gothicB: gothicWindowTexture(2),
     rose: roseWindowTexture(), bossClock: bossClockTexture(), bossBack: bossClockBackTexture(),
-    bossFloor: bossFloorTexture(),
+    bossFloor: bossFloorTexture(), naveSide: naveWallTexture(3), naveEnd: naveWallTexture(7),
   };
+  TEX.naveSide.repeat.set(8, 4);
+  TEX.naveEnd.repeat.set(5, 5);
 
   // ------------------------------------------------------------ background
   const bg = new THREE.Group();
@@ -875,6 +920,28 @@ export function createScene(canvasEl) {
   churchFloor.renderOrder = -9;
   church.add(churchFloor);
 
+  // Continuous ashlar walls behind the glass, plus the end wall that holds the
+  // rose window. The planes face inward, so the intro's fly-out camera shots
+  // still see straight into the nave instead of hitting a black barrier.
+  const wallMat = churchMat(new THREE.MeshBasicMaterial({
+    map: TEX.naveSide, color: 0xffffff, fog: false,
+  }), 0.9);
+  const wallGeo = new THREE.PlaneGeometry(78, 34);
+  for (const side of [-1, 1]) {
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.set(side * 11.62, 10, -27);
+    wall.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2;
+    wall.renderOrder = -8;
+    church.add(wall);
+  }
+  const endWallMat = churchMat(new THREE.MeshBasicMaterial({
+    map: TEX.naveEnd, color: 0x3a3048, fog: false,
+  }), 0.96);
+  const endWall = new THREE.Mesh(new THREE.PlaneGeometry(52, 46), endWallMat);
+  endWall.position.set(0, 12, -66);
+  endWall.renderOrder = -8;
+  church.add(endWall);
+
   // Stone piers and their gold ribs silhouette the nave on both sides.
   const stoneMat = churchMat(new THREE.MeshBasicMaterial({ color: 0x140f1d, fog: false }), 1);
   const pierGeo = new THREE.BoxGeometry(1.35, 18, 1.35);
@@ -915,7 +982,7 @@ export function createScene(canvasEl) {
   // of the cathedral instead of a second dial stacked above the first one.
   const roseWindow = new THREE.Sprite(roseMat);
   roseWindow.position.set(0, 12.6, -56);
-  roseWindow.scale.set(38, 38, 1);
+  roseWindow.scale.set(34, 34, 1);
   roseWindow.renderOrder = -4;
   church.add(roseWindow);
 
@@ -925,7 +992,7 @@ export function createScene(canvasEl) {
   }), 0.045);
   const roseAura = new THREE.Sprite(roseAuraMat);
   roseAura.position.set(0, 12.6, -57);
-  roseAura.scale.set(54, 54, 1);
+  roseAura.scale.set(44, 44, 1);
   roseAura.renderOrder = -5;
   church.add(roseAura);
 
@@ -937,7 +1004,7 @@ export function createScene(canvasEl) {
   const bossBackMat = churchMat(new THREE.SpriteMaterial({
     map: TEX.bossBack, color: 0xffffff, transparent: true, depthWrite: false,
     depthTest: false, blending: THREE.NormalBlending, fog: false,
-  }), 0.92);
+  }), 1);
   const bossBack = new THREE.Sprite(bossBackMat);
   bossBack.scale.set(21.6, 21.6, 1);
   bossBack.position.z = -0.06;
@@ -1780,7 +1847,20 @@ export function createScene(canvasEl) {
       stream.power += (wanted - stream.power) * (1 - Math.exp(-dt * 2.1));
       const power = stream.power;
       const visible = power > 0.012;
-      const laneX = lanes[stream.lane].group.position.x;
+      let laneX = lanes[stream.lane].group.position.x;
+      if (!boss.intro) {
+        // The 4-lane field parks its unused lanes far off screen. Move their
+        // wind to the visible edge of the current field so every empty lane
+        // still contributes a gust the player can see.
+        const half = (Math.max(4, state.keyCount) - 1) * state.spacing * 0.5;
+        const dist = Math.max(1, Math.abs(camera.position.z));
+        const halfW = Math.tan(camera.fov * Math.PI / 360) * dist * camera.aspect;
+        const edge = Math.min(
+          half + state.spacing * (0.55 + (stream.lane % 2) * 0.45),
+          halfW * 0.86,
+        );
+        laneX = stream.lane < 3.5 ? -edge : edge;
+      }
       for (let k = 0; k < stream.ribbons.length; k++) {
         const ribbon = stream.ribbons[k];
         ribbon.visible = visible;
@@ -1798,7 +1878,7 @@ export function createScene(canvasEl) {
         const len = 4.2 + 2.8 * Math.abs(Math.sin(phase * 1.3));
         const width = 0.85 + 0.5 * Math.abs(Math.cos(phase * 0.8));
         ribbon.scale.set(width, len, 1);
-        ribbon.material.opacity = power * edge * (0.21 + 0.12 * Math.pow(Math.sin(phase * 2.1), 2));
+        ribbon.material.opacity = power * edge * (0.14 + 0.09 * Math.pow(Math.sin(phase * 2.1), 2));
       }
       for (let k = 0; k < stream.glows.length; k++) {
         const glow = stream.glows[k];
@@ -1811,10 +1891,10 @@ export function createScene(canvasEl) {
           y,
           0.45 + Math.cos(phase * 0.71) * 1.3,
         );
-        const sc = 0.42 + 0.2 * Math.sin(phase * 1.6);
+        const sc = 0.22 + 0.1 * Math.sin(phase * 1.6);
         glow.scale.set(sc, sc, 1);
         glow.material.rotation = phase;
-        glow.material.opacity = power * 0.19 * (0.55 + 0.45 * Math.sin(phase * 1.3));
+        glow.material.opacity = power * 0.075 * (0.55 + 0.45 * Math.sin(phase * 1.3));
       }
     }
   }
@@ -1839,7 +1919,7 @@ export function createScene(canvasEl) {
       for (const entry of churchMats) entry.mat.opacity = entry.base * cf;
       // The clock owns the stage, so its face breathes slightly above the nave.
       const kf = boss.clockFade;
-      bossBackMat.opacity = kf * 0.92;
+      bossBackMat.opacity = kf;
       bossFaceMat.opacity = kf * (0.72 + boss.hubKick * 0.08);
       bossAuraMat.opacity = kf * (0.05 + boss.hubKick * 0.045);
       bossHubMat.opacity = kf * (0.36 + boss.hubKick * 0.2);
@@ -1918,9 +1998,9 @@ export function createScene(canvasEl) {
     bossClockGroup.position.set(0, state.portrait ? 13.4 : 10.4, state.portrait ? -46 : -39);
     bossClockGroup.scale.setScalar(state.portrait ? 0.76 : 1);
     roseWindow.position.set(0, state.portrait ? 15 : 12.6, state.portrait ? -62 : -56);
-    roseWindow.scale.set(state.portrait ? 29 : 38, state.portrait ? 29 : 38, 1);
+    roseWindow.scale.set(state.portrait ? 26 : 34, state.portrait ? 26 : 34, 1);
     roseAura.position.set(0, state.portrait ? 15 : 12.6, state.portrait ? -63 : -57);
-    roseAura.scale.set(state.portrait ? 40 : 54, state.portrait ? 40 : 54, 1);
+    roseAura.scale.set(state.portrait ? 36 : 44, state.portrait ? 36 : 44, 1);
     pendulumLayout();
     for (let i = 0; i < 8; i++) {
       const x = (i - 3.5) * state.spacing;
@@ -2356,7 +2436,7 @@ export function createScene(canvasEl) {
       const field = boss.active ? boss.fieldFade : 1;
       const lineTarget = (live
         ? (i % 2 ? 0.86 : 0.96) * 0.58
-        : ghostAmp * 0.34) * field;
+        : ghostAmp * 0.34) * field * (boss.active ? 0.45 : 1);
       const beamTarget = (live
         ? (0.065 + pulse * 0.03)
         : ghostAmp * 0.04) * field * (boss.active ? 0.55 : 1);
