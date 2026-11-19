@@ -18,9 +18,14 @@ import * as THREE from 'three';
 //   • the camera's own area is never hidden
 //   • gameplay objects (items, characters, bodies, doors) are in
 //     separate groups and are never touched
-//   • a prop is only hidden after two consecutive sweeps
+//   • architecture is never hidden: walls that vanish read as a
+//     broken world, and the renderer already frustum-culls them
+//   • props that straddle a wall (bulletin boards, clocks) stay if
+//     *either* side is visible, and anything within ARM_REACH of the
+//     camera is shown regardless of area
 // ─────────────────────────────────────────────────────────────
 const CHUNK = 13;
+const ARM_REACH = 3.0;
 
 export class VisibilityCuller {
   constructor(game) {
@@ -68,6 +73,7 @@ export class VisibilityCuller {
     const connect = (a, b, px, pz, kind, radius, isOpen) => {
       const c = { a, b, px, pz, kind, open: isOpen || (() => true) };
       c.sphere = new THREE.Sphere(new THREE.Vector3(px, 1.6, pz), radius);
+      c.points = [[px, pz]];
       a.neighbors.push({ other: b, conn: c });
       b.neighbors.push({ other: a, conn: c });
       conns.push(c);
@@ -97,9 +103,16 @@ export class VisibilityCuller {
 
     // chunk seams are open arches
     for (const list of [central, back]) {
+      const seamZ = list === back ? -27 : 0;
       for (let i = 0; i < list.length - 1; i++) {
         const a = list[i], b = list[i + 1];
-        connect(a, b, a.x2, 0, 'arch', 4.2);
+        // A wide sphere: the seam is the whole corridor cross-section, and
+        // a narrow sphere at the centre popped the far end of a chunk in
+        // and out while panning.
+        // The seam has to sit in its own hall: the back hall's seams used
+        // to be placed at z=0, so a whole back-corridor chunk chain could
+        // never be reached from inside it.
+        connect(a, b, a.x2, seamZ, 'arch', 6.5);
       }
     }
 
@@ -125,10 +138,19 @@ export class VisibilityCuller {
       const corridor = room.side === 'back'
         ? chunkAt(back, doorX)
         : chunkAt(central, doorX);
-      const c = connect(a, corridor, doorX, d.wallZ, 'door', 1.5, () => d.open === true);
-      // point a little way inside the room: if the wall beside the door
-      // blocks the line to it, the doorway is edge-on and the room can
-      // stay culled even though the door leaf is on screen
+      const c = connect(a, corridor, doorX, d.wallZ, 'door', 1.6, () => d.open === true);
+      // Sample the whole opening, not one point: an oblique view down the
+      // hall can see a slice of a room through a doorway while the point
+      // 1.9 m inside is behind the jamb. Any clear sample opens the room.
+      const half = Math.max(0.2, (room.door[1] - room.door[0]) / 2 - 0.25);
+      const inward = room.side === 'south' ? 1 : -1;
+      c.points = [];
+      for (const off of [0, -half, half]) {
+        for (const depth of [0.3, 1.2, 2.2]) {
+          c.points.push([doorX + off, d.wallZ + inward * depth]);
+        }
+      }
+      // point a little way inside the room for the old single-point test
       c.inside = {
         x: doorX,
         z: d.wallZ + (room.side === 'south' ? 1.9 : -1.9)
@@ -153,9 +175,23 @@ export class VisibilityCuller {
         if (sphere.radius < 0.05) continue;
         let owner = this.areaAt(sphere.center.x, sphere.center.z);
         if (!owner) owner = this.nearestArea(sphere.center.x, sphere.center.z);
+        // Anything that touches an area's slab is allowed to live there.
+        // Bulletin boards and clocks are mounted on the corridor face of
+        // a room wall, so a centre-point lookup used to file them under
+        // the hidden room and they popped in as you walked up.
+        const touches = [];
+        for (const a of this.areas) {
+          if (box.max.x >= a.x1 - 0.18 && box.min.x <= a.x2 + 0.18 &&
+              box.max.z >= a.z1 - 0.18 && box.min.z <= a.z2 + 0.18) {
+            touches.push(a);
+          }
+        }
+        if (owner && !touches.includes(owner)) touches.push(owner);
+        if (!touches.length && owner) touches.push(owner);
         const e = {
           obj, box, sphere,
           area: owner,
+          touches,
           hidden: !obj.visible,
           blocked: 0
         };
@@ -170,7 +206,7 @@ export class VisibilityCuller {
     // area, which protects shared walls between a seen room and a
     // hidden one.
     this.arch = [];
-    const skip = new Set([w.hideGroup, w.itemGroup, w.bodyGroup, w.propGroup]);
+    const skip = new Set([w.hideGroup, w.itemGroup, w.bodyGroup, w.propGroup, w.outdoorGroup]);
     for (const obj of w.scene.children) {
       if (skip.has(obj) || obj.isLight || obj.isCamera) continue;
       if (obj.userData && obj.userData.cullSkip) continue;
@@ -306,11 +342,13 @@ export class VisibilityCuller {
           // whose door is off-camera cannot be seen even though its
           // bounding sphere may reach into the corridor.
           if (!this.frustum.intersectsSphere(n.conn.sphere)) continue;
-          // Sight line to the doorway itself. Oblique doorways and
+          // Sight line to the opening itself. Oblique doorways and
           // connections reached around a corner are dropped here.
-          const tx = n.conn.inside ? n.conn.inside.x : n.conn.px;
-          const tz = n.conn.inside ? n.conn.inside.z : n.conn.pz;
-          if (this.losBlocked(cam.position.x, cam.position.z, tx, tz)) continue;
+          let clear = false;
+          for (const [tx, tz] of (n.conn.points || [[n.conn.px, n.conn.pz]])) {
+            if (!this.losBlocked(cam.position.x, cam.position.z, tx, tz)) { clear = true; break; }
+          }
+          if (!clear) continue;
           n.other.visible = true;
           queue.push(n.other);
         }
@@ -319,14 +357,20 @@ export class VisibilityCuller {
 
     let visible = 0, hiddenArea = 0, hiddenFrustum = 0;
     for (const e of this.entries) {
-      const areaSeen = !e.area || e.area.visible;
-      if (!areaSeen) {
+      const inFrustum = this.frustum.intersectsSphere(e.sphere);
+      let areaSeen = false;
+      for (const a of e.touches) { if (a.visible) { areaSeen = true; break; } }
+      // Near-field safety net: whatever the area graph thinks, a prop
+      // inside the frustum and within arm's reach is genuinely visible.
+      const near = inFrustum &&
+        e.sphere.center.distanceTo(cam.position) - e.sphere.radius < ARM_REACH;
+      if (!areaSeen && !near) {
         e.blocked = 2;
         if (!e.hidden) { e.obj.visible = false; e.hidden = true; }
         hiddenArea++;
         continue;
       }
-      if (!this.frustum.intersectsSphere(e.sphere)) {
+      if (!inFrustum) {
         if (!e.hidden) { e.obj.visible = false; e.hidden = true; }
         e.blocked = 0;
         hiddenFrustum++;
@@ -340,33 +384,19 @@ export class VisibilityCuller {
     }
 
     // ── architecture pass ──
+    // Walls, doors, windows and fixtures are left alone. Hiding them by
+    // area made whole wall runs disappear while the player was looking
+    // at them; the renderer's own frustum culling is safe and cheap for
+    // this small set of merged meshes.
     const seen = [];
     for (const a of this.areas) {
       if (a.visible) seen.push(a);
-    }
-    let archHidden = 0;
-    for (const e of this.arch) {
-      if (e.cullSkip) continue;
-      let keep = !e.area || e.area.visible;
-      if (!keep) {
-        const b = e.box;
-        for (const a of seen) {
-          if (b.max.x >= a.x1 - 0.45 && b.min.x <= a.x2 + 0.45 &&
-              b.max.z >= a.z1 - 0.45 && b.min.z <= a.z2 + 0.45) { keep = true; break; }
-        }
-      }
-      if (keep) {
-        if (e.hidden) { e.obj.visible = true; e.hidden = false; }
-      } else if (!e.hidden) {
-        e.obj.visible = false;
-        e.hidden = true;
-      }
     }
 
     this.stats.visible = visible;
     this.stats.hiddenArea = hiddenArea;
     this.stats.hiddenFrustum = hiddenFrustum;
-    this.stats.archHidden = this.arch.reduce((n, e) => n + (e.hidden ? 1 : 0), 0);
+    this.stats.archHidden = 0;
     this.stats.areasVisible = seen.length;
     this.stats.areaCount = areaCount;
 
