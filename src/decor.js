@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { T } from './textures.js';
 import {
-  box, cyl, sphere, makeLabel, makeSignPlane, makePoster, makeGlow,
+  box, cyl, sphere, makeLabel, makeLabelPlane, makeSignPlane, makePoster, makeGlow,
   makeDesk, makeChair, makeTeacherDesk, makeLockerBank, makeBookshelf,
   makeTable, makeBench, makeVending, makeStall, makeSinkCounter, makeMirror,
   makeTrash, makeCone, makeWetFloorSign, makeBoiler, makeBreaker,
@@ -64,12 +64,12 @@ function makeGraffiti(text = 'Q!?', color = '#8dffb2') {
   return new THREE.Mesh(new THREE.PlaneGeometry(1.65, 0.82), mat);
 }
 
-function paperScatter(world, x, z, n = 6, spread = 3) {
+function paperScatter(world, x, z, n = 6, spread = 3, spreadZ = spread) {
   for (let i = 0; i < n; i++) {
     const p = new THREE.Mesh(new THREE.PlaneGeometry(0.21, 0.3), PAPER());
     p.rotation.x = -Math.PI / 2;
     p.rotation.z = Math.random() * 7;
-    p.position.set(x + (Math.random() - 0.5) * spread, 0.012, z + (Math.random() - 0.5) * spread);
+    p.position.set(x + (Math.random() - 0.5) * spread, 0.012, z + (Math.random() - 0.5) * spreadZ);
     world.propGroup.add(p);
   }
 }
@@ -102,7 +102,7 @@ function bulletin(world, x, y, z, ry, title, notes = 5) {
     g.add(p);
     g.add(sphere(0.022, C(0xa33434, 0.5), p.position.x, p.position.y + 0.17, 0.08));
   }
-  const lbl = makeLabel(title, { color: '#3a3322', bg: 'rgba(232,222,194,.96)', size: 512, h: 72, font: 'bold 34px Courier New' });
+  const lbl = makeLabelPlane(title, { color: '#3a3322', bg: 'rgba(232,222,194,.96)', size: 512, h: 72, font: 'bold 34px Courier New' });
   lbl.scale.set(1.9, 0.27, 1); lbl.position.set(0, 0.42, 0.08); g.add(lbl);
   add(world, g, x, y, z, ry);
 }
@@ -196,7 +196,7 @@ function decorateClass101(world, r) {
   add(world, box(0.22, 0.06, 1.2, C(0x6b5a42, 0.8)), x1 + 0.15, 1.05, 9.4);
   add(world, makeBookshelf(), x2 - 0.4, 0, z1 + 3.4, -Math.PI / 2);
   // banner
-  const banner = makeLabel('ROOM 101  ·  NO EXCUSES', { color: '#d8cfb2', bg: 'rgba(40,55,40,.92)', size: 700, h: 110, font: 'bold 44px Courier New' });
+  const banner = makeLabelPlane('ROOM 101  ·  NO EXCUSES', { color: '#d8cfb2', bg: 'rgba(40,55,40,.92)', size: 700, h: 110, font: 'bold 44px Courier New' });
   banner.scale.set(5.2, 0.82, 1); add(world, banner, (x1 + x2) / 2, 2.78, z1 + 0.18, 0);
   paperScatter(world, (x1 + x2) / 2, z1 + 3, 8, 5);
 }
@@ -209,8 +209,8 @@ function decorateSenior(world, r) {
   const n2 = makeDesk(); n2.rotation.z = Math.PI / 2; add(world, n2, -12.6, 0.65, -4.0, -0.3);
   const n3 = makeTable(1.8, 0.8); n3.rotation.z = Math.PI / 2; add(world, n3, -13.2, 0.8, -4.8, 0.1);
   add(world, box(1.8, 1.0, 0.1, C(0x6b5136, 0.85)), -13.2, 0.5, -4.9, 0.1);
-  const caution = makeLabel('SAFE ROOM (probably)', { color: '#ffcf6b', bg: 'rgba(20,16,4,.9)', size: 620, h: 96, font: 'bold 38px Courier New' });
-  caution.scale.set(4.4, 0.7, 1); add(world, caution, -13, 2.55, -4.15, 0);
+  const caution = makeLabelPlane('SAFE ROOM (probably)', { color: '#ffcf6b', bg: 'rgba(20,16,4,.9)', size: 620, h: 96, font: 'bold 38px Courier New' });
+  caution.scale.set(4.4, 0.7, 1); add(world, caution, -13, 2.55, -4.15, Math.PI);
   // circle of desks/chairs
   for (let i = 0; i < 6; i++) {
     const a = i / 6 * Math.PI * 2;
@@ -230,13 +230,13 @@ function decorateSenior(world, r) {
   // whiteboard with plan
   const board = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 2.0), new THREE.MeshStandardMaterial({ color: 0xdfe3da, roughness: 0.5 }));
   add(world, board, x2 - 0.18, 1.85, -8.5, -Math.PI / 2);
-  const plan = makeLabel('PLAN: 1. DON\'T DIE  2. FIND KEYS  3. EXIT', { color: '#28352b', bg: 'rgba(230,235,226,.95)', size: 900, h: 100, font: 'bold 30px Courier New' });
+  const plan = makeLabelPlane('PLAN: 1. DON\'T DIE  2. FIND KEYS  3. EXIT', { color: '#28352b', bg: 'rgba(230,235,226,.95)', size: 900, h: 100, font: 'bold 30px Courier New' });
   plan.scale.set(3.7, 0.4, 1); plan.position.set(x2 - 0.24, 2.0, -8.5); plan.rotation.y = -Math.PI / 2; world.propGroup.add(plan);
   // beds/rolls on floor
   add(world, makeBed(), x1 + 2.2, 0, z2 - 3.0, Math.PI / 2);
   add(world, box(1.4, 0.1, 0.7, C(0x3b4a4e, 0.9)), x2 - 2.4, 0.05, z2 - 2.4, 0.1);
   add(world, makeSofa(), x2 - 2.2, 0, z1 + 4.2, -Math.PI / 2);
-  paperScatter(world, -13, -12, 10, 6);
+  paperScatter(world, -13, -12, 10, 4);
 }
 
 function decoratePrincipal(world, r) {
@@ -268,7 +268,7 @@ function decoratePrincipal(world, r) {
   add(world, rug, x1 + 4.6, 0.014, z1 + 5.6, 0, -Math.PI / 2);
   // portrait
   const portrait = makePoster(6, 1.2, 1.5); add(world, portrait, x1 + 4.2, 2.35, z1 + 0.18, 0);
-  const plaque = makeLabel('PRINCIPAL G. GRADY', { color: '#d8c9a2', bg: 'rgba(30,24,14,.9)', size: 600, h: 84, font: 'bold 30px Courier New' });
+  const plaque = makeLabelPlane('PRINCIPAL G. GRADY', { color: '#d8c9a2', bg: 'rgba(30,24,14,.9)', size: 600, h: 84, font: 'bold 30px Courier New' });
   plaque.scale.set(3.4, 0.5, 1); add(world, plaque, x1 + 4.2, 1.6, z1 + 0.19);
   add(world, makeFireExtinguisher(), x2 - 0.6, 0, z2 - 0.7);
   paperScatter(world, x1 + 4, z1 + 6, 5, 4);
@@ -289,7 +289,7 @@ function decorateComputer(world, r) {
   add(world, board, (x1 + x2) / 2, 1.85, z2 - 0.18, Math.PI);
   for (let i = 0; i < 2; i++) add(world, makeServerRack(), x2 - 1.0, 0, z1 + 2 + i * 1.1, Math.PI / 2);
   add(world, makeVending(), x2 - 1.4, 0, z2 - 1.4, Math.PI);
-  const sign = makeLabel('COMPUTER LAB — PLEASE DO NOT LICK THE WIRES', { color: '#7de0b4', bg: 'rgba(6,18,12,.9)', size: 900, h: 90, font: 'bold 28px Courier New' });
+  const sign = makeLabelPlane('COMPUTER LAB — PLEASE DO NOT LICK THE WIRES', { color: '#7de0b4', bg: 'rgba(6,18,12,.9)', size: 900, h: 90, font: 'bold 28px Courier New' });
   sign.scale.set(6.2, 0.62, 1); add(world, sign, (x1 + x2) / 2, 2.9, z1 + 0.18);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 8, 5);
   ceilingCable(world, x1 + 2, z1 + 1, x2 - 2, z2 - 1);
@@ -359,7 +359,7 @@ function decorateGym(world, r) {
   // scoreboard
   const sb = new THREE.Group();
   sb.add(box(4.4, 1.4, 0.2, C(0x22282a, 0.6), 0, 0, 0));
-  sb.add(makeLabel('HOME 00 : 00 VISITORS', { color: '#ff6045', bg: 'rgba(10,8,8,.95)', size: 700, h: 100, font: 'bold 38px Courier New' }));
+  sb.add(makeLabelPlane('HOME 00 : 00 VISITORS', { color: '#ff6045', bg: 'rgba(10,8,8,.95)', size: 700, h: 100, font: 'bold 38px Courier New' }));
   sb.children[1].position.set(0, 0.1, 0.13); sb.children[1].scale.set(3.8, 0.55, 1);
   add(world, sb, (x1 + x2) / 2, 2.6, z1 + 0.15);
   add(world, makeCone(), x1 + 2.2, 0, z1 + 2.2);
@@ -430,7 +430,7 @@ function decorateAV(world, r) {
     const tape = box(0.16, 0.15, 0.04, C(0x1c1f1e, 0.5), x1 + 4.3 + i * 0.3, 0.8, z1 + 3.9);
     add(world, tape, tape.position.x, 0.8, tape.position.z);
   }
-  const sign = makeLabel('AV CLUB — WE SEE EVERYTHING', { color: '#8dffb2', bg: 'rgba(5,16,10,.9)', size: 700, h: 90, font: 'bold 30px Courier New' });
+  const sign = makeLabelPlane('AV CLUB — WE SEE EVERYTHING', { color: '#8dffb2', bg: 'rgba(5,16,10,.9)', size: 700, h: 90, font: 'bold 30px Courier New' });
   sign.scale.set(5.0, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.85, z1 + 0.18);
   ceilingCable(world, x1 + 2, z1 + 2, x2 - 1, z1 + 2);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 5, 3);
@@ -455,7 +455,7 @@ function decorateNurse(world, r) {
   crossR.rotation.y = Math.PI / 2; world.propGroup.add(crossR);
   const crossR2 = box(0.1, 0.5, 0.02, C(0xa62a2a, 0.7), x1 + 0.19, 2.1, z2 - 4);
   crossR2.rotation.y = Math.PI / 2; world.propGroup.add(crossR2);
-  const sign = makeLabel('NURSE — OUT LUNCH (PERMANENTLY)', { color: '#cfe6d8', bg: 'rgba(8,20,14,.9)', size: 800, h: 90, font: 'bold 30px Courier New' });
+  const sign = makeLabelPlane('NURSE — OUT LUNCH (PERMANENTLY)', { color: '#cfe6d8', bg: 'rgba(8,20,14,.9)', size: 800, h: 90, font: 'bold 30px Courier New' });
   sign.scale.set(4.6, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.8, z2 - 0.18, Math.PI);
   add(world, makeTrash(), x1 + 1.2, 0, z2 - 0.4);
   add(world, makeFireExtinguisher(), x2 - 1.0, 0, z2 - 0.25);
@@ -467,7 +467,7 @@ function decorateCafeteria(world, r) {
   // serving counter along north wall
   const fc = makeFoodCounter(7.5); add(world, fc, x1 + 6.5, 0, z1 + 0.62, 0);
   collide(world, x1 + 6.5, z1 + 0.62, 7.6, 1.1);
-  const menu = makeLabel('TODAY: MYSTERY MEAT  ·  YESTERDAY: MYSTERY MEAT', { color: '#e8d8a0', bg: 'rgba(28,24,10,.92)', size: 900, h: 90, font: 'bold 26px Courier New' });
+  const menu = makeLabelPlane('TODAY: MYSTERY MEAT  ·  YESTERDAY: MYSTERY MEAT', { color: '#e8d8a0', bg: 'rgba(28,24,10,.92)', size: 900, h: 90, font: 'bold 26px Courier New' });
   menu.scale.set(5.8, 0.55, 1); add(world, menu, x1 + 6.5, 2.9, z1 + 0.15);
   // tables
   for (let row = 0; row < 3; row++) {
@@ -484,14 +484,14 @@ function decorateCafeteria(world, r) {
   add(world, makeVending(), x2 - 1.4, 0, z1 + 1.0, Math.PI);
   // kitchen door
   add(world, box(1.3, 2.2, 0.1, C(0x8c9188, 0.7, 0.3)), x2 - 4.0, 1.1, z1 + 0.19);
-  const kitchen = makeLabel('KITCHEN — STAFF ONLY', { color: '#d8d2bc', bg: 'rgba(10,12,10,.9)', size: 512, h: 72, font: 'bold 28px Courier New' });
+  const kitchen = makeLabelPlane('KITCHEN — STAFF ONLY', { color: '#d8d2bc', bg: 'rgba(10,12,10,.9)', size: 512, h: 72, font: 'bold 28px Courier New' });
   kitchen.scale.set(2.6, 0.36, 1); add(world, kitchen, x2 - 4, 2.55, z1 + 0.24);
   // trash + wet floor
   add(world, makeTrash(), x1 + 1.2, 0, z2 - 0.4);
   add(world, makeTrash(), x2 - 1.2, 0, z2 - 0.4);
   add(world, makeWetFloorSign(), x1 + 9.5, 0, z2 - 2.2);
   // banner
-  const banner = makeLabel('MILLBROOK CAFETERIA  ·  EAT LIKE NOBODY\'S WATCHING', { color: '#d8c9a2', bg: 'rgba(42,30,16,.9)', size: 1000, h: 90, font: 'bold 26px Courier New' });
+  const banner = makeLabelPlane('MILLBROOK CAFETERIA  ·  EAT LIKE NOBODY\'S WATCHING', { color: '#d8c9a2', bg: 'rgba(42,30,16,.9)', size: 1000, h: 90, font: 'bold 26px Courier New' });
   banner.scale.set(7.2, 0.64, 1); add(world, banner, (x1 + x2) / 2, 2.95, z2 - 0.18, Math.PI);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 10, 7);
 }
@@ -525,7 +525,7 @@ function decorateScience(world, r) {
     skel.add(box(0.04, 0.5, 0.04, bone, x * 2.4, 1.2, 0));
   }
   add(world, skel, x1 + 1.0, 0, z1 + 1.6);
-  const sign = makeLabel('SCIENCE: BECAUSE MATH WASN\'T SCARY ENOUGH', { color: '#8dffb2', bg: 'rgba(5,16,10,.9)', size: 1000, h: 90, font: 'bold 26px Courier New' });
+  const sign = makeLabelPlane('SCIENCE: BECAUSE MATH WASN\'T SCARY ENOUGH', { color: '#8dffb2', bg: 'rgba(5,16,10,.9)', size: 1000, h: 90, font: 'bold 26px Courier New' });
   sign.scale.set(6.2, 0.58, 1); add(world, sign, (x1 + x2) / 2, 2.95, z1 + 0.18);
   add(world, makeFireExtinguisher(), x1 + 0.7, 0, z2 - 1.0);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 7, 4);
@@ -557,7 +557,7 @@ function decorateLibrary(world, r) {
   }
   add(world, makeSofa(), x2 - 2.5, 0, z1 + 2.2, -Math.PI / 2);
   add(world, makePlant(), x1 + 1.0, 0, z2 - 1.2);
-  const quiet = makeLabel('QUIET PLEASE  ·  THE HALL MONITOR IS LISTENING', { color: '#d8cfb2', bg: 'rgba(20,28,22,.92)', size: 900, h: 90, font: 'bold 30px Courier New' });
+  const quiet = makeLabelPlane('QUIET PLEASE  ·  THE HALL MONITOR IS LISTENING', { color: '#d8cfb2', bg: 'rgba(20,28,22,.92)', size: 900, h: 90, font: 'bold 30px Courier New' });
   quiet.scale.set(5.8, 0.62, 1); add(world, quiet, (x1 + x2) / 2, 2.95, z2 - 0.18, Math.PI);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 10, 5);
 }
@@ -587,7 +587,7 @@ function decorateMusic(world, r) {
     const c = box(1.2, 0.3, 0.4, C(0x25282a, 0.7), x1 + 2.5 + i * 1.4, 0.18, z1 + 2.0);
     add(world, c, c.position.x, 0.18, c.position.z);
   }
-  const sign = makeLabel('MUSIC ROOM  ·  BAND PRACTICE CANCELLED (AGAIN)', { color: '#d8cfb2', bg: 'rgba(22,22,30,.92)', size: 900, h: 90, font: 'bold 28px Courier New' });
+  const sign = makeLabelPlane('MUSIC ROOM  ·  BAND PRACTICE CANCELLED (AGAIN)', { color: '#d8cfb2', bg: 'rgba(22,22,30,.92)', size: 900, h: 90, font: 'bold 28px Courier New' });
   sign.scale.set(5.8, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.95, z1 + 0.18);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 5, 4);
 }
@@ -614,7 +614,7 @@ function decorateArt(world, r) {
     add(world, art, x1 + 0.17, 1.9, z1 + 3 + i * 1.8, Math.PI / 2);
   }
   add(world, makeSinkCounter(), x2 - 2.0, 0, z1 + 1.0, 0);
-  const sign = makeLabel('ART ROOM  ·  EVERYTHING IS ART IF YOU\'RE BRAVE ENOUGH', { color: '#e8d8b0', bg: 'rgba(28,20,14,.92)', size: 1000, h: 90, font: 'bold 26px Courier New' });
+  const sign = makeLabelPlane('ART ROOM  ·  EVERYTHING IS ART IF YOU\'RE BRAVE ENOUGH', { color: '#e8d8b0', bg: 'rgba(28,20,14,.92)', size: 1000, h: 90, font: 'bold 26px Courier New' });
   sign.scale.set(6.4, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.95, z2 - 0.18, Math.PI);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 8, 5);
 }
@@ -636,7 +636,7 @@ function decorateBoiler(world, r) {
   }
   const warn = makeSignPlane('!', 0.8, 0.8, '#ffb03a');
   add(world, warn, x1 + 0.17, 2.1, z2 - 2.5, Math.PI / 2);
-  const sign = makeLabel('BOILER ROOM  ·  AUTHORIZED STAFF ONLY  ·  AND YOU', { color: '#ffcf6b', bg: 'rgba(24,14,4,.92)', size: 1000, h: 90, font: 'bold 26px Courier New' });
+  const sign = makeLabelPlane('BOILER ROOM  ·  AUTHORIZED STAFF ONLY  ·  AND YOU', { color: '#ffcf6b', bg: 'rgba(24,14,4,.92)', size: 1000, h: 90, font: 'bold 26px Courier New' });
   sign.scale.set(6.4, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.95, z2 - 0.18, Math.PI);
   add(world, makeWetFloorSign(), x1 + 2, 0, z2 - 2);
   // steam particles
@@ -684,7 +684,7 @@ function decorateJanitor(world, r) {
   mop.add(cyl(0.03, 0.03, 1.4, C(0x9a8455, 0.9), 0, 0.7, 0));
   mop.add(cyl(0.15, 0.05, 0.3, C(0xb9b6a5, 0.95), 0, 0.1, 0));
   add(world, mop, x1 + 4.5, 0, z2 - 1.0, 0.2, 0, 0.35);
-  const sign = makeLabel('JANITOR  ·  THE ONLY ONE WHO KNOWS WHERE ANYTHING IS', { color: '#d8d2c0', bg: 'rgba(14,18,14,.9)', size: 900, h: 90, font: 'bold 24px Courier New' });
+  const sign = makeLabelPlane('JANITOR  ·  THE ONLY ONE WHO KNOWS WHERE ANYTHING IS', { color: '#d8d2c0', bg: 'rgba(14,18,14,.9)', size: 900, h: 90, font: 'bold 24px Courier New' });
   sign.scale.set(6.0, 0.58, 1); add(world, sign, (x1 + x2) / 2, 2.9, z2 - 0.18, Math.PI);
   add(world, makeWetFloorSign(), x1 + 2.5, 0, z1 + 2.5);
 }
@@ -702,10 +702,10 @@ function decorateDetention(world, r) {
   }
   const board = new THREE.Mesh(new THREE.PlaneGeometry(5.0, 1.9), new THREE.MeshStandardMaterial({ map: T.blackboard(1), roughness: 0.95 }));
   add(world, board, (x1 + x2) / 2, 1.85, z2 - 0.18, Math.PI);
-  const sign = makeLabel('DETENTION  ·  SIT DOWN. THINK ABOUT IT.', { color: '#ff8b96', bg: 'rgba(24,8,10,.92)', size: 800, h: 90, font: 'bold 30px Courier New' });
+  const sign = makeLabelPlane('DETENTION  ·  SIT DOWN. THINK ABOUT IT.', { color: '#ff8b96', bg: 'rgba(24,8,10,.92)', size: 800, h: 90, font: 'bold 30px Courier New' });
   sign.scale.set(5.4, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.9, z1 + 0.18);
   add(world, makeClock(), x2 - 0.18, 2.2, z1 + 4.0, -Math.PI / 2);
-  paperScatter(world, (x1 + x2) / 2, z1 + 4, 8, 4);
+  paperScatter(world, (x1 + x2) / 2, z1 + 4, 8, 6, 4);
 }
 
 function decorateDarkroom(world, r) {
@@ -731,7 +731,7 @@ function decorateDarkroom(world, r) {
   const bulb = sphere(0.1, new THREE.MeshBasicMaterial({ color: 0xff3a3a }), (x1 + x2) / 2, 2.9, (z1 + z2) / 2);
   add(world, bulb, bulb.position.x, 2.9, bulb.position.z);
   add(world, makeGlow('#ff3333', 2.0), (x1 + x2) / 2, 2.85, (z1 + z2) / 2);
-  const sign = makeLabel('DARKROOM  ·  DO NOT OPEN (EVER)', { color: '#ff6b7a', bg: 'rgba(24,4,8,.9)', size: 800, h: 90, font: 'bold 30px Courier New' });
+  const sign = makeLabelPlane('DARKROOM  ·  DO NOT OPEN (EVER)', { color: '#ff6b7a', bg: 'rgba(24,4,8,.9)', size: 800, h: 90, font: 'bold 30px Courier New' });
   sign.scale.set(5.0, 0.58, 1); add(world, sign, (x1 + x2) / 2, 2.9, z1 + 0.18);
   add(world, makeFireExtinguisher(), x1 + 0.7, 0, z2 - 1.0);
 }
@@ -759,7 +759,7 @@ function decorateFaculty(world, r) {
   coffee.add(box(0.32, 0.18, 0.02, new THREE.MeshBasicMaterial({ color: 0xc94a2a }), 0, 0.4, 0.21));
   add(world, coffee, x2 - 3.2, 0.9, z2 - 0.48);
   add(world, makeTrash(), x1 + 1.0, 0, z2 - 0.4);
-  const sign = makeLabel('FACULTY LOUNGE  ·  PLEASE KNOCK (THEY WON\'T ANSWER)', { color: '#d8cfb2', bg: 'rgba(22,22,18,.9)', size: 1000, h: 90, font: 'bold 26px Courier New' });
+  const sign = makeLabelPlane('FACULTY LOUNGE  ·  PLEASE KNOCK (THEY WON\'T ANSWER)', { color: '#d8cfb2', bg: 'rgba(22,22,18,.9)', size: 1000, h: 90, font: 'bold 26px Courier New' });
   sign.scale.set(6.4, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.9, z1 + 0.18);
   // donuts
   for (let i = 0; i < 3; i++) {
@@ -784,7 +784,7 @@ function decorateServer(world, r) {
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.8), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x255a4a : 0x1b3a55 }));
     add(world, scr, x1 + 3 + (i % 2) * 1.4, 1.8 + Math.floor(i / 2) * 1.0, z2 - 0.18, Math.PI);
   }
-  const sign = makeLabel('SERVER ROOM  ·  DO NOT UNPLUG ANYTHING. EVER.', { color: '#8dd8ff', bg: 'rgba(6,14,22,.92)', size: 900, h: 90, font: 'bold 28px Courier New' });
+  const sign = makeLabelPlane('SERVER ROOM  ·  DO NOT UNPLUG ANYTHING. EVER.', { color: '#8dd8ff', bg: 'rgba(6,14,22,.92)', size: 900, h: 90, font: 'bold 28px Courier New' });
   sign.scale.set(5.8, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.95, z1 + 0.18);
   add(world, makeTrash(), x2 - 1.0, 0, z2 - 1.0);
   paperScatter(world, x1 + 4, z1 + 5, 5, 3);
@@ -810,10 +810,10 @@ function decorateAuditorium(world, r) {
     spot.add(cyl(0.12, 0.18, 0.4, C(0x2a2e2e, 0.5), 0, 0.2, 0));
     add(world, spot, x1 + 8 + i * 5, 3.0, z1 + 4.0, 0, Math.PI / 2);
   }
-  const sign = makeLabel('AUDITORIUM  ·  "THE SHOW MUST GO ON" (IT DID NOT)', { color: '#e8d8b0', bg: 'rgba(24,18,10,.92)', size: 1000, h: 90, font: 'bold 26px Courier New' });
+  const sign = makeLabelPlane('AUDITORIUM  ·  "THE SHOW MUST GO ON" (IT DID NOT)', { color: '#e8d8b0', bg: 'rgba(24,18,10,.92)', size: 1000, h: 90, font: 'bold 26px Courier New' });
   sign.scale.set(6.4, 0.6, 1); add(world, sign, (x1 + x2) / 2, 2.95, z2 - 0.18, Math.PI);
   add(world, makeCone(), x2 - 2, 0, z2 - 2);
-  paperScatter(world, (x1 + x2) / 2, z1 + 12, 12, 8);
+  paperScatter(world, (x1 + x2) / 2, z1 + 11, 12, 8, 4);
 }
 
 function genericRoom(world, room) {
@@ -877,15 +877,15 @@ export function decorateCorridor(world) {
   add(world, makeFireExtinguisher(), -44, 0, -2.4);
   add(world, makeFireExtinguisher(), 20, 0, -2.4);
   // banners
-  const banner1 = makeLabel('MILLBROOK HIGH  ·  HOME OF THE FIGHTING FERNS', { color: '#d8cfb2', bg: 'rgba(32,44,32,.9)', size: 1000, h: 96, font: 'bold 30px Courier New' });
+  const banner1 = makeLabelPlane('MILLBROOK HIGH  ·  HOME OF THE FIGHTING FERNS', { color: '#d8cfb2', bg: 'rgba(32,44,32,.9)', size: 1000, h: 96, font: 'bold 30px Courier New' });
   banner1.scale.set(8.2, 0.74, 1); add(world, banner1, -20, 2.95, -2.8);
-  const banner2 = makeLabel('SENIOR PRANK 2026: WE\'RE STILL HERE', { color: '#c9d8c9', bg: 'rgba(26,34,28,.88)', size: 900, h: 88, font: 'bold 28px Courier New' });
+  const banner2 = makeLabelPlane('SENIOR PRANK 2026: WE\'RE STILL HERE', { color: '#c9d8c9', bg: 'rgba(26,34,28,.88)', size: 900, h: 88, font: 'bold 28px Courier New' });
   banner2.scale.set(7.4, 0.68, 1); add(world, banner2, 20, 2.95, 2.8, Math.PI);
   // clocks
   const clock = wallClock(world, 0, 2.6, -2.8, 0); world.clockHands = clock.userData.hands;
   // exit signs at ends
   for (const [x, z, ry] of [[-51.55, -2.80, 0], [51.55, -2.80, 0], [-51.55, 2.80, Math.PI], [51.55, 2.80, Math.PI]]) {
-    const sign = makeLabel('EXIT', { color: '#a9ffbe', bg: 'rgba(5,30,16,.92)', size: 256, h: 90, font: 'bold 56px Arial Black' });
+    const sign = makeLabelPlane('EXIT', { color: '#a9ffbe', bg: 'rgba(5,30,16,.92)', size: 256, h: 90, font: 'bold 56px Arial Black' });
     sign.scale.set(1.5, 0.5, 1); add(world, sign, x, 3.0, z, ry);
   }
   // central passage decor
@@ -904,8 +904,8 @@ export function decorateCorridor(world) {
   world.scene.add(dust);
   world.dust = dust;
   // scattered papers
-  paperScatter(world, 0, 0, 14, 30);
-  paperScatter(world, 0, -27, 10, 25);
+  paperScatter(world, 0, 0, 14, 96, 4.6);
+  paperScatter(world, 0, -27, 10, 96, 4.6);
   // fire alarm pulls
   fireAlarm(world, -3.2, 1.5, -2.85, 0);
   fireAlarm(world, 30, 1.5, 2.85, Math.PI);
@@ -918,7 +918,7 @@ export function decorateCorridor(world) {
     pile.add(b);
   }
   add(world, pile, 0, 0, 0);
-  const lost = makeLabel('LOST & FOUND', { color: '#d8cfb2', bg: 'rgba(20,24,20,.9)', size: 512, h: 80, font: 'bold 32px Courier New' });
+  const lost = makeLabelPlane('LOST & FOUND', { color: '#d8cfb2', bg: 'rgba(20,24,20,.9)', size: 512, h: 80, font: 'bold 32px Courier New' });
   lost.scale.set(1.8, 0.28, 1); add(world, lost, -13.6, 1.15, 2.7, Math.PI);
 }
 
@@ -949,7 +949,7 @@ export function decorateOutdoor(world) {
   stop.position.set(84, 0, 9.6);
   world.addCollider(82.5, 9.0, 85.5, 10.2, { type: 'prop' });
   // street sign
-  const sign = makeLabel('MILLBROOK  ·  POP. 1,203 (AND FALLING)', { color: '#cfe0d0', bg: 'rgba(10,16,12,.9)', size: 700, h: 100, font: 'bold 34px Courier New' });
+  const sign = makeLabelPlane('MILLBROOK  ·  POP. 1,203 (AND FALLING)', { color: '#cfe0d0', bg: 'rgba(10,16,12,.9)', size: 700, h: 100, font: 'bold 34px Courier New' });
   sign.scale.set(3.2, 0.45, 1); sign.position.set(80, 3.6, 10.4); world.scene.add(sign);
   // police tape near entrance
   for (let i = 0; i < 2; i++) {
@@ -957,7 +957,7 @@ export function decorateOutdoor(world) {
     tape.rotation.y = 0.4 + i * 0.2;
     world.scene.add(tape);
   }
-  const tapeLabel = makeLabel('DO NOT CROSS  ·  ACTUALLY PLEASE CROSS  ·  HELP', { color: '#171b16', bg: 'rgba(216,196,58,.95)', size: 1000, h: 90, font: 'bold 34px Courier New' });
+  const tapeLabel = makeLabelPlane('DO NOT CROSS  ·  ACTUALLY PLEASE CROSS  ·  HELP', { color: '#171b16', bg: 'rgba(216,196,58,.95)', size: 1000, h: 90, font: 'bold 34px Courier New' });
   tapeLabel.scale.set(3.8, 0.36, 1); tapeLabel.position.set(61, 1.35, 0); tapeLabel.rotation.y = 0.4; world.scene.add(tapeLabel);
   // stars? keep sky simple
 }

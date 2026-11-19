@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { T } from './textures.js';
 import {
-  box, cyl, sphere, makeLabel, makeSignPlane, makePerson, makeKillerModel,
+  box, cyl, sphere, makeLabel, makeLabelPlane, makeSignPlane, makePerson, makeKillerModel,
   makeLockerBank, makeDesk, makeChair, makeBookshelf, makeTable, makeBench,
   makeVending, makeStall, makeTrash, makeCone, makeBoiler, makeBreaker,
   makeComputerDesk, makeClock, makeSinkCounter, makeMirror, makeCar,
@@ -138,9 +138,12 @@ class Door {
     if (this.side === 'south') this.plate.rotation.y = Math.PI;
     this.group.add(this.plate);
 
-    this.nameSprite = makeLabel(room.short, { color: '#b6c8bb', bg: 'rgba(4,8,6,.55)', size: 512, h: 90, font: 'bold 30px Courier New' });
+    // A flat plate rather than a camera-facing sprite, centred over the
+    // door. The old sprite sat at the hinge end and drifted across the wall.
+    this.nameSprite = makeLabelPlane(room.short, { color: '#b6c8bb', bg: 'rgba(4,8,6,.55)', size: 512, h: 90, font: 'bold 30px Courier New' });
     this.nameSprite.scale.set(2.1, 0.37, 1);
-    this.nameSprite.position.set(room.door[0] - this.hingeX + 0.2, 2.62, this.side === 'south' ? -0.14 : 0.14);
+    this.nameSprite.position.set(this.width / 2, 2.62, this.side === 'south' ? -0.14 : 0.14);
+    if (this.side === 'south') this.nameSprite.rotation.y = Math.PI;
     this.group.add(this.nameSprite);
     world.scene.add(this.group);
     if (Math.random() < 0.45) this.setOpen(true, false);

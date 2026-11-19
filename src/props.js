@@ -53,7 +53,7 @@ function shade(hex, f) {
 // ─────────────────────────────────────────────────────────────
 // labels, signs, glow
 // ─────────────────────────────────────────────────────────────
-export function makeLabel(text, opts = {}) {
+function labelTexture(text, opts) {
   const { color = '#8dffb2', bg = 'rgba(4,10,7,.85)', size = 512, h = 96, font = 'bold 44px Courier New' } = opts;
   const c = document.createElement('canvas');
   c.width = size; c.height = h;
@@ -64,10 +64,26 @@ export function makeLabel(text, opts = {}) {
   g.fillText(text, size / 2, h / 2 + 2);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export function makeLabel(text, opts = {}) {
+  const tex = labelTexture(text, opts);
   const m = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
   const sprite = new THREE.Sprite(m);
-  sprite.scale.set(size / h * 0.5, 0.5, 1);
+  sprite.scale.set((opts.size || 512) / (opts.h || 96) * 0.5, 0.5, 1);
   return sprite;
+}
+
+// A wall-mounted version of makeLabel. Sprites always turn to face the
+// camera, which makes long hallway banners look like they float in the
+// middle of the corridor. Wall signs need to stay stuck to their wall.
+export function makeLabelPlane(text, opts = {}) {
+  const tex = labelTexture(text, opts);
+  const m = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), m);
+  mesh.scale.set((opts.size || 512) / (opts.h || 96) * 0.5, 0.5, 1);
+  return mesh;
 }
 
 export function makeSignPlane(text, w = 0.55, h = 0.45, color = '#ff5566') {
@@ -766,15 +782,21 @@ export function makeLockerBank(count = 3, startNum = 1) {
   const g = new THREE.Group();
   const frameMat = M(0x384d55, 0.55, 0.45);
   const w = 0.58;
+  const half = (count * w) / 2;
   for (let i = 0; i < count; i++) {
+    // Build around the group origin so the bank sits exactly where the
+    // decor code places it. It used to run from x=0 to x=count*w.
+    const x = i * w + w / 2 - half;
     const doorMat = mat('lockDoor' + ((startNum + i) % 8), { map: T.locker((startNum + i) % 8), roughness: 0.5, metalness: 0.45 });
-    const door = box(w - 0.035, 1.56, 0.055, doorMat, i * w + w / 2, 1.02, 0.04);
+    const door = box(w - 0.035, 1.56, 0.055, doorMat, x, 1.02, 0.04);
     g.add(door);
-    g.add(box(w, 1.64, 0.04, frameMat, i * w + w / 2, 1.02, -0.02));
-    g.add(box(w - 0.04, 0.05, 0.06, frameMat, i * w + w / 2, 1.82, 0.04));
-    g.add(box(w - 0.04, 0.06, 0.06, frameMat, i * w + w / 2, 0.22, 0.04));
+    g.add(box(w, 1.64, 0.04, frameMat, x, 1.02, -0.02));
+    g.add(box(w - 0.04, 0.05, 0.06, frameMat, x, 1.82, 0.04));
+    g.add(box(w - 0.04, 0.06, 0.06, frameMat, x, 0.22, 0.04));
   }
-  g.add(box(count * w + 0.08, 0.1, 0.6, M(0x2b3a40, 0.7), count * w / 2 - w / 2, 1.88, 0));
+  g.add(box(count * w + 0.08, 0.1, 0.6, M(0x2b3a40, 0.7), 0, 1.88, 0));
+  // plinth: the doors start at 0.2 m, so without this the bank floats
+  g.add(box(count * w + 0.08, 0.2, 0.56, M(0x2a3236, 0.8), 0, 0.1, 0));
   return g;
 }
 
