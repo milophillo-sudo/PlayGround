@@ -44,9 +44,6 @@ export class AudioEngine {
       buffer = await this.ctx.decodeAudioData(data.buffer);
       this.cache.set(url, buffer);
     }
-    this.buffer = buffer;
-    this.duration = buffer.duration;
-    this.loaded = true;
     if (!this.gain) {
       this.gain = this.ctx.createGain();
       this.gain.gain.value = 0.92;
@@ -59,6 +56,16 @@ export class AudioEngine {
     }
     onProgress?.(1);
     return buffer;
+  }
+
+  // Decoding is async, so the caller decides when a decoded buffer becomes the
+  // live transport. That keeps a slow load from a track the player already
+  // abandoned from overwriting the one they are waiting on.
+  setBuffer(buffer) {
+    if (!buffer) return;
+    this.buffer = buffer;
+    this.duration = buffer.duration;
+    this.loaded = true;
   }
 
   async start(at = 0, options = {}) {

@@ -3,11 +3,17 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { createIntentionStage } from './intention-stage.js';
 
 const LANE_COLORS = [
   '#4ff2ff', '#43d8ff', '#6aa8ff', '#9a86ff',
   '#c477ff', '#ff79dc', '#ff7fb5', '#ffb06e',
 ];
+
+// INTENTION strips the field back to plain white circles on black. The stage
+// carries all of the colour, so the lane language stays absolutely readable.
+const INTENTION_LANE_COLORS = Array.from({ length: 8 }, () => '#ffffff');
+
 
 // The boss field trades the neon palette for candlelight: mirror-symmetric
 // crimson edges, gold inner lanes, and bone-white centres.
@@ -1221,6 +1227,12 @@ export function createScene(canvasEl) {
     windStreams.push({ lane: i, ribbons, glows, power: 0, seed: i * 2.399963 });
   }
 
+  // INTENTION lives in a different world; building it once and fading it in
+  // per track keeps the menu and the cathedral completely unaffected.
+  const intention = createIntentionStage({
+    scene, camera, lanes, stage, TEX,
+  });
+
   // ------------------------------------------------------------ clock
   // CHRONOSTASIS' signature background event. The two lanes that sit outside
   // the playable 4/6-lane field become the clock's hands: lane 0 is the slow
@@ -1551,7 +1563,9 @@ export function createScene(canvasEl) {
 
   // ------------------------------------------------------------ notes
   function makeNote(lane, type, free = false) {
-    const palette = boss.active ? BOSS_LANE_COLORS : LANE_COLORS;
+    const palette = boss.active
+      ? (boss.theme === 'intention' ? INTENTION_LANE_COLORS : BOSS_LANE_COLORS)
+      : LANE_COLORS;
     const color = new THREE.Color(palette[lane]);
     const group = new THREE.Group();
     group.renderOrder = 5;
@@ -1739,8 +1753,9 @@ export function createScene(canvasEl) {
 
   // ------------------------------------------------------------ boss stage
   const boss = {
-    active: false, mode: 'off', intro: false,
-    fieldFade: 1, fieldTarget: 1,
+    active: false, mode: 'off', intro: false, theme: 'untouchable',
+    fieldFade: 1, fieldTarget: 1, fieldHidden: false,
+    intentFocus: 0, intentFocusTarget: 0,
     churchFade: 0, churchTarget: 0,
     clockFade: 0, clockTarget: 0,
     windBoost: 0, glitch: 0,
@@ -1757,34 +1772,71 @@ export function createScene(canvasEl) {
   };
 
   function applyBossPalette(on) {
-    const palette = on ? BOSS_LANE_COLORS : LANE_COLORS;
+    const palette = on
+      ? (boss.theme === 'intention' ? INTENTION_LANE_COLORS : BOSS_LANE_COLORS)
+      : LANE_COLORS;
     boss.palette = on ? 'boss' : 'normal';
     const secColor = state.section?.color;
     for (let i = 0; i < 8; i++) {
       lanes[i].color.set(palette[i]);
       lanes[i].targetColor.copy(lanes[i].color);
-      if (secColor) lanes[i].targetColor.lerp(new THREE.Color(secColor), 0.24);
+      // INTENTION keeps its lanes pure white; the cathedral still tints its
+      // field with the current section colour.
+      if (secColor && boss.theme !== 'intention') {
+        lanes[i].targetColor.lerp(new THREE.Color(secColor), 0.24);
+      }
     }
   }
 
-  function setBoss(mode = 'off') {
+  function setBoss(mode = 'off', theme = boss.theme) {
     const next = mode || 'off';
+    const nextTheme = theme === 'intention' ? 'intention' : 'untouchable';
+    const themeChanged = boss.theme !== nextTheme;
+    boss.theme = nextTheme;
+    const isIntent = nextTheme === 'intention';
     boss.mode = next;
     boss.active = next !== 'off';
     boss.intro = next === 'intro' || next === 'preview';
     boss.fieldTarget = next === 'play' || next === 'outro' ? 1 : 0;
-    boss.churchTarget = next === 'off' ? 0 : next === 'intro' ? 1 : next === 'preview' ? 0.66 : 0.46;
-    boss.clockTarget = next === 'off' ? 0 : next === 'intro' ? 1 : 0.94;
+    if (theme === 'intention' && next === 'intro') boss.fieldTarget = 1;
+    if (isIntent) {
+      boss.churchTarget = 0;
+      boss.clockTarget = 0;
+      if (themeChanged) {
+        boss.churchFade = 0;
+        boss.clockFade = 0;
+        church.visible = false;
+        bossClockGroup.visible = false;
+      }
+      intention.setActive(boss.active);
+      if (next === 'preview') intention.setPhase('preview');
+      else if (next === 'intro') intention.setPhase('void');
+      else if (next === 'play' && boss.intro) intention.setPhase('ocean');
+      else if (next === 'outro') intention.setPhase('dawn');
+    } else {
+      boss.churchTarget = next === 'off' ? 0 : next === 'intro' ? 1 : next === 'preview' ? 0.66 : 0.46;
+      boss.clockTarget = next === 'off' ? 0 : next === 'intro' ? 1 : 0.94;
+      if (themeChanged || next === 'off') intention.setActive(false);
+    }
     if (next === 'off' || next === 'preview') boss.cameraLock = false;
+    if (next === 'off' || next === 'preview' || next === 'intro') {
+      boss.intentFocus = 0;
+      boss.intentFocusTarget = 0;
+    }
     if (next === 'intro') {
-      // Start the cinematic from a wide nave shot; the chart's first camera
-      // event takes over on the opening downbeat.
+      // Start the cinematic from a wide shot; the chart's first camera event
+      // takes over on the opening downbeat.
       boss.cameraLock = true;
-      bossCam.pos.set(0, 12, 34);
-      bossCam.look.set(0, 14, -60);
+      if (isIntent) {
+        bossCam.pos.set(0, 10, 34);
+        bossCam.look.set(0, 11, -70);
+      } else {
+        bossCam.pos.set(0, 12, 34);
+        bossCam.look.set(0, 14, -60);
+      }
       bossCam.targetPos.copy(bossCam.pos);
       bossCam.targetLook.copy(bossCam.look);
-      bossCam.fov = bossCam.targetFov = 54;
+      bossCam.fov = bossCam.targetFov = isIntent ? 52 : 54;
       bossCam.roll = bossCam.targetRoll = 0;
       boss.slowAngle = 0;
       boss.fastAngle = 0;
@@ -1793,14 +1845,34 @@ export function createScene(canvasEl) {
       boss.handKick = 0;
       boss.hubKick = 0;
     }
-    if (next === 'off') {
+    if (next === 'off' || next === 'preview') {
+      // The menu returns to the normal lens: the gameplay framing guard may
+      // have widened the camera during the boss stage.
       bossCam.fov = bossCam.targetFov = state.portrait ? 52 : 46;
       bossCam.roll = bossCam.targetRoll = 0;
       bossCam.lock = false;
       camera.fov = bossCam.fov;
       camera.updateProjectionMatrix();
     }
+    if (!isIntent) {
+      boss.fieldHidden = false;
+      noteRoot.visible = true;
+    }
     applyBossPalette(boss.active);
+  }
+
+  // INTENTION's dawn is note-less. The lane field stays visible so the ocean
+  // and the rainbow sync bar own the frame; only the note layer is switched off.
+  function setIntentNoteLayerHidden(on) {
+    noteRoot.visible = !on;
+  }
+
+  // INTENTION's overture and dawn are lane-less. The flag is folded into the
+  // field visibility test below so the regular lane fades still own the rest
+  // of the game.
+  function setIntentFieldHidden(on) {
+    boss.fieldHidden = !!on;
+    noteRoot.visible = !on;
   }
 
   function bossCameraEvent(pos, look, fov = 49, roll = 0, dur = 0.8) {
@@ -1910,6 +1982,7 @@ export function createScene(canvasEl) {
     boss.windBoost = Math.min(2.4, boss.windBoost + power * 0.7);
     state.shake = Math.min(0.24, state.shake + power * 0.035);
     state.zoomKick = Math.min(1.5, state.zoomKick + power * 0.3);
+    if (boss.theme === 'intention') intention.glitch(power);
   }
 
   function windFx(power = 1) {
@@ -1925,6 +1998,7 @@ export function createScene(canvasEl) {
   function bossTick(hand = 'fast', power = 1) {
     boss.handKick = Math.max(boss.handKick, 0.35 + power * 0.55);
     boss.hubKick = Math.max(boss.hubKick, 0.25 + power * 0.4);
+    if (boss.theme === 'intention') intention.beat(power);
     if (power > 0.9 && boss.clockFade > 0.3) {
       const pos = bossClockGroup.localToWorld(new THREE.Vector3(0, 0, 0.8));
       spawnShock(pos, hand === 'slow' ? 0xffd166 : 0xff4d6d, 1.1 + power * 0.4);
@@ -1934,9 +2008,16 @@ export function createScene(canvasEl) {
   function updateWind(dt, t) {
     const gust = 1 + boss.windBoost * 0.85;
     for (const stream of windStreams) {
-      const wanted = boss.active
-        ? boss.intro ? 1 : state.active.has(stream.lane) ? 0 : 0.95
-        : 0;
+      let wanted;
+      if (!boss.active) wanted = 0;
+      else if (boss.theme === 'intention') {
+        // INTENTION's stage carries its own motes, flowers and memory wisps.
+        // The cathedral's rotated wind ribbons read as glass panes against the
+        // ocean, so the separate world never borrows them.
+        wanted = 0;
+      } else {
+        wanted = boss.intro ? 1 : state.active.has(stream.lane) ? 0 : 0.95;
+      }
       stream.power += (wanted - stream.power) * (1 - Math.exp(-dt * 2.1));
       const power = stream.power;
       const visible = power > 0.012;
@@ -1958,6 +2039,7 @@ export function createScene(canvasEl) {
         const ribbon = stream.ribbons[k];
         ribbon.visible = visible;
         if (!visible) continue;
+        if (boss.theme === 'intention') ribbon.material.color.setRGB(0.92, 0.96, 1);
         const phase = t * 1.15 * gust + stream.seed + k * 1.71;
         const cycle = ((t * 1.05 * gust + k * 1.9 + stream.seed * 0.8) % 13 + 13) % 13;
         const y = -1.4 + cycle;
@@ -2000,6 +2082,17 @@ export function createScene(canvasEl) {
     boss.glitch *= Math.exp(-dt * 6.2);
     boss.handKick *= Math.exp(-dt * 3.3);
     boss.hubKick *= Math.exp(-dt * 2.8);
+
+    if (boss.active && boss.theme === 'intention') {
+      // INTENTION owns the whole background: the neon skyline, the nave and
+      // the clock are all hidden while its ocean/void set is on screen.
+      for (const obj of [neb1, neb2, neb3, grid, ...bgRings, ...shards]) obj.visible = false;
+      church.visible = false;
+      bossClockGroup.visible = false;
+      intention.update(dt, t);
+      updateWind(dt, t);
+      return;
+    }
 
     // The neon skyline dressing belongs to the other tracks. In the nave only
     // the cathedral and the distant stars remain.
@@ -2057,11 +2150,15 @@ export function createScene(canvasEl) {
   function frameFor(keys) {
     const aspect = innerWidth / Math.max(1, innerHeight);
     if (state.portrait) {
+      if (keys <= 1) return { spacing: 2.3, ring: 2.35 };
+      if (keys <= 2) return { spacing: 2.0, ring: 2.05 };
       if (keys <= 4) return { spacing: 1.72, ring: 1.62 };
       if (keys <= 6) return { spacing: 1.3, ring: 1.24 };
       return { spacing: 1.02, ring: 1.04 };
     }
     const wide = aspect > 1.9 ? 1.08 : 1;
+    if (keys <= 1) return { spacing: 4.2 * wide, ring: 3.15 * wide };
+    if (keys <= 2) return { spacing: 3.8 * wide, ring: 2.85 * wide };
     if (keys <= 4) return { spacing: 3.15 * wide, ring: 2.35 * wide };
     if (keys <= 6) return { spacing: 2.16 * wide, ring: 1.95 * wide };
     return { spacing: 1.75 * wide, ring: 1.65 * wide };
@@ -2114,6 +2211,7 @@ export function createScene(canvasEl) {
     renderer.setSize(w, h);
     composer.setSize(w, h);
     bloom.resolution.set(w / 2, h / 2);
+    intention.layout(state.portrait);
   }
   addEventListener('resize', layout);
   layout();
@@ -2140,7 +2238,9 @@ export function createScene(canvasEl) {
     state.target.camZ = sec.camZ + (state.portrait ? 6.4 : 0);
     state.target.camY = sec.camY;
     state.target.bloom = boss.active
-      ? (boss.intro ? Math.min(0.38, sec.bloom * 0.45) : Math.min(0.28, sec.bloom * 0.3))
+      ? (boss.theme === 'intention'
+        ? (boss.intro ? 0.42 : 0.56)
+        : (boss.intro ? Math.min(0.38, sec.bloom * 0.45) : Math.min(0.28, sec.bloom * 0.3)))
       : sec.bloom * 0.82;
     state.target.spin = sec.spin;
     state.targetMotion = {
@@ -2153,7 +2253,9 @@ export function createScene(canvasEl) {
     // the zoom kick keeps the section change feeling like a camera move,
     // never a hard cut, while the lane spacing eases into its new width
     if (changed) state.zoomKick = Math.min(1.4, state.zoomKick + 0.85);
-    const sets = { 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7] };
+    const sets = {
+      1: [3], 2: [2, 4], 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7],
+    };
     state.active = new Set(sets[sec.keys] || sets[8]);
     state.live = new Set(state.active);
     for (let i = 0; i < 8; i++) {
@@ -2161,6 +2263,7 @@ export function createScene(canvasEl) {
       lanes[i].active = live ? 1 : 0;
       if (!live) lanes[i].ghostFx = null;
       lanes[i].targetColor.copy(lanes[i].color).lerp(new THREE.Color(sec.color), 0.24);
+      if (boss.theme === 'intention') lanes[i].targetColor.copy(lanes[i].color);
       if (live) lanes[i].flash = Math.max(lanes[i].flash, 0.22);
     }
     // The clock hands inherit the current colors of the two unused outer
@@ -2357,6 +2460,7 @@ export function createScene(canvasEl) {
   function pulseFx(power = 1) {
     state.energyPulse = Math.min(1.5, state.energyPulse + 0.35 * power);
     state.shake = Math.min(0.18, state.shake + 0.008 * power);
+    if (boss.active && boss.theme === 'intention') intention.beat(power * 0.85);
   }
 
   function burstFx(lane, power = 1) {
@@ -2398,6 +2502,14 @@ export function createScene(canvasEl) {
     const pos = worldPoint(lane, 0.05);
     spawnBurst(pos, l.color, quality === 'perfect' ? 22 : 14, 3.5);
     spawnShock(pos, l.color.getHex(), 3.0);
+    // In INTENTION's libra/halo shots the lens leans toward the lane that just
+    // answered, then drifts back to the centre of the four pillars.
+    if (boss.active && boss.theme === 'intention') {
+      const p = intention.level.phase;
+      if (p === 'field' || p === 'pillars' || p === 'halo') {
+        boss.intentFocusTarget = (lane - 3.5) * 0.2;
+      }
+    }
   }
   function missFx(lane) {
     state.shake = Math.min(0.25, state.shake + 0.13);
@@ -2450,7 +2562,11 @@ export function createScene(canvasEl) {
     bloom.strength += clickPulse * (boss.active ? 0.1 : 0.32);
     // The boss chart fires many more accents than the lane tracks. Cap the
     // additive bloom so the cathedral stays readable instead of clipping.
-    if (boss.active) bloom.strength = Math.min(bloom.strength, boss.intro ? 0.5 : 0.38);
+    if (boss.active) {
+      bloom.strength = Math.min(bloom.strength, boss.theme === 'intention'
+        ? (boss.intro ? 0.56 : 0.72)
+        : (boss.intro ? 0.5 : 0.38));
+    }
     updateBoss(dt, t);
 
     // stage motion
@@ -2464,7 +2580,15 @@ export function createScene(canvasEl) {
     // lane positions respond to spread and to the active lane count
     for (let i = 0; i < 8; i++) {
       const l = lanes[i];
-      const x = (i - 3.5) * v.spacing * v.spread;
+      let x = (i - 3.5) * v.spacing * v.spread;
+      // The 1-lane and 2-lane gimmick sections are centred as a group: lane 3
+      // becomes the single centre line, and lanes 2/4 straddle the middle.
+      if (state.keyCount === 1) {
+        x = i === 3 ? 0 : (i < 3 ? -1 : 1) * v.spacing * 4;
+      } else if (state.keyCount === 2) {
+        if (i === 2) x = -v.spacing * 0.78;
+        else if (i === 4) x = v.spacing * 0.78;
+      }
       l.baseX = x;
       l.group.position.x = x;
       l.group.position.z = ARC * x * x;
@@ -2551,7 +2675,7 @@ export function createScene(canvasEl) {
       l.line.material.color.copy(l.targetColor).lerp(white, 0.14 + l.flash * 0.32);
       l.beam.material.color.copy(l.targetColor);
     }
-    const showField = !boss.active || boss.fieldFade > 0.03;
+    const showField = (!boss.active || boss.fieldFade > 0.03) && !boss.fieldHidden;
     laneRoot.visible = showField;
     hitLine.visible = showField;
     updateLaneScreen();
@@ -2574,13 +2698,24 @@ export function createScene(canvasEl) {
       bc.look.lerp(bc.targetLook, rate);
       bc.fov += (bc.targetFov - bc.fov) * rate;
       bc.roll += (bc.targetRoll - bc.roll) * rate;
+      // A hit in the four-pillar / halo shots nudges the lens toward that
+      // cardinal lane, then the focus relaxes back to the libra.
+      boss.intentFocusTarget *= Math.exp(-dt * 0.8);
+      const focusPhase = boss.theme === 'intention' && !boss.intro
+        && (intention.level.phase === 'field' || intention.level.phase === 'pillars'
+          || intention.level.phase === 'halo');
+      const focusWant = focusPhase ? boss.intentFocusTarget : 0;
+      boss.intentFocus += (focusWant - boss.intentFocus) * (1 - Math.exp(-dt * 4.6));
       camera.position.copy(bc.pos);
+      camera.position.x += boss.intentFocus;
       camera.fov = bc.fov;
       camera.updateProjectionMatrix();
-      camera.lookAt(bc.look);
+      camera.lookAt(bc.look.x + boss.intentFocus * 0.82, bc.look.y, bc.look.z);
       // Gameplay shots are re-framed so the hit rings never fall off the
-      // bottom; the overture keeps its pure cinematic framing.
-      if (!boss.intro) bossPlayFraming(bc.roll);
+      // bottom; the overture keeps its pure cinematic framing. INTENTION's
+      // camera is authored around the ring row already, including its
+      // top-down and libra-glide shots, so it is left uncorrected.
+      if (!boss.intro && boss.theme !== 'intention') bossPlayFraming(bc.roll);
       camera.rotation.z += bc.roll;
       if (boss.glitch > 0.01) {
         camera.position.x += (Math.random() - .5) * boss.glitch * 0.24;
@@ -2758,11 +2893,15 @@ export function createScene(canvasEl) {
 
   return {
     scene, camera, stage, noteRoot, state, clock, boss, bloom, laneRoot, windRoot, church,
+    intention,
     makeNote, setSection, animate, render, laneX, laneZ, worldPoint,
     laneScreenXs, laneScreenPoints, laneScreenGeometry, laneScreenAngle,
     setPreviewLanes, setCity, setTempo,
     setClock, clockTick, clockReset,
     setBoss, bossCameraEvent, bossGlitch, bossTick, windFx, freeNotePose,
+    setIntentionPhase: (phase) => intention.setPhase(phase),
+    intentionPulse: (power) => intention.beat(power),
+    setIntentFieldHidden, setIntentNoteLayerHidden,
     startPendulum, stopPendulum, swingResolve, swingWhiff, pendulumReset, pendulumTargetScreen,
     pendulum,
     pressFx, hitFx, missFx, ghostFx, echoFx, pulseFx, burstFx, vibeFx, motionEvent,

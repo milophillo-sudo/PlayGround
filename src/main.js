@@ -34,7 +34,7 @@ const dom = {
   cPerfect: $('cPerfect'), cGreat: $('cGreat'), cGood: $('cGood'), cBad: $('cBad'),
   cMiss: $('cMiss'), fMaxCombo: $('fMaxCombo'), fcBadge: $('fcBadge'), resultTag: $('resultTag'),
   bestScoreLabel: $('bestScoreLabel'), bestBadge: $('bestBadge'), bestNote: $('bestNote'),
-  bestLine: $('bestLine'), hudTrack: $('hudTrack'), hudBpm: $('hudBpm'),
+  bestLine: $('bestLine'), hudTrack: $('hudTrack'), hudBpm: $('hudBpm'), clearCount: $('clearCount'),
   resultTrack: $('resultTrack'), resultDiff: $('resultDiff'), resultBpm: $('resultBpm'),
   footTrack: $('footTrack'), footLanes: $('footLanes'),
   barPerfect: $('barPerfect'), barGreat: $('barGreat'), barGood: $('barGood'),
@@ -44,6 +44,11 @@ const dom = {
   loadProgress: $('loadProgress'), loadPct: $('loadPct'), loadRank: $('loadRank'),
   flash: $('flash'), bossGlitch: $('bossGlitch'), bossCaption: $('bossCaption'),
   bcKicker: $('bcKicker'), bcTitle: $('bcTitle'), bcSub: $('bcSub'),
+  guilt: $('guiltHud'), guiltFill: $('guiltFill'), guiltPct: $('guiltPct'),
+  guiltCopy: $('guiltCopy'), heartbeat: $('heartbeat'),
+  intentText: $('intentGlitchText'), intentTextSub: $('intentGlitchSub'),
+  yellow: $('yellowVignette'), rainbow: $('rainbowWash'), whiteout: $('whiteout'),
+  syncEl: document.querySelector('.sync'),
 };
 
 // ---------------------------------------------------------------- state
@@ -68,6 +73,27 @@ let vibeTimer = 0;
 let bossIntro = false;
 let captionTimer = 0;
 let glitchTimer = 0;
+let intentTextTimer = 0;
+
+// INTENTION's HUD is event-driven: the chart raises the guilt bar, the
+// heartbeat, the whiteouts and the dawn filters, and this state keeps them in
+// sync with the song. The guilt meter only exists for that one track.
+const intent = {
+  phase: 'off',
+  guiltOn: false,
+  guilt: 100,
+  fakeGuilt: false,
+  fakeValue: 14,
+  fakeBase: 14,
+  fakeStart: 0,
+  heartOn: false,
+  heartBpm: 150,
+  hbAcc: 0,
+  screenGlitch: false,
+  glitchAcc: 0,
+  forceSync: false,
+  notesHidden: false,
+};
 
 const stats = {
   score: 0, combo: 0, maxCombo: 0, judged: 0, weight: 0,
@@ -95,11 +121,26 @@ function readBestMap() {
     const raw = localStorage.getItem(BEST_KEY);
     if (raw) Object.assign(map, JSON.parse(raw) || {});
   } catch { /* ignore */ }
+  // A run that never scored is not a personal best. Older builds could store
+  // one from a seek/skip, so prune those entries when loading.
+  for (const [id, best] of Object.entries(map)) {
+    if (!best || typeof best !== 'object' || !(Number(best.score) > 0)) {
+      delete map[id];
+      continue;
+    }
+    best.score = Math.round(Number(best.score));
+    best.acc = Number.isFinite(best.acc) ? best.acc : 0;
+    best.maxCombo = Number.isFinite(best.maxCombo) ? best.maxCombo : 0;
+  }
   return map;
 }
 
 let bestMap = readBestMap();
 let personalBest = bestMap[selectedTrack.id] || null;
+
+function isCleared(best) {
+  return !!best && (best.acc || 0) >= 50;
+}
 
 function renderBest() {
   personalBest = bestMap[selectedTrack.id] || null;
@@ -115,6 +156,12 @@ function renderBest() {
       tag.textContent = best ? `PB ${best.rank || '—'}` : '';
       tag.title = best ? `Personal best ${best.score} · ${(best.acc || 0).toFixed(2)}%` : '';
     }
+    card.classList.toggle('cleared', isCleared(best));
+  }
+  if (dom.clearCount) {
+    const cleared = TRACKS.filter((t) => isCleared(bestMap[t.id])).length;
+    dom.clearCount.textContent = `${cleared} / ${TRACKS.length} CLEARED`;
+    dom.clearCount.classList.toggle('all', cleared === TRACKS.length);
   }
 }
 
@@ -122,7 +169,7 @@ function renderBest() {
 scene.setSection(chart.sections[0]);
 scene.setTempo(chart.song.bpm, chart.song.beatOffset);
 scene.setCity(chart.sections[0].city || 0);
-scene.setBoss(selectedTrack.boss ? 'preview' : 'off');
+scene.setBoss(selectedTrack.boss ? 'preview' : 'off', selectedTrack.theme || 'untouchable');
 
 function clearNoteObjects() {
   for (const n of noteObjects) {
@@ -185,6 +232,7 @@ function resetGame() {
   scene.clockReset();
   endPendulum();
   scene.pendulumReset();
+  resetIntentHud();
   for (const n of swingNotes) n.state = 'pending';
   sectionIndex = 0;
   currentSection = null;
@@ -232,7 +280,7 @@ function updateHUD(t) {
   dom.progressGlow.style.left = (p * 100).toFixed(2) + '%';
   const secs = Math.max(0, Math.min(trackDuration, t));
   dom.time.textContent = `${fmtTime(secs)} / ${fmtTime(trackDuration)}`;
-  dom.energy.style.height = Math.max(0, Math.min(100, stats.health)).toFixed(1) + '%';
+  dom.energy.style.height = (intent.forceSync ? 100 : Math.max(0, Math.min(100, stats.health))).toFixed(1) + '%';
 }
 
 function showJudge(kind, text) {
@@ -309,11 +357,230 @@ function glitchScreen(power = 1) {
   glitchTimer = setTimeout(() => dom.bossGlitch.classList.remove('on'), 340);
 }
 
+// ---------------------------------------------------------------- intention HUD
+function paintGuilt() {
+  const value = Math.max(0, Math.min(100, intent.fakeGuilt ? intent.fakeValue : intent.guilt));
+  if (dom.guiltFill) dom.guiltFill.style.width = value.toFixed(1) + '%';
+  if (dom.guiltPct) dom.guiltPct.textContent = String(Math.round(value));
+}
+
+function setIntentNotesHidden(on) {
+  if (intent.notesHidden === on) return;
+  intent.notesHidden = on;
+  scene.setIntentNoteLayerHidden(on);
+}
+
+function showIntentText(text, sub = '', hold = 3.2) {
+  if (!dom.intentText) return;
+  clearTimeout(intentTextTimer);
+  const span = dom.intentText.querySelector('span');
+  if (span) {
+    span.textContent = text || 'INTENTIONS';
+    span.setAttribute('data-text', text || 'INTENTIONS');
+  }
+  if (dom.intentTextSub) dom.intentTextSub.textContent = sub || '';
+  dom.intentText.classList.remove('on');
+  void dom.intentText.offsetWidth;
+  dom.intentText.classList.add('on');
+  if (hold > 0) {
+    intentTextTimer = setTimeout(() => dom.intentText.classList.remove('on'), hold * 1000);
+  }
+}
+
+function clearIntentClasses() {
+  for (const cls of ['guilt-on', 'guilt-fake', 'heartbeat-on', 'static-on', 'static-heavy',
+    'distort-on', 'bright-on', 'intent-whiteout', 'intent-black', 'intent-yellow', 'intent-glitch']) {
+    document.body.classList.remove(cls);
+  }
+  dom.heartbeat?.classList.remove('on', 'beat');
+  dom.intentText?.classList.remove('on');
+  dom.whiteout?.classList.remove('on');
+  dom.yellow?.classList.remove('on');
+  dom.rainbow?.classList.remove('on');
+  dom.syncEl?.classList.remove('rainbow');
+}
+
+function resetIntentHud() {
+  clearTimeout(intentTextTimer);
+  clearIntentClasses();
+  intent.phase = 'off';
+  intent.guiltOn = false;
+  intent.guilt = 100;
+  intent.fakeGuilt = false;
+  intent.fakeValue = 14;
+  intent.fakeBase = 14;
+  intent.fakeStart = 0;
+  intent.heartOn = false;
+  intent.heartBpm = 150;
+  intent.hbAcc = 0;
+  intent.screenGlitch = false;
+  intent.glitchAcc = 0;
+  intent.forceSync = false;
+  if (intent.notesHidden) {
+    intent.notesHidden = false;
+    document.body.classList.remove('intent-field-hidden');
+    scene.setIntentNoteLayerHidden(false);
+  }
+  if (dom.guiltCopy) dom.guiltCopy.textContent = 'CONSISTENT PERFECTS KEEP IT FULL';
+  paintGuilt();
+}
+
+function applyIntentHud(ev) {
+  const on = ev.on !== false;
+  switch (ev.hud) {
+    case 'clear':
+      clearIntentClasses();
+      intent.guiltOn = false;
+      intent.fakeGuilt = false;
+      intent.heartOn = false;
+      intent.screenGlitch = false;
+      intent.forceSync = false;
+      if (intent.notesHidden) setIntentNotesHidden(false);
+      break;
+    case 'black':
+      // The 3D stage itself goes to black for the guilt sections; the class
+      // only tints the HUD so the lanes stay readable on the pure void.
+      document.body.classList.toggle('intent-black', on);
+      break;
+    case 'guilt':
+      intent.guiltOn = on;
+      intent.fakeGuilt = false;
+      if (on) intent.guilt = ev.value ?? 100;
+      document.body.classList.toggle('guilt-on', on);
+      document.body.classList.remove('guilt-fake');
+      if (dom.guiltCopy) dom.guiltCopy.textContent = 'CONSISTENT PERFECTS KEEP IT FULL';
+      paintGuilt();
+      break;
+    case 'fakeGuilt':
+      intent.fakeGuilt = on;
+      intent.guiltOn = on;
+      if (on) {
+        intent.fakeBase = ev.value ?? 14;
+        intent.fakeValue = intent.fakeBase;
+        intent.fakeStart = audio.time;
+      }
+      document.body.classList.toggle('guilt-fake', on);
+      document.body.classList.toggle('guilt-on', on);
+      if (dom.guiltCopy) dom.guiltCopy.textContent = 'IT WILL NOT REFILL';
+      paintGuilt();
+      break;
+    case 'heartbeat':
+      intent.heartOn = on;
+      if (ev.bpm) intent.heartBpm = ev.bpm;
+      intent.hbAcc = 0;
+      dom.heartbeat?.classList.toggle('on', on);
+      document.body.classList.toggle('heartbeat-on', on);
+      break;
+    case 'glitch':
+      intent.screenGlitch = on;
+      document.body.classList.toggle('intent-glitch', on);
+      break;
+    case 'text':
+      if (on) showIntentText(ev.text, ev.sub, ev.hold ?? 3.2);
+      else dom.intentText?.classList.remove('on');
+      break;
+    case 'static':
+      document.body.classList.toggle('static-on', on);
+      document.body.classList.toggle('static-heavy', on && (ev.power ?? 0) >= 0.9);
+      break;
+    case 'distort':
+      document.body.classList.toggle('distort-on', on);
+      break;
+    case 'bright':
+      document.body.classList.toggle('bright-on', on);
+      break;
+    case 'white':
+      dom.whiteout?.classList.toggle('on', on);
+      document.body.classList.toggle('intent-whiteout', on);
+      break;
+    case 'yellow':
+      document.body.classList.toggle('intent-yellow', on);
+      dom.yellow?.classList.toggle('on', on);
+      break;
+    case 'rainbow':
+      intent.forceSync = on;
+      dom.syncEl?.classList.toggle('rainbow', on);
+      dom.rainbow?.classList.toggle('on', on);
+      if (on) dom.energy.style.height = '100%';
+      break;
+    default:
+      break;
+  }
+}
+
+function applyIntentEvent(ev) {
+  if (ev.mode === 'phase') {
+    intent.phase = ev.phase;
+    scene.setIntentionPhase(ev.phase);
+    // The dawn is note-less; the lane field stays on so the ocean can breathe.
+    setIntentNotesHidden(ev.phase === 'dawn');
+    return;
+  }
+  if (ev.mode === 'hud') applyIntentHud(ev);
+}
+
+function intentJudged(kind) {
+  if (!intent.guiltOn || intent.fakeGuilt) return;
+  const gain = kind === 'perfect' ? 1.35
+    : kind === 'great' ? 0.95
+    : kind === 'good' ? 0.5
+    : kind === 'bad' ? -2.2
+    : -6;
+  intent.guilt = Math.max(0, Math.min(100, intent.guilt + gain));
+  paintGuilt();
+}
+
+function updateIntent(dt, t) {
+  if (intent.guiltOn && !intent.fakeGuilt) {
+    // The bar drains faster while a stream is coming and slows down when the
+    // chart thins out, so sparse phrases never punish the player for waiting.
+    let ahead = 0;
+    for (const n of noteObjects) {
+      if (n.state === 'pending' && n.data.t >= t && n.data.t < t + 2.4) ahead++;
+    }
+    const density = ahead / 2.4;
+    const drain = 0.5 + Math.min(1.5, density * 0.55);
+    intent.guilt = Math.max(0, Math.min(100, intent.guilt - drain * dt));
+    paintGuilt();
+  }
+  if (intent.fakeGuilt) {
+    // Tie the decorative drain to the song clock, not frame time, so it still
+    // reaches the shatter point on slow devices.
+    const age = Math.max(0, audio.time - intent.fakeStart);
+    intent.fakeValue = Math.max(2.6, intent.fakeBase - age * 0.5);
+    paintGuilt();
+  }
+  if (intent.heartOn) {
+    intent.hbAcc += dt;
+    const interval = 60 / Math.max(40, intent.heartBpm);
+    if (intent.hbAcc >= interval) {
+      intent.hbAcc %= interval;
+      const el = dom.heartbeat;
+      if (el) {
+        el.classList.remove('beat');
+        void el.offsetWidth;
+        el.classList.add('beat');
+      }
+    }
+  } else {
+    intent.hbAcc = 0;
+  }
+  if (intent.screenGlitch) {
+    intent.glitchAcc += dt;
+    if (intent.glitchAcc > 0.52 + Math.random() * 0.4) {
+      intent.glitchAcc = 0;
+      scene.bossGlitch(0.32 + Math.random() * 0.3);
+      glitchScreen(0.45);
+    }
+  }
+}
+
 function updateSection(sec, force = false) {
   if (!sec || (!force && sec === currentSection)) return;
   currentSection = sec;
   scene.setSection(sec);
   if (sec.bpm) scene.setTempo(sec.bpm, sec.beatOffset ?? 0);
+  noteSpeed = SPEED * (sec.noteSpeed || 1);
   dom.section.textContent = sec.name;
   dom.keys.textContent = sec.keys;
   if (dom.hudBpm && sec.bpm) dom.hudBpm.textContent = `${Number(sec.bpm).toFixed(1).replace(/\.0$/, '')} BPM`;
@@ -357,6 +624,7 @@ function judgeHit(note, offset) {
   stats.weight += WEIGHT[kind];
   stats.score += SCORE[kind];
   stats.health = Math.min(100, stats.health + (kind === 'perfect' ? 1.1 : kind === 'great' ? .8 : kind === 'good' ? .4 : -1.6));
+  intentJudged(kind);
 
   if (kind === 'bad') {
     setCombo(0, false);
@@ -392,6 +660,7 @@ function missNote(note) {
   showJudge('miss', 'MISS');
   scene.missFx(note.lane);
   audio.thud();
+  intentJudged('miss');
 }
 
 function dropHold(note) {
@@ -407,6 +676,7 @@ function dropHold(note) {
   showJudge('miss', 'HOLD LOST');
   scene.missFx(note.lane);
   audio.thud();
+  intentJudged('miss');
 }
 
 function completeHold(note) {
@@ -554,12 +824,13 @@ function swingTap() {
 
 // ---------------------------------------------------------------- note render
 const SPEED = 8.4;
+let noteSpeed = SPEED;
 
 function updateNotes(t) {
   const ns = scene.noteScale;
   for (const n of noteObjects) {
     if (n.state === 'pending') {
-      const y = (n.data.t - t) * SPEED;
+      const y = (n.data.t - t) * noteSpeed;
       if (n.free) {
         // Boss notes fly along a curved stage-space path and converge on the
         // lane ring exactly at the hit line.
@@ -572,7 +843,7 @@ function updateNotes(t) {
       n.group.visible = y < 14.5 && y > -1.3;
       n.head.scale.set(1.04 * ns, 1.04 * ns, 1);
       if (n.body) {
-        const len = n.data.dur * SPEED;
+        const len = n.data.dur * noteSpeed;
         n.body.visible = n.group.visible;
         n.tail.visible = n.group.visible;
         n.body.scale.set(0.52 * ns, len, 1);
@@ -588,7 +859,7 @@ function updateNotes(t) {
         completeHold(n);
         continue;
       }
-      const remain = Math.max(0, (n.endTime - t) * SPEED);
+      const remain = Math.max(0, (n.endTime - t) * noteSpeed);
       n.group.visible = true;
       if (n.free) {
         const pose = scene.freeNotePose(n.lane, 0, n.index);
@@ -631,10 +902,10 @@ async function startGame() {
   hideCaption();
   dom.bossGlitch?.classList.remove('on');
   if (selectedTrack.boss) {
-    scene.setBoss('intro');
+    scene.setBoss('intro', selectedTrack.theme || 'untouchable');
     setBossIntro(true);
   } else {
-    scene.setBoss('off');
+    scene.setBoss('off', selectedTrack.theme || 'untouchable');
     setBossIntro(false);
   }
   resetGame();
@@ -683,11 +954,12 @@ function quitToMenu() {
   scene.setSection(chart.sections[0]);
   scene.setTempo(chart.song.bpm, chart.song.beatOffset);
   scene.setCity(chart.sections[0].city || 0);
-  scene.setBoss(selectedTrack.boss ? 'preview' : 'off');
+  scene.setBoss(selectedTrack.boss ? 'preview' : 'off', selectedTrack.theme || 'untouchable');
   scene.setPreviewLanes(new Set());
   setBossIntro(false);
   hideCaption();
   dom.bossGlitch?.classList.remove('on');
+  resetIntentHud();
   for (const n of noteObjects) n.group.visible = false;
   held.fill(false);
   holdNote.fill(null);
@@ -791,7 +1063,8 @@ function showResults(data) {
   dom.footTrack.textContent = selectedTrack.shortTitle;
   dom.footLanes.textContent = selectedTrack.laneLabel;
   dom.resultTag.textContent = full ? 'FULL COMBO // FIELD MASTERED'
-    : acc < 50 ? 'SIGNAL LOST // TRY AGAIN'
+    : !data.cleared ? 'SIGNAL LOST // TRY AGAIN'
+    : selectedTrack.boss ? (selectedTrack.clearTag || 'THE UNTOUCHABLE // FELLED')
     : 'CLEARED // SIGNAL COMPLETE';
   dom.fcBadge.classList.toggle('on', full);
   dom.bestBadge.classList.toggle('on', isBest);
@@ -802,7 +1075,9 @@ function showResults(data) {
     : 'FIRST RUN';
   const gap = Math.max(0, (best?.score || 0) - data.score);
   dom.scoreDelta.textContent = isBest
-    ? (prevBest ? `NEW BEST +${String(Math.max(0, data.score - prevBest.score)).padStart(5, '0')}` : 'FIRST CLEAR')
+    ? (prevBest ? `NEW BEST +${String(Math.max(0, data.score - prevBest.score)).padStart(5, '0')}`
+      : data.cleared ? 'FIRST CLEAR' : 'FIRST SCORE')
+    : !data.scored ? 'NO SCORE RECORDED'
     : gap > 0 ? `PB GAP ${String(gap).padStart(5, '0')}` : 'PB MATCHED';
 
   dom.result.classList.remove('show');
@@ -828,10 +1103,14 @@ function finishGame() {
   if (comboHistory.length > COMBO_CAP) comboHistory.shift();
   const full = stats.miss === 0 && stats.bad === 0 && stats.judged > 0;
   const runScore = stats.score;
+  const scored = runScore > 0;
+  const cleared = scored && acc >= 50;
   const prevBest = bestMap[selectedTrack.id] || null;
-  const isBest = !prevBest
+  // Skipping to the end (or never touching a lane) must not overwrite a real
+  // personal best with a zero-score run.
+  const isBest = scored && (!prevBest
     || runScore > prevBest.score
-    || (runScore === prevBest.score && acc > prevBest.acc);
+    || (runScore === prevBest.score && acc > prevBest.acc));
   if (isBest) {
     bestMap[selectedTrack.id] = { score: runScore, acc, rank, maxCombo: stats.maxCombo, full, at: Date.now() };
     try { localStorage.setItem(BEST_KEY, JSON.stringify(bestMap)); } catch { /* storage unavailable */ }
@@ -839,7 +1118,7 @@ function finishGame() {
   renderBest();
 
   const data = {
-    score: runScore, acc, rank, full, isBest, prevBest,
+    score: runScore, acc, rank, full, isBest, prevBest, scored, cleared,
     maxCombo: stats.maxCombo, counts: { ...stats }, judgeTotals: stats.judged,
   };
 
@@ -961,13 +1240,16 @@ function updateChartEvents(t) {
         scene.bossTick(ev.hand, ev.power ?? 1);
         break;
       case 'bossPhase':
-        scene.setBoss(ev.mode === 'play' ? 'play' : 'outro');
+        scene.setBoss(ev.mode === 'play' ? 'play' : 'outro', selectedTrack.theme);
         if (ev.mode === 'play') {
           setBossIntro(false);
-          toast('CLOCK STAGE // FREE FIELD', 1700);
+          if (selectedTrack.theme !== 'intention') toast('CLOCK STAGE // FREE FIELD', 1700);
         } else {
           hideCaption();
         }
+        break;
+      case 'intent':
+        applyIntentEvent(ev);
         break;
       case 'wind':
         scene.windFx(ev.power ?? 1);
@@ -1109,6 +1391,8 @@ function applyTrackUI() {
   if (dom.hudTrack) dom.hudTrack.textContent = t.shortTitle;
   if (dom.hudBpm) dom.hudBpm.textContent = t.bpmLabel || `${t.bpm} BPM`;
   if (dom.loadTrack) dom.loadTrack.textContent = `${t.shortTitle} // ${t.difficulty}`;
+  const count = $('trackCount');
+  if (count) count.textContent = String(TRACKS.length).padStart(2, '0');
   document.body.classList.toggle('boss-track', !!t.boss);
   for (const card of dom.trackCards) {
     const meta = TRACK_BY_ID[card.dataset.track];
@@ -1132,7 +1416,7 @@ async function selectTrack(id, { autoLoad = true } = {}) {
   setBossIntro(false);
   hideCaption();
   dom.bossGlitch?.classList.remove('on');
-  scene.setBoss(next.boss ? 'preview' : 'off');
+  scene.setBoss(next.boss ? 'preview' : 'off', next.theme || 'untouchable');
   scene.setSection(chart.sections[0]);
   scene.setTempo(chart.song.bpm, chart.song.beatOffset);
   scene.setCity(chart.sections[0].city || 0);
@@ -1153,11 +1437,12 @@ async function loadAudio(track = selectedTrack) {
   dom.startLabel.textContent = 'DECODING AUDIO';
   dom.loadFill.style.width = '0%';
   try {
-    await audio.load(track.audio, (p) => {
+    const buffer = await audio.load(track.audio, (p) => {
       if (token !== loadToken) return;
       dom.loadFill.style.width = Math.round(p * 100) + '%';
     });
     if (token !== loadToken) return;
+    audio.setBuffer(buffer);
     dom.loadFill.style.width = '100%';
     dom.startLabel.textContent = 'START SESSION';
     dom.startBtn.disabled = false;
@@ -1193,6 +1478,7 @@ function frame(now) {
     scene.setPreviewLanes(ahead);
     updateGhostEvents(t);
     updateChartEvents(t);
+    updateIntent(dt, t);
     updateSwing(t);
     updateNotes(t);
     updateHUD(t);
@@ -1222,6 +1508,7 @@ window.__cryout = {
   swingTap,
   get state() { return gameState; },
   get best() { return personalBest; },
+  get intent() { return intent; },
 };
 
 requestAnimationFrame(frame);

@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#04040c" />
   <title>CRYOUT — Dynamic 3D Rhythm</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
-  <script type="module" crossorigin src="./assets/index-BX7L4n97.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-BkcOfsU-.css">
+  <script type="module" crossorigin src="./assets/index-D-ONwQUn.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-Du1R-Uhn.css">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -42,6 +42,21 @@
         </div>
       </div>
 
+      <div id="guiltHud" aria-hidden="true">
+        <div class="guilt-head"><span>GUILT</span><b id="guiltPct">100</b></div>
+        <div class="guilt-track"><i id="guiltFill"></i><u id="guiltCrack"></u></div>
+        <div class="guilt-copy" id="guiltCopy">CONSISTENT PERFECTS KEEP IT FULL</div>
+      </div>
+
+      <div id="heartbeat" aria-hidden="true">
+        <svg viewBox="0 0 1200 140" preserveAspectRatio="none">
+          <path class="hb-glow" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
+          <path class="hb-line" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
+        </svg>
+      </div>
+
+      <div id="intentGlitchText" aria-hidden="true"><span data-text="INTENTIONS">INTENTIONS</span><em id="intentGlitchSub"></em></div>
+
       <div id="comboHud"><b id="comboNum">0</b><span>COMBO</span></div>
       <div id="judge" aria-live="polite"></div>
 
@@ -72,7 +87,7 @@
           <h1>CRY<br>OUT</h1>
           <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
           <div class="track-picker" id="trackPicker" role="tablist" aria-label="Track selection">
-            <div class="picker-head"><span>SELECT TRACK</span><b id="trackCount">04</b></div>
+            <div class="picker-head"><span>SELECT TRACK</span><em id="clearCount">0 / 4 CLEARED</em><b id="trackCount">04</b></div>
             <button class="track-card active" data-track="cryout" role="tab" aria-selected="true">
               <span class="tc-num">01</span>
               <span class="tc-copy"><b>CRYOUT</b><em>ORIGINAL TRACK</em></span>
@@ -92,6 +107,11 @@
               <span class="tc-num">04</span>
               <span class="tc-copy"><b>THE UNTOUCHABLE</b><em>OF f RA IA'S LAND</em></span>
               <span class="tc-tags"><span>111 BPM</span><span>BOSS</span><span class="thumb">NAVE</span><span class="tc-best"></span></span>
+            </button>
+            <button class="track-card boss" data-track="intention" role="tab" aria-selected="false">
+              <span class="tc-num">05</span>
+              <span class="tc-copy"><b>INTENTION</b><em>THE OCEAN REMEMBERS</em></span>
+              <span class="tc-tags"><span>180 BPM</span><span>BOSS</span><span class="thumb">TIDE</span><span class="tc-best"></span></span>
             </button>
           </div>
           <div class="specs">
@@ -259,6 +279,13 @@
     </div>
     <div id="rotateHint"><span>↻</span> ROTATE FOR THE FULL FIELD</div>
   </main>
+
+  <div id="blackout" aria-hidden="true"></div>
+  <div id="intentStatic" aria-hidden="true"></div>
+  <div id="intentScanlines" aria-hidden="true"></div>
+  <div id="yellowVignette" aria-hidden="true"></div>
+  <div id="rainbowWash" aria-hidden="true"></div>
+  <div id="whiteout" aria-hidden="true"></div>
 
 </body>
 </html>
