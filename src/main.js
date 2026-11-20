@@ -74,6 +74,7 @@ let bossIntro = false;
 let captionTimer = 0;
 let glitchTimer = 0;
 let intentTextTimer = 0;
+let intentCinematic = false;
 
 // INTENTION's HUD is event-driven: the chart raises the guilt bar, the
 // heartbeat, the whiteouts and the dawn filters, and this state keeps them in
@@ -322,6 +323,21 @@ function setBossIntro(on) {
   if (!on) hideCaption();
 }
 
+// INTENTION is played without HUD copy. Only the overture and dawn are
+// cinematics, so only those may keep their title cards; every gameplay caption,
+// score readout, judgement word and lane label stays out of the frame.
+function setIntentPresentation(on, cinematic = false) {
+  const active = on && selectedTrack.theme === 'intention';
+  document.body.classList.toggle('intent-clean', active);
+  setIntentCinematic(active && cinematic);
+}
+
+function setIntentCinematic(on) {
+  intentCinematic = !!on && selectedTrack.theme === 'intention';
+  document.body.classList.toggle('intent-cutscene', intentCinematic);
+  if (!intentCinematic) hideCaption();
+}
+
 function hideCaption() {
   clearTimeout(captionTimer);
   if (!dom.bossCaption) return;
@@ -482,6 +498,9 @@ function applyIntentHud(ev) {
     case 'static':
       document.body.classList.toggle('static-on', on);
       document.body.classList.toggle('static-heavy', on && (ev.power ?? 0) >= 0.9);
+      // The memory movement keeps a thin, transparent veil; the later STATIC
+      // section is the one that thickens into real interference.
+      document.body.classList.toggle('static-soft', on && (ev.power ?? 0) < 0.9);
       break;
     case 'distort':
       document.body.classList.toggle('distort-on', on);
@@ -908,6 +927,7 @@ async function startGame() {
     scene.setBoss('off', selectedTrack.theme || 'untouchable');
     setBossIntro(false);
   }
+  setIntentPresentation(selectedTrack.theme === 'intention', true);
   resetGame();
   gameState = 'starting';
   try {
@@ -957,6 +977,7 @@ function quitToMenu() {
   scene.setBoss(selectedTrack.boss ? 'preview' : 'off', selectedTrack.theme || 'untouchable');
   scene.setPreviewLanes(new Set());
   setBossIntro(false);
+  setIntentPresentation(false);
   hideCaption();
   dom.bossGlitch?.classList.remove('on');
   resetIntentHud();
@@ -1096,6 +1117,8 @@ function finishGame() {
   dom.hud.setAttribute('aria-hidden', 'true');
   dom.pause.classList.remove('show');
   document.body.classList.remove('playing');
+  setIntentPresentation(false);
+  setBossIntro(false);
 
   const acc = stats.judged ? (stats.weight / stats.judged) * 100 : 100;
   const rank = rankFor(acc, stats.judged);
@@ -1243,9 +1266,11 @@ function updateChartEvents(t) {
         scene.setBoss(ev.mode === 'play' ? 'play' : 'outro', selectedTrack.theme);
         if (ev.mode === 'play') {
           setBossIntro(false);
-          if (selectedTrack.theme !== 'intention') toast('CLOCK STAGE // FREE FIELD', 1700);
+          if (selectedTrack.theme === 'intention') setIntentCinematic(false);
+          else toast('CLOCK STAGE // FREE FIELD', 1700);
         } else {
-          hideCaption();
+          if (selectedTrack.theme === 'intention') setIntentCinematic(true);
+          else hideCaption();
         }
         break;
       case 'intent':
@@ -1414,6 +1439,7 @@ async function selectTrack(id, { autoLoad = true } = {}) {
   trackDuration = next.duration;
   applyTrackUI();
   setBossIntro(false);
+  setIntentPresentation(false);
   hideCaption();
   dom.bossGlitch?.classList.remove('on');
   scene.setBoss(next.boss ? 'preview' : 'off', next.theme || 'untouchable');

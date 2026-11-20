@@ -1026,3 +1026,27 @@ body.guilt-on #comboHud span{color:#ff6b84}
   #heartbeat{top:40%;height:15vh}
   body.guilt-on #comboHud{left:28%;top:35%}
 }
+
+/* ============================================================
+   INTENTION — textless field, title cards only in cutscenes
+   ============================================================ */
+body.intent-clean #hud .brand,
+body.intent-clean #hud .scoreblock,
+body.intent-clean #hud .trackmeta,
+body.intent-clean #hud .lane-count,
+body.intent-clean #hud .sync-label,
+body.intent-clean #hud #comboHud,
+body.intent-clean #hud #judge,
+body.intent-clean #hud .pad .pk,
+body.intent-clean #hud #centerPad .cp-label,
+body.intent-clean #guiltHud .guilt-head,
+body.intent-clean #guiltHud .guilt-copy,
+body.intent-clean #intentGlitchText,
+body.intent-clean #toast{display:none !important}
+
+/* Keep the silent progress line and sync/guilt bars as pure graphics. */
+body.intent-clean #hud .topbar{grid-template-columns:1fr}
+body.intent-clean #hud .track-wrap{grid-column:1 / -1}
+body.intent-clean #bossCaption{opacity:0 !important;visibility:hidden !important}
+body.intent-clean.intent-cutscene #bossCaption.on{opacity:1 !important;visibility:visible !important}
+
