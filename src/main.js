@@ -247,6 +247,7 @@ function resetGame() {
   held.fill(false);
   holdNote.fill(null);
   touchPoints.clear();
+  keysHeld.clear();
   ghostCursor = 0;
   eventCursor = 0;
   comboHistory = [];
@@ -1097,6 +1098,7 @@ function quitToMenu() {
   held.fill(false);
   holdNote.fill(null);
   touchPoints.clear();
+  keysHeld.clear();
   ghostCursor = 0;
   eventCursor = 0;
   scene.clearGhosts();
