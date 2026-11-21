@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3002",
     "build": "vite build --base ./",
-    "preview": "vite preview --host 0.0.0.0 --port 3002"
+    "preview": "vite preview --host 0.0.0.0 --port 3002",
+    "charts": "node tools/build-game-charts.mjs"
   },
   "repository": {
     "type": "git",

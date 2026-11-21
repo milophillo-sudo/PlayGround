@@ -25,13 +25,20 @@ A browser rhythm game built around a flat, bold hit-circle language placed insid
 
 | Track | BPM | Difficulty | Lanes | Notes |
 | --- | --- | --- | --- | --- |
-| **CRYOUT** | 100 | Advanced | 4 · 6 · 8 | 328 notes · 6 holds |
-| **WORLD YEARNING FOR AN END** | 120 | Hard | 4 · 6 | 448 notes · 5 holds |
-| **CHRONOSTASIS** | 99.4 | Expert | 4 · 6 | 432 notes · 1 hold · 8 pendulum taps |
-| **THE UNTOUCHABLE OF f RA IA'S LAND** | 111.1 / 96 | Boss | 4 · 6 · 8 | 407 notes · 4 holds · 243 events |
-| **INTENTION** | 180 / 195 | Boss | 1 · 2 · 4 · 6 | 596 notes · 26 holds · 239 events |
+| **CRYOUT** | 100 | Advanced | 4 · 6 · 8 | 390 notes · 12 holds |
+| **WORLD YEARNING FOR AN END** | 120 | Hard | 4 · 6 | 444 notes · 10 holds |
+| **CHRONOSTASIS** | 99.4 | Expert | 4 · 6 | 436 notes · 10 holds · 8 pendulum taps |
+| **THE UNTOUCHABLE OF f RA IA'S LAND** | 111.1 / 96 | Boss | 4 · 6 · 8 | 374 notes · 8 holds · 229 events |
+| **INTENTION** | 180 / 195 | Boss | 1 · 2 · 4 · 6 | 532 notes · 19 holds · 284 events |
 
-Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. Each track has its own event recipe: CRYOUT keeps its authored 4/6/8-lane chart and signal accents, WORLD uses city/atmospheric accents, CHRONOSTASIS derives its ticks, bursts, clock windows, and pendulum taps from its analysed motif peaks, and THE UNTOUCHABLE is built from a dedicated onset analysis with an explicit tempo map. INTENTION uses a dedicated onset/tempo analysis and an event score for its ocean, libra, guilt and dawn movements. Track metadata lives in `src/tracks.js`.
+Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. One shared generator, `tools/build-game-charts.mjs`, rebuilds all five charts from the authored section maps and the decoded onset files in `tools/source/`. Every section is charted as a four-bar phrase (A A' B C): rhythmic cells come from a groove library keyed to the section's energy, weak slots are thinned against the real onsets, lanes follow bounded figures with hand-safe repeats, chords are reserved for phrase peaks, and long same-lane gaps become holds. Accent events are regenerated from bar energy, while boss camera/glitch cues, CHRONOSTASIS's clock/pendulum score, and INTENTION's memory/guilt cues are copied verbatim from `tools/source/gimmick-events.json`, so every gimmick stays choreographed to the record. Track metadata lives in `src/tracks.js`.
+
+| Command | Purpose |
+| --- | --- |
+| `npm run charts` | Rebuild all five charts from the committed analyses and section maps. |
+| `node tools/analyze-mp3.mjs` | Optional: decode the MP3s in Chromium and refresh the CRYOUT / WORLD / CHRONOSTASIS onset analyses. |
+
+The older `tools/build-charts.mjs`, `tools/build-boss-chart.mjs`, and `tools/build-intention-chart.mjs` scripts are kept as the historical per-track builders; the shared generator is the canonical pipeline now.
 
 ### Gameplay
 

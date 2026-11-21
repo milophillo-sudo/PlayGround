@@ -1733,10 +1733,6 @@ export function createScene(canvasEl) {
     noteSpeed: 8.2,
     time: 0,
     playing: false,
-    gameOver: false,
-    gameOverElapsed: 0,
-    gameOverFromPos: new THREE.Vector3(0, 6.7, 17.2),
-    gameOverFromFov: 46,
     spacing: SPACING,
     ringScale: 1.65,
     portrait: false,
@@ -2745,24 +2741,6 @@ export function createScene(canvasEl) {
       camera.lookAt(0, 4.05, 0);
     }
 
-    // Game over: pull the lens back and up while the chart slows to a stop.
-    // This runs after the section/boss camera so it wins on every track.
-    if (state.gameOver) {
-      state.gameOverElapsed += dt;
-      const gp = Math.min(1, state.gameOverElapsed / 2.8);
-      const ge = 1 - Math.pow(1 - gp, 3);
-      const from = state.gameOverFromPos;
-      camera.position.set(
-        THREE.MathUtils.lerp(from.x, 0, ge),
-        THREE.MathUtils.lerp(from.y, from.y + 11, ge),
-        THREE.MathUtils.lerp(from.z, from.z + 27, ge),
-      );
-      camera.fov = THREE.MathUtils.lerp(state.gameOverFromFov, 60, ge);
-      camera.updateProjectionMatrix();
-      camera.lookAt(0, 3.1, 0);
-      camera.rotation.z += Math.sin(ge * Math.PI) * 0.05;
-    }
-
     // background
     stars.rotation.y += dt * 0.006;
     stars2.rotation.y -= dt * 0.004;
@@ -2905,18 +2883,6 @@ export function createScene(canvasEl) {
 
   }
 
-  function startGameOver() {
-    state.gameOver = true;
-    state.gameOverElapsed = 0;
-    state.gameOverFromPos.copy(camera.position);
-    state.gameOverFromFov = camera.fov;
-  }
-
-  function resetGameOver() {
-    state.gameOver = false;
-    state.gameOverElapsed = 0;
-  }
-
   function render() {
     composer.render();
   }
@@ -2933,7 +2899,6 @@ export function createScene(canvasEl) {
     setPreviewLanes, setCity, setTempo,
     setClock, clockTick, clockReset,
     setBoss, bossCameraEvent, bossGlitch, bossTick, windFx, freeNotePose,
-    startGameOver, resetGameOver,
     setIntentionPhase: (phase) => intention.setPhase(phase),
     intentionPulse: (power) => intention.beat(power),
     setIntentFieldHidden, setIntentNoteLayerHidden,
