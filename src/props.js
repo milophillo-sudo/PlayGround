@@ -1188,10 +1188,16 @@ export function makeBleacher() {
   const g = new THREE.Group();
   const wood = mat('bleachWood', { map: T.wood(true), roughness: 0.85 });
   const metal = M(0x3d4345, 0.5, 0.5);
-  for (let i = 0; i < 4; i++) {
-    g.add(box(6, 0.09, 0.65, wood, 0, 0.2 + i * 0.32, -i * 0.6));
-    g.add(box(6, 0.3, 0.06, wood, 0, 0.35 + i * 0.32, -i * 0.6 - 0.3));
-    for (const x of [-2.8, 2.8]) g.add(box(0.06, 0.6, 0.6, metal, x, 0.1 + i * 0.32, -i * 0.6));
+  const rows = 4, rise = 0.33, run = 0.62;
+  for (let i = 0; i < rows; i++) {
+    const y = rise * (i + 1);          // seat top
+    const z = -i * run;
+    g.add(box(6, 0.1, 0.64, wood, 0, y, z));
+    // riser closes the step down to the row in front (or the floor)
+    const riserH = y - 0.06;
+    g.add(box(6, riserH, 0.07, wood, 0, riserH / 2 + 0.03, z - 0.32));
+    // legs actually reach the floor instead of hovering under each plank
+    for (const x of [-2.85, 2.85]) g.add(box(0.08, y, 0.5, metal, x, y / 2, z));
   }
   return g;
 }

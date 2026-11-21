@@ -333,14 +333,23 @@ function decorateGym(world, r) {
   add(world, mid, (x1 + x2) / 2, 0.011, (z1 + z2) / 2, 0, -Math.PI / 2);
   const circle = new THREE.Mesh(new THREE.RingGeometry(2.4, 2.52, 40), lineMat);
   add(world, circle, (x1 + x2) / 2, 0.012, (z1 + z2) / 2, 0, -Math.PI / 2);
-  // hoops
-  for (const x of [x1 + 2.6, x2 - 2.6]) {
+  // hoops: one on each end wall of the court (the centre line and
+  // circle run between them). They used to sit side by side on the back
+  // wall with their arms pointing sideways.
+  for (const [hx, hz, ry] of [
+    [x1 + 0.5, (z1 + z2) / 2, Math.PI / 2],
+    [x2 - 0.5, (z1 + z2) / 2, -Math.PI / 2]
+  ]) {
     const pole = new THREE.Group();
-    pole.add(cyl(0.08, 0.1, 3.0, C(0x3c4345, 0.5, 0.5), 0, 1.5, 0));
-    pole.add(box(1.2, 0.08, 0.1, C(0x3c4345, 0.5, 0.5), 0.55, 2.9, 0));
-    pole.add(box(1.5, 1.0, 0.06, C(0xd8d5c9, 0.7), 0.55, 2.55, 0.05));
-    pole.add(cyl(0.23, 0.23, 0.03, C(0xd0562c, 0.6), 0.75, 2.3, 0.12));
-    add(world, pole, x, 0, z1 + 0.8);
+    pole.add(cyl(0.08, 0.1, 3.4, C(0x3c4345, 0.5, 0.5), 0, 1.7, 0));
+    pole.add(box(0.1, 0.09, 1.0, C(0x3c4345, 0.5, 0.5), 0, 3.35, 0.5));
+    pole.add(box(1.6, 1.05, 0.07, C(0xe7e4d8, 0.7), 0, 2.8, 0.98));
+    pole.add(box(0.62, 0.46, 0.03, new THREE.MeshBasicMaterial({ color: 0xc0562c }), 0, 2.67, 1.02));
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.23, 0.025, 8, 20), C(0xd0562c, 0.6));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(0, 3.05, 1.22);
+    pole.add(rim);
+    add(world, pole, hx, 0, hz, ry);
   }
   // bleachers
   const b1 = makeBleacher(); add(world, b1, x2 - 4.5, 0, z1 + 2.25, 0);
