@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#04040c" />
   <title>CRYOUT — Dynamic 3D Rhythm</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
-  <script type="module" crossorigin src="./assets/index-mQYRodg7.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CNLBD-Be.css">
+  <script type="module" crossorigin src="./assets/index-Cs9_EEGI.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-B7fSt0aI.css">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -49,10 +49,17 @@
       </div>
 
       <div id="heartbeat" aria-hidden="true">
-        <svg viewBox="0 0 1200 140" preserveAspectRatio="none">
-          <path class="hb-glow" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
-          <path class="hb-line" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
-        </svg>
+        <div class="hb-wash"></div>
+        <div class="hb-track">
+          <div class="hb-rings"><i></i><i></i><i></i></div>
+          <div class="hb-spark"></div>
+          <svg viewBox="0 0 1200 140" preserveAspectRatio="none">
+            <path class="hb-ghost" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
+            <path class="hb-glow" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
+            <path class="hb-line" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
+            <path class="hb-split" d="M0 80 L120 80 L150 78 L168 62 L190 118 L216 36 L242 96 L262 80 L430 80 L468 80 L492 72 L512 92 L534 80 L730 80 L760 80 L782 66 L804 106 L826 80 L1010 80 L1042 76 L1060 60 L1082 112 L1106 46 L1130 88 L1150 80 L1200 80" />
+          </svg>
+        </div>
       </div>
 
       <div id="intentGlitchText" aria-hidden="true"><span data-text="INTENTIONS">INTENTIONS</span><em id="intentGlitchSub"></em></div>
@@ -276,6 +283,16 @@
       <span id="bcKicker">OVERTURE</span>
       <b id="bcTitle">THE UNTOUCHABLE</b>
       <em id="bcSub">OF f RA IA'S LAND</em>
+    </div>
+    <div id="gameOverFx" aria-hidden="true">
+      <div class="go-wash"></div>
+      <div class="go-bars"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="go-flatline">
+        <svg viewBox="0 0 1200 140" preserveAspectRatio="none">
+          <path d="M0 80 L420 80 L438 80 L454 76 L470 88 L486 80 L520 80 L540 64 L558 18 L578 122 L598 66 L618 86 L638 80 L1200 80" />
+        </svg>
+      </div>
+      <div class="go-title"><b>SIGNAL LOST</b><span>THE FIELD GOES DARK</span></div>
     </div>
     <div id="rotateHint"><span>↻</span> ROTATE FOR THE FULL FIELD</div>
   </main>
