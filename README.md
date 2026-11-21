@@ -44,7 +44,7 @@ The older `tools/build-charts.mjs`, `tools/build-boss-chart.mjs`, and `tools/bui
 
 - **Track selection:** pick any of the five tracks from the start screen. Audio decodes per track and is cached, and personal bests are stored per track in `localStorage`. A run that clears a track (50% accuracy or better) marks its card, and the picker header tracks how many of the five have been cleared.
 - **Dynamic lane count:** charts move through 4, 6, and 8-lane sections; the field spacing, ring scale, note scale, camera and hit zones re-frame themselves around the playable lanes.
-- **Tap the whole lane:** invisible tap strips start at the hit circle, run straight up the lane along its projected angle, extend below the ring for thumbs, and widen to fill the gap between neighbouring lanes. Pressing never draws an overlay — all feedback is in the 3D field.
+- **Tap anywhere:** every tap or key press claims the single pending note closest to the hit line. A second finger claims the next-closest note, so chords need two fingers and one tap never clears a stack. Pressing never draws an overlay — all feedback is in the 3D field.
 - **Incoming lanes unlock early:** a lane with a note on the way becomes tappable before its section officially starts, so notes never arrive on a hidden lane.
 - **Holds:** keep at least one finger anywhere on the screen to sustain every active hold. Releasing one thumb won't break another lane's hold.
 - **Moving lanes:** lanes fan, wave, slope, zigzag, and orbit with each section; notes and hold bodies are parented to the lane frame so they follow the same diagonal.
@@ -59,12 +59,13 @@ The older `tools/build-charts.mjs`, `tools/build-boss-chart.mjs`, and `tools/bui
 - **Guilt engine:** during INTENTION's guilt movements the red bar drains with note density and receives a small refill for every perfect/great/good, so sparse phrases are forgiving and dense phrases demand accuracy. The later fake bar is decorative: it drains slowly toward a crack, never refills, and does not affect scoring.
 - **Feedback:** perfect/great/good/bad/miss windows, combo, score, accuracy, sync meter, hit bursts, shockwaves, screen flashes, and rank screen.
 - **Results:** animated “COMPILING RESULTS” transition followed by a full results layout with score, accuracy ring, judgement bars, combo trace, rank, and new-best delta.
+- **Fail state:** health drains on misses; at zero the transport tape-stops, the lens pulls back, the field washes red behind a SIGNAL LOST flatline, and the results screen records the failed run without overwriting a personal best.
 - **Pause safely:** `Esc` or the pause button freezes both the transport and the chart; switching tabs/windows pauses automatically.
 - **Responsive:** landscape and portrait layouts, safe-area padding, multi-touch pointer capture, no page scrolling during play.
 
 ### Controls
 
-`A S D F J K L ;`, numpad `1–8`, or tap/click anywhere along a lane. During CHRONOSTASIS's STASIS breakdown, `Space` or a tap on the centre target hits the pendulum. `Esc` pauses.
+`A S D F J K L ;`, numpad `1–8`, or tap/click anywhere in the playfield. During CHRONOSTASIS's STASIS breakdown, `Space` or a tap on the centre target hits the pendulum. `Esc` pauses.
 
 ### Development
 

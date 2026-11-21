@@ -99,6 +99,27 @@ export class AudioEngine {
     }
   }
 
+  // Tape-stop used by the game-over sequence. Lowering playbackRate drops the
+  // pitch and tempo together, which reads as the song losing power.
+  pitchDrop(target = 0.5, seconds = 2.4) {
+    if (!this.ctx || !this.source) return;
+    const now = this.ctx.currentTime;
+    try {
+      const rate = this.source.playbackRate;
+      rate.cancelScheduledValues(now);
+      rate.setValueAtTime(Math.max(0.05, rate.value || 1), now);
+      rate.linearRampToValueAtTime(Math.max(0.05, target), now + seconds);
+    } catch { /* noop */ }
+    try {
+      if (this.gain) {
+        const g = this.gain.gain;
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(Math.max(0.02, g.value || 0.92), now);
+        g.linearRampToValueAtTime(0, now + seconds + 0.6);
+      }
+    } catch { /* noop */ }
+  }
+
   pause() {
     if (this.ctx && this.ctx.state === 'running') this.ctx.suspend();
   }

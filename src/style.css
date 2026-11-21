@@ -915,21 +915,82 @@ body.guilt-fake .guilt-copy{color:#a3374b}
 @keyframes guilt-flicker{0%,100%{opacity:1}42%{opacity:.55}46%{opacity:1}72%{opacity:.68}}
 body:not(.guilt-on):not(.guilt-fake) #guiltHud{display:none}
 
-/* heartbeat line — red, beat-synced, behind the playfield copy */
+/* heartbeat line — a full-screen ECG that climbs one third of the screen per
+   beat (bottom → middle → top) and pulses a concentric shockwave on every hit */
 #heartbeat{
-  position:fixed;left:0;right:0;top:44%;height:18vh;z-index:3;pointer-events:none;
-  opacity:0;transition:opacity .45s ease;mix-blend-mode:screen;
+  position:fixed;inset:0;z-index:3;pointer-events:none;
+  opacity:0;transition:opacity .5s ease;mix-blend-mode:screen;
+  --hb-y:70%;
 }
-#heartbeat.on{opacity:.72}
-#heartbeat svg{width:100%;height:100%;overflow:visible}
+#heartbeat.on{opacity:1}
+.hb-wash{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse at 50% var(--hb-y),rgba(255,38,80,.22),transparent 44%),
+    radial-gradient(ellipse at 50% var(--hb-y),rgba(255,120,140,.10),transparent 24%),
+    linear-gradient(180deg,transparent 0%,rgba(255,20,60,.045) 50%,transparent 100%);
+  opacity:.7;transition:background .18s linear;
+}
+.hb-track{
+  position:absolute;left:-2%;right:-2%;top:var(--hb-y);
+  height:clamp(120px,21vh,230px);transform:translateY(-50%);
+  transition:top .17s cubic-bezier(.2,.9,.25,1);
+  filter:drop-shadow(0 0 20px rgba(255,51,85,.38));
+  will-change:top,transform;
+}
+.hb-track svg{width:100%;height:100%;overflow:visible}
 #heartbeat path{fill:none;stroke-linecap:round;stroke-linejoin:round}
-#heartbeat .hb-glow{stroke:rgba(255,51,85,.35);stroke-width:14;filter:blur(8px)}
-#heartbeat .hb-line{stroke:#ff5b73;stroke-width:2.1;filter:drop-shadow(0 0 6px rgba(255,51,85,.9))}
-#heartbeat.beat .hb-line{animation:hb-beat .3s ease}
-#heartbeat.beat .hb-glow{animation:hb-glow .3s ease}
-@keyframes hb-beat{0%{stroke:#fff;stroke-width:3.2}38%{stroke:#ff5b73;stroke-width:2.8}100%{stroke:#ff5b73;stroke-width:2.1}}
-@keyframes hb-glow{0%{stroke-width:22;opacity:1}100%{stroke-width:14;opacity:.75}}
-body.heartbeat-on #heartbeat{opacity:.68}
+.hb-ghost{stroke:rgba(255,90,120,.16);stroke-width:1;transform:translateY(-8px)}
+.hb-split{stroke:rgba(90,230,255,.32);stroke-width:1.1;transform:translate(3px,-4px)}
+.hb-glow{stroke:rgba(255,51,85,.30);stroke-width:17;filter:blur(11px)}
+.hb-line{stroke:#ff5b73;stroke-width:2.3;filter:drop-shadow(0 0 7px rgba(255,51,85,.95))}
+.hb-rings{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+.hb-rings i{
+  position:absolute;left:0;top:0;width:18vmin;height:18vmin;margin:-9vmin 0 0 -9vmin;
+  border:1.5px solid rgba(255,92,120,.7);border-radius:50%;
+  opacity:0;transform:scale(.15);box-shadow:0 0 22px rgba(255,51,85,.35) inset;
+}
+.hb-spark{
+  position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;
+  border-radius:50%;background:#fff;opacity:0;
+  box-shadow:0 0 12px #fff,0 0 34px #ff3355,0 0 70px rgba(255,51,85,.8);
+}
+#heartbeat.beat .hb-line{animation:hb-beat .34s cubic-bezier(.2,.8,.2,1)}
+#heartbeat.beat .hb-glow{animation:hb-glow .34s ease-out}
+#heartbeat.beat .hb-ghost{animation:hb-ghost .44s ease-out}
+#heartbeat.beat .hb-split{animation:hb-split .38s ease-out}
+#heartbeat.beat .hb-spark{animation:hb-spark .36s ease-out}
+#heartbeat.beat .hb-track{animation:hb-lurch .34s cubic-bezier(.2,.9,.25,1)}
+#heartbeat.beat .hb-wash{animation:hb-wash .42s ease-out}
+#heartbeat.beat .hb-rings i:nth-child(1){animation:hb-ring .62s ease-out}
+#heartbeat.beat .hb-rings i:nth-child(2){animation:hb-ring .62s .07s ease-out}
+#heartbeat.beat .hb-rings i:nth-child(3){animation:hb-ring .62s .14s ease-out}
+@keyframes hb-beat{0%{stroke:#fff;stroke-width:3.8}24%{stroke:#ffd2da;stroke-width:3.2}52%{stroke:#ff5b73;stroke-width:2.6}100%{stroke:#ff5b73;stroke-width:2.3}}
+@keyframes hb-glow{0%{stroke-width:30;opacity:1}38%{stroke-width:22;opacity:.9}100%{stroke-width:17;opacity:.72}}
+@keyframes hb-ghost{0%{opacity:.55;transform:translateY(-2px)}100%{opacity:.16;transform:translateY(-10px)}}
+@keyframes hb-split{0%{opacity:.85;transform:translate(7px,-8px)}100%{opacity:.32;transform:translate(3px,-4px)}}
+@keyframes hb-spark{0%{opacity:1;transform:scale(2.6)}34%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(.2)}}
+@keyframes hb-lurch{0%{transform:translateY(-50%) scaleY(1.13)}30%{transform:translateY(-50%) scaleY(.95)}62%{transform:translateY(-50%) scaleY(1.03)}100%{transform:translateY(-50%) scaleY(1)}}
+@keyframes hb-wash{0%{opacity:1}100%{opacity:.7}}
+@keyframes hb-ring{0%{opacity:.85;transform:scale(.2)}70%{opacity:.25}100%{opacity:0;transform:scale(2.5)}}
+body.heartbeat-on #heartbeat{opacity:1}
+
+/* During the heartbeat the standard HUD steps aside. The progress line, the
+   sync/guilt bars and the heartbeat itself stay; score, judgement, combo,
+   lane labels and pads fade out. */
+body.heartbeat-on #hud .brand,
+body.heartbeat-on #hud .scoreblock,
+body.heartbeat-on #hud .trackmeta,
+body.heartbeat-on #hud .lane-count,
+body.heartbeat-on #hud .sync-label,
+body.heartbeat-on #hud #comboHud,
+body.heartbeat-on #hud #judge,
+body.heartbeat-on #hud #pads,
+body.heartbeat-on #hud .pad .pk,
+body.heartbeat-on #toast{
+  opacity:0 !important;visibility:hidden !important;pointer-events:none !important;
+  transition:opacity .28s ease,visibility .28s ease;
+}
 
 /* INTENTIONS glitch title */
 #intentGlitchText{
@@ -1023,7 +1084,7 @@ body.guilt-on #comboHud span{color:#ff6b84}
   #guiltHud{bottom:clamp(96px,13vh,138px);width:clamp(150px,42vw,230px)}
   .guilt-track{height:13px}
   #intentGlitchText span{font-size:clamp(34px,12vw,78px)}
-  #heartbeat{top:40%;height:15vh}
+  .hb-track{height:15vh}
   body.guilt-on #comboHud{left:28%;top:35%}
 }
 
@@ -1049,4 +1110,79 @@ body.intent-clean #hud .topbar{grid-template-columns:1fr}
 body.intent-clean #hud .track-wrap{grid-column:1 / -1}
 body.intent-clean #bossCaption{opacity:0 !important;visibility:hidden !important}
 body.intent-clean.intent-cutscene #bossCaption.on{opacity:1 !important;visibility:visible !important}
+
+/* ============================================================
+   GAME OVER — tape-stop field, red wash, flatline
+   ============================================================ */
+#gameOverFx{
+  position:fixed;inset:0;z-index:25;pointer-events:none;overflow:hidden;
+  opacity:0;transition:opacity .22s ease;
+}
+body.game-over #gameOverFx{opacity:1}
+body.game-over #scene{
+  filter:saturate(.35) contrast(1.28) brightness(.72);
+  transform:scale(1.015);
+}
+body.game-over #hud{opacity:.16;filter:blur(1.2px);transition:opacity .5s ease}
+body.game-over #toast{opacity:0 !important}
+
+.go-wash{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse at 50% 48%,transparent 24%,rgba(190,0,24,.24) 60%,rgba(96,0,12,.72) 100%),
+    linear-gradient(180deg,rgba(255,0,32,.10),rgba(90,0,14,.28));
+  mix-blend-mode:screen;
+  animation:go-pulse 1.5s ease-in-out infinite;
+}
+.go-bars{position:absolute;inset:0;opacity:.6;mix-blend-mode:screen}
+.go-bars i{
+  position:absolute;left:-10%;right:-10%;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(255,40,70,.85),transparent);
+  animation:go-scan 2.4s linear infinite;
+}
+.go-bars i:nth-child(1){top:12%;animation-delay:-.2s}
+.go-bars i:nth-child(2){top:31%;animation-delay:-1.1s;opacity:.6}
+.go-bars i:nth-child(3){top:49%;animation-delay:-.6s;height:4px}
+.go-bars i:nth-child(4){top:68%;animation-delay:-1.7s;opacity:.5}
+.go-bars i:nth-child(5){top:86%;animation-delay:-.9s}
+.go-flatline{
+  position:absolute;left:-2%;right:-2%;top:50%;height:clamp(110px,19vh,210px);
+  transform:translateY(-50%);opacity:.8;
+  filter:drop-shadow(0 0 18px rgba(255,24,56,.7));
+}
+.go-flatline svg{width:100%;height:100%;overflow:visible}
+.go-flatline path{
+  fill:none;stroke:#ff2748;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:1400;stroke-dashoffset:0;
+  animation:go-flatline 2.2s ease-out both;
+}
+.go-title{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+  text-align:center;
+}
+.go-title b{
+  font-family:var(--sans);font-size:clamp(40px,9vw,118px);font-weight:900;
+  letter-spacing:.14em;color:#fff;line-height:.9;
+  text-shadow:0 0 22px rgba(255,31,67,.95),0 0 80px rgba(255,0,40,.5);
+  animation:go-title-glitch .9s steps(2,end) infinite;
+}
+.go-title span{
+  font-family:var(--mono);font-size:9px;letter-spacing:.62em;color:#ff8fa2;
+  text-indent:.62em;
+}
+body.intent-clean .go-title{display:none}
+
+@keyframes go-pulse{0%,100%{opacity:.72;transform:scale(1)}50%{opacity:1;transform:scale(1.012)}}
+@keyframes go-scan{0%{transform:translateY(-14vh)}100%{transform:translateY(114vh)}}
+@keyframes go-flatline{0%{stroke-dashoffset:1400;opacity:0}16%{opacity:1}100%{stroke-dashoffset:0;opacity:1}}
+@keyframes go-title-glitch{
+  0%,100%{transform:translate(0,0);text-shadow:0 0 22px rgba(255,31,67,.95),0 0 80px rgba(255,0,40,.5)}
+  24%{transform:translate(-2px,1px);text-shadow:3px 0 rgba(90,230,255,.8),-3px 0 rgba(255,0,40,.9)}
+  48%{transform:translate(2px,-1px);text-shadow:-2px 0 rgba(90,230,255,.7),2px 0 rgba(255,0,40,.85)}
+}
+
+@media (max-width:900px){
+  .go-title b{font-size:clamp(34px,12vw,74px)}
+}
 

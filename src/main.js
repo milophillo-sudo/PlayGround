@@ -90,10 +90,22 @@ const intent = {
   heartOn: false,
   heartBpm: 150,
   hbAcc: 0,
+  hbBeat: -1,
   screenGlitch: false,
   glitchAcc: 0,
   forceSync: false,
   notesHidden: false,
+};
+
+// The game-over sequence slows the chart clock to a stop, drops the music's
+// pitch, pulls the camera out and paints the red flatline before results.
+const gameOver = {
+  active: false,
+  elapsed: 0,
+  wallStart: 0,
+  t0: 0,
+  visualT: 0,
+  finished: false,
 };
 
 const stats = {
@@ -103,10 +115,15 @@ const stats = {
 };
 const held = new Array(8).fill(false);
 const holdNote = new Array(8).fill(null);
-// Any finger resting anywhere on the screen keeps holds alive, so two-thumb
-// holds never break when a second finger lands or slides between lanes.
+// Taps are not tied to lanes. Every pointer or key press claims exactly one
+// note: the pending note closest to the hit line. A second finger claims the
+// next-closest note, which makes two-note chords a two-finger tap without ever
+// letting a single tap clear a whole stack.
 const touchPoints = new Set();
-function touching() { return touchPoints.size > 0; }
+const keysHeld = new Set();
+const padFlashTimers = new Array(8).fill(0);
+function inputHeld() { return touchPoints.size > 0 || keysHeld.size > 0; }
+function touching() { return inputHeld(); }
 let toastTimer = 0;
 let ghostCursor = 0;
 let eventCursor = 0;
@@ -201,6 +218,12 @@ function buildNotes() {
 }
 
 function resetGame() {
+  gameOver.active = false;
+  gameOver.finished = false;
+  gameOver.elapsed = 0;
+  gameOver.visualT = 0;
+  document.body.classList.remove('game-over');
+  scene.resetGameOver();
   for (const n of noteObjects) {
     n.state = 'pending';
     n.tickAt = n.data.t;
@@ -347,6 +370,11 @@ function hideCaption() {
 
 function showCaption(ev) {
   if (!dom.bossCaption) return;
+  // INTENTION keeps its title cards only inside the overture and dawn
+  // cinematics. Every other big mid-song phrase (THE OCEAN REMEMBERS, READY,
+  // STATIC...) would cover the field the player is reading, so it stays in the
+  // timeline but is never painted.
+  if (selectedTrack.theme === 'intention' && !intentCinematic) return;
   clearTimeout(captionTimer);
   dom.bcKicker.textContent = ev.kicker || '';
   dom.bcTitle.textContent = ev.title || '';
@@ -374,6 +402,16 @@ function glitchScreen(power = 1) {
 }
 
 // ---------------------------------------------------------------- intention HUD
+const HEARTBEAT_Y = ['70%', '50%', '30%'];
+const HEARTBEAT_POS = ['bottom', 'middle', 'top'];
+function setHeartbeatPosition(index) {
+  if (!dom.heartbeat) return;
+  const i = ((index % 3) + 3) % 3;
+  dom.heartbeat.style.setProperty('--hb-y', HEARTBEAT_Y[i]);
+  dom.heartbeat.dataset.beat = String(i);
+  dom.heartbeat.dataset.position = HEARTBEAT_POS[i];
+}
+
 function paintGuilt() {
   const value = Math.max(0, Math.min(100, intent.fakeGuilt ? intent.fakeValue : intent.guilt));
   if (dom.guiltFill) dom.guiltFill.style.width = value.toFixed(1) + '%';
@@ -429,9 +467,16 @@ function resetIntentHud() {
   intent.heartOn = false;
   intent.heartBpm = 150;
   intent.hbAcc = 0;
+  intent.hbBeat = -1;
   intent.screenGlitch = false;
   intent.glitchAcc = 0;
   intent.forceSync = false;
+  if (dom.heartbeat) {
+    dom.heartbeat.classList.remove('on', 'beat');
+    dom.heartbeat.style.setProperty('--hb-y', '70%');
+    dom.heartbeat.dataset.beat = '0';
+    dom.heartbeat.dataset.position = 'bottom';
+  }
   if (intent.notesHidden) {
     intent.notesHidden = false;
     document.body.classList.remove('intent-field-hidden');
@@ -484,6 +529,12 @@ function applyIntentHud(ev) {
       intent.heartOn = on;
       if (ev.bpm) intent.heartBpm = ev.bpm;
       intent.hbAcc = 0;
+      if (on) {
+        intent.hbBeat = -1;
+        setHeartbeatPosition(0);
+      } else {
+        intent.hbBeat = -1;
+      }
       dom.heartbeat?.classList.toggle('on', on);
       document.body.classList.toggle('heartbeat-on', on);
       break;
@@ -492,6 +543,8 @@ function applyIntentHud(ev) {
       document.body.classList.toggle('intent-glitch', on);
       break;
     case 'text':
+      if (selectedTrack.theme === 'intention'
+        && String(ev.text || '').trim().toUpperCase() !== 'INTENTION') break;
       if (on) showIntentText(ev.text, ev.sub, ev.hold ?? 3.2);
       else dom.intentText?.classList.remove('on');
       break;
@@ -574,6 +627,11 @@ function updateIntent(dt, t) {
     const interval = 60 / Math.max(40, intent.heartBpm);
     if (intent.hbAcc >= interval) {
       intent.hbAcc %= interval;
+      // bottom → middle → top on successive beats, then repeat. The CSS
+      // transition carries the line between positions while the ripple and
+      // ECG flash fire on the beat itself.
+      intent.hbBeat = (intent.hbBeat + 1) % 3;
+      setHeartbeatPosition(intent.hbBeat);
       const el = dom.heartbeat;
       if (el) {
         el.classList.remove('beat');
@@ -709,31 +767,80 @@ function completeHold(note) {
   scene.hitFx(note.lane, 'great');
 }
 
-function pressLane(lane) {
-  if (gameState !== 'playing') return;
-  scene.pressFx(lane);
-  audio.click(lane, 0.16);
-  const t = audio.time;
-  if (t < 0) return;
-
+function nearestNote(t, lane = null) {
   let best = null;
   let bestAbs = Infinity;
   for (const n of noteObjects) {
-    if (n.lane !== lane || n.state !== 'pending') continue;
+    if (n.state !== 'pending') continue;
+    if (lane !== null && n.lane !== lane) continue;
     const d = t - n.data.t;
     if (d < -EARLY_WINDOW || d > HIT_WINDOW) continue;
     const a = Math.abs(d);
-    if (a < bestAbs) { bestAbs = a; best = n; }
+    // `<` (not `<=`) keeps the first note on a tied chord: the next finger
+    // then claims the second one instead of stacking both on one tap.
+    if (a < bestAbs - 1e-6) { bestAbs = a; best = n; }
   }
-  if (!best) return;
-  judgeHit(best, t - best.data.t);
+  return best;
+}
+
+function flashPad(lane) {
+  const pad = dom.pads[lane];
+  if (!pad) return;
+  pad.classList.add('pressed');
+  clearTimeout(padFlashTimers[lane]);
+  padFlashTimers[lane] = setTimeout(() => pad.classList.remove('pressed'), 90);
+}
+
+function hitNote(note, t) {
+  flashPad(note.lane);
+  scene.pressFx(note.lane);
+  judgeHit(note, t - note.data.t);
+}
+
+// Global tap: ignores the lane under the finger and always takes the single
+// note closest to the timing line.
+function pressGlobal() {
+  if (gameState !== 'playing') return;
+  const t = audio.time;
+  if (t < 0) return;
+  const best = nearestNote(t);
+  if (!best) {
+    audio.click(3, 0.07);
+    return;
+  }
+  hitNote(best, t);
+}
+
+// Kept for automated tests and the keyboard fallback: a lane-scoped tap still
+// takes only one note.
+function pressLane(lane) {
+  if (gameState !== 'playing') return;
+  const t = audio.time;
+  if (t < 0) return;
+  const best = nearestNote(t, lane);
+  if (!best) {
+    scene.pressFx(lane);
+    audio.click(lane, 0.1);
+    return;
+  }
+  hitNote(best, t);
+}
+
+function releaseHolds() {
+  if (gameState !== 'playing' || inputHeld()) return;
+  const active = holdNote.filter((n) => n && n.state === 'holding');
+  for (const n of active) {
+    holdNote[n.lane] = null;
+    if (audio.time < n.endTime - 0.12) dropHold(n);
+    else completeHold(n);
+  }
 }
 
 function releaseLane(lane) {
   if (gameState !== 'playing') return;
   const n = holdNote[lane];
   if (!n) return;
-  // Another finger still resting on the glass keeps every active hold alive.
+  // Another finger or key still held keeps every active hold alive.
   if (touching()) return;
   holdNote[lane] = null;
   if (audio.time < n.endTime - 0.12) dropHold(n);
@@ -871,7 +978,7 @@ function updateNotes(t) {
         n.tail.scale.set(0.68 * ns, 0.68 * ns, 1);
         n.tail.position.y = len;
       }
-      if (t > n.data.t + HIT_WINDOW) missNote(n);
+      if (t > n.data.t + HIT_WINDOW && gameState === 'playing') missNote(n);
     } else if (n.state === 'holding') {
       if (!held[n.lane] && !touching()) { dropHold(n); continue; }
       if (t >= n.endTime - 0.02) {
@@ -962,6 +1069,11 @@ async function resumeGame() {
 function quitToMenu() {
   resultToken++;
   gameState = 'menu';
+  gameOver.active = false;
+  gameOver.finished = false;
+  gameOver.elapsed = 0;
+  document.body.classList.remove('game-over');
+  scene.resetGameOver();
   audio.stop();
   audio.resume();
   dom.pause.classList.remove('show');
@@ -1083,7 +1195,8 @@ function showResults(data) {
   dom.resultBpm.textContent = selectedTrack.bpmLabel || `${selectedTrack.bpm} BPM`;
   dom.footTrack.textContent = selectedTrack.shortTitle;
   dom.footLanes.textContent = selectedTrack.laneLabel;
-  dom.resultTag.textContent = full ? 'FULL COMBO // FIELD MASTERED'
+  dom.resultTag.textContent = data.failed ? 'SIGNAL LOST // GAME OVER'
+    : full ? 'FULL COMBO // FIELD MASTERED'
     : !data.cleared ? 'SIGNAL LOST // TRY AGAIN'
     : selectedTrack.boss ? (selectedTrack.clearTag || 'THE UNTOUCHABLE // FELLED')
     : 'CLEARED // SIGNAL COMPLETE';
@@ -1108,11 +1221,48 @@ function showResults(data) {
   dom.resultLoading.setAttribute('aria-hidden', 'true');
 }
 
-function finishGame() {
-  if (gameState !== 'playing' && gameState !== 'paused') return;
+function startGameOver() {
+  if (gameOver.active || (gameState !== 'playing' && gameState !== 'paused')) return;
+  gameOver.active = true;
+  gameOver.finished = false;
+  gameOver.elapsed = 0;
+  gameOver.wallStart = performance.now();
+  gameOver.t0 = audio.time;
+  gameOver.visualT = gameOver.t0;
+  gameState = 'gameover';
+  audio.pitchDrop(0.5, 2.4);
+  scene.startGameOver();
+  document.body.classList.add('game-over');
+  clearTimeout(toastTimer);
+  dom.toast.classList.remove('on');
+  hideCaption();
+  endPendulum();
+  dom.pause.classList.remove('show');
+}
+
+function updateGameOver() {
+  // Wall-clock, not frame time: the sequence still lasts 3.7s on a device
+  // that drops frames instead of stretching the flatline for half a minute.
+  gameOver.elapsed = (performance.now() - gameOver.wallStart) / 1000;
+  // The chart clock keeps moving but decelerates to a full stop. Notes that
+  // were approaching the line glide in and freeze instead of snapping away.
+  const p = Math.min(1, gameOver.elapsed / 2.7);
+  const eased = 1 - Math.pow(1 - p, 2.3);
+  gameOver.visualT = gameOver.t0 + 1.3 * eased;
+  if (!gameOver.finished && gameOver.elapsed >= 3.7) {
+    gameOver.finished = true;
+    finishGame(true);
+  }
+}
+
+function finishGame(failed = false) {
+  if (gameState !== 'playing' && gameState !== 'paused' && gameState !== 'gameover') return;
   gameState = 'results';
   audio.stop();
   audio.resume();
+  gameOver.active = false;
+  scene.resetGameOver();
+  document.body.classList.remove('game-over');
   dom.hud.classList.add('hidden');
   dom.hud.setAttribute('aria-hidden', 'true');
   dom.pause.classList.remove('show');
@@ -1124,13 +1274,13 @@ function finishGame() {
   const rank = rankFor(acc, stats.judged);
   comboHistory.push(stats.combo);
   if (comboHistory.length > COMBO_CAP) comboHistory.shift();
-  const full = stats.miss === 0 && stats.bad === 0 && stats.judged > 0;
+  const full = !failed && stats.miss === 0 && stats.bad === 0 && stats.judged > 0;
   const runScore = stats.score;
-  const scored = runScore > 0;
+  const scored = runScore > 0 && !failed;
   const cleared = scored && acc >= 50;
   const prevBest = bestMap[selectedTrack.id] || null;
   // Skipping to the end (or never touching a lane) must not overwrite a real
-  // personal best with a zero-score run.
+  // personal best with a zero-score run. A failed run is not a clear either.
   const isBest = scored && (!prevBest
     || runScore > prevBest.score
     || (runScore === prevBest.score && acc > prevBest.acc));
@@ -1141,7 +1291,7 @@ function finishGame() {
   renderBest();
 
   const data = {
-    score: runScore, acc, rank, full, isBest, prevBest, scored, cleared,
+    score: runScore, acc, rank, full, isBest, prevBest, scored, cleared, failed,
     maxCombo: stats.maxCombo, counts: { ...stats }, judgeTotals: stats.judged,
   };
 
@@ -1288,6 +1438,8 @@ function updateChartEvents(t) {
 }
 
 // ---------------------------------------------------------------- input
+// Lane keys are accepted as a convenience, but the destination lane is chosen
+// by the chart: the closest note to the hit line always answers first.
 function keyDown(e) {
   if (e.code === 'Escape') {
     if (gameState === 'playing') { e.preventDefault(); pauseGame(); }
@@ -1302,52 +1454,54 @@ function keyDown(e) {
     return;
   }
   if (e.repeat) return;
-  const lane = KEYMAP[e.code];
-  if (lane === undefined) return;
+  if (KEYMAP[e.code] === undefined) return;
   e.preventDefault();
   if (gameState !== 'playing') return;
-  if (held[lane]) return;
-  held[lane] = true;
-  dom.pads[lane].classList.add('pressed');
-  pressLane(lane);
+  if (keysHeld.has(e.code)) return;
+  keysHeld.add(e.code);
+  pressGlobal();
 }
 
 function keyUp(e) {
-  const lane = KEYMAP[e.code];
-  if (lane === undefined) return;
-  if (!held[lane]) return;
-  held[lane] = false;
-  dom.pads[lane].classList.remove('pressed');
-  releaseLane(lane);
+  if (KEYMAP[e.code] === undefined) return;
+  keysHeld.delete(e.code);
+  releaseHolds();
 }
 
 document.addEventListener('keydown', keyDown, { passive: false });
 document.addEventListener('keyup', keyUp);
 
+function overGameUi(target) {
+  return !!(target?.closest?.('#pauseBtn, #centerPad, .overlay, #startScreen, #resultScreen, #pauseScreen'));
+}
+
+// One capture-phase listener owns every tap. Pads are visuals and accessible
+// buttons now; the finger can land anywhere in the playfield.
+function pointerDown(e) {
+  if (gameState !== 'playing') return;
+  if (overGameUi(e.target)) return;
+  e.preventDefault();
+  try { e.target.setPointerCapture?.(e.pointerId); } catch { /* noop */ }
+  touchPoints.add(e.pointerId);
+  if (swingMode) swingTap();
+  else pressGlobal();
+}
+
+function pointerUp(e) {
+  touchPoints.delete(e.pointerId);
+  releaseHolds();
+}
+
+window.addEventListener('pointerdown', pointerDown, { capture: true, passive: false });
+window.addEventListener('pointerup', pointerUp, { capture: true, passive: true });
+window.addEventListener('pointercancel', pointerUp, { capture: true, passive: true });
+window.addEventListener('blur', () => {
+  touchPoints.clear();
+  keysHeld.clear();
+  releaseHolds();
+});
+
 for (const pad of dom.pads) {
-  const lane = Number(pad.dataset.lane);
-  const down = (e) => {
-    e.preventDefault();
-    if (gameState !== 'playing') return;
-    touchPoints.add(e.pointerId);
-    try { pad.setPointerCapture(e.pointerId); } catch { /* noop */ }
-    if (held[lane]) return;
-    held[lane] = true;
-    pad.classList.add('pressed');
-    pressLane(lane);
-  };
-  const up = (e) => {
-    e.preventDefault();
-    touchPoints.delete(e.pointerId);
-    if (!held[lane]) return;
-    held[lane] = false;
-    pad.classList.remove('pressed');
-    releaseLane(lane);
-  };
-  pad.addEventListener('pointerdown', down, { passive: false });
-  pad.addEventListener('pointerup', up, { passive: false });
-  pad.addEventListener('pointercancel', up, { passive: false });
-  pad.addEventListener('lostpointercapture', up, { passive: false });
   pad.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
@@ -1356,7 +1510,6 @@ if (dom.centerPad) {
     e.preventDefault();
     if (gameState !== 'playing' || !swingMode) return;
     touchPoints.add(e.pointerId);
-    try { dom.centerPad.setPointerCapture(e.pointerId); } catch { /* noop */ }
     dom.centerPad.classList.add('pressed');
     swingTap();
   };
@@ -1364,6 +1517,7 @@ if (dom.centerPad) {
     e.preventDefault();
     touchPoints.delete(e.pointerId);
     dom.centerPad.classList.remove('pressed');
+    releaseHolds();
   };
   dom.centerPad.addEventListener('pointerdown', down, { passive: false });
   dom.centerPad.addEventListener('pointerup', up, { passive: false });
@@ -1371,15 +1525,6 @@ if (dom.centerPad) {
   dom.centerPad.addEventListener('lostpointercapture', up, { passive: false });
   dom.centerPad.addEventListener('contextmenu', (e) => e.preventDefault());
 }
-
-// Count fingers pressed anywhere on the page, not just on a lane strip.
-document.addEventListener('pointerdown', (e) => {
-  if (gameState === 'playing') touchPoints.add(e.pointerId);
-}, { passive: true });
-const dropPointer = (e) => { touchPoints.delete(e.pointerId); };
-document.addEventListener('pointerup', dropPointer, { passive: true });
-document.addEventListener('pointercancel', dropPointer, { passive: true });
-document.addEventListener('pointerleave', dropPointer, { passive: true });
 
 dom.startBtn.addEventListener('click', () => {
   if (gameState === 'boot' || gameState === 'menu') startGame();
@@ -1510,7 +1655,15 @@ function frame(now) {
     updateHUD(t);
     scene.animate(dt, t, true);
     alignPads(ahead);
+    const failed = stats.health <= 0.001
+      || (intent.guiltOn && !intent.fakeGuilt && intent.guilt <= 0.001);
     if (t >= chartEnd) finishGame();
+    else if (failed) startGameOver();
+  } else if (gameState === 'gameover') {
+    updateGameOver();
+    updateNotes(gameOver.visualT);
+    scene.animate(dt, gameOver.visualT, true);
+    alignPads(new Set());
   } else if (gameState === 'paused') {
     const t = audio.time;
     scene.animate(dt, t, true);
@@ -1526,7 +1679,7 @@ function frame(now) {
 
 // exposed for automated smoke tests / tinkering
 window.__cryout = {
-  audio, stats, scene, pressLane, releaseLane, selectTrack,
+  audio, stats, scene, pressLane, pressGlobal, releaseLane, selectTrack,
   get chart() { return chart; },
   get notes() { return noteObjects; },
   get swings() { return swingNotes; },
