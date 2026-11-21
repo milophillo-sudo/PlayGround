@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#04040c" />
   <title>CRYOUT — Dynamic 3D Rhythm</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
-  <script type="module" crossorigin src="./assets/index-DxZ4iUlo.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-B7fSt0aI.css">
+  <script type="module" crossorigin src="./assets/index-DW7wK3NB.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-CFiD_PwA.css">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -93,6 +93,19 @@
           <div class="eyebrow"><i></i> ORBIT SYSTEM / ONLINE</div>
           <h1>CRY<br>OUT</h1>
           <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
+          <div class="partner-bar" aria-label="Select partner">
+            <button class="partner-chip active" data-partner="kai" aria-pressed="true">
+              <span class="pc-art"><img src="./art/kai.svg" alt="" /></span>
+              <span class="pc-copy"><b>KAI</b><em>VOCAL / GUITAR</em></span>
+            </button>
+            <button class="partner-chip" data-partner="rei" aria-pressed="false">
+              <span class="pc-art"><img src="./art/rei.svg" alt="" /></span>
+              <span class="pc-copy"><b>REI</b><em>BASS / SIGNAL</em></span>
+            </button>
+            <button id="storyBtn" class="story-btn" aria-label="Open band file">
+              <span>BAND FILE</span><b>03</b><i>→</i>
+            </button>
+          </div>
           <div class="track-picker" id="trackPicker" role="tablist" aria-label="Track selection">
             <div class="picker-head"><span>SELECT TRACK</span><em id="clearCount">0 / 5 CLEARED</em><b id="trackCount">05</b></div>
             <button class="track-card active" data-track="cryout" role="tab" aria-selected="true">
@@ -120,6 +133,15 @@
               <span class="tc-copy"><b>INTENTION</b><em>THE OCEAN REMEMBERS</em></span>
               <span class="tc-tags"><span>180 BPM</span><span>BOSS</span><span class="thumb">TIDE</span><span class="tc-best"></span></span>
             </button>
+            <div class="mode-row" id="modeRow">
+              <span class="mode-label">MODE</span>
+              <button id="modeNormal" class="mode-btn active" aria-pressed="true">
+                <b>STANDARD</b><em>1 · 2 · 4 · 6</em>
+              </button>
+              <button id="modeChaos" class="mode-btn chaos" aria-pressed="false" disabled>
+                <b>CHAOS</b><em>1200 NOTES / 150 HOLDS</em>
+              </button>
+            </div>
           </div>
           <div class="specs">
             <div><span>TRACK</span><b id="startTrack">CRYOUT</b></div>
@@ -137,6 +159,20 @@
         </div>
 
         <div class="start-side">
+          <div class="panel partner-panel">
+            <div class="panel-title">PARTNER / LIVE</div>
+            <div class="pp-body">
+              <div class="pp-art"><img id="partnerPortrait" src="./art/kai.svg" alt="KAI — vocal and guitar" /></div>
+              <div class="pp-copy">
+                <span class="pp-file" id="partnerFile">CHAPTER 01 // THE LAST FLYER</span>
+                <b id="partnerName">KAI</b>
+                <em id="partnerRole">VOCAL / GUITAR</em>
+                <q id="partnerQuote">“If I stop moving, the silence wins.”</q>
+              </div>
+            </div>
+            <div class="pp-story" id="partnerStory"></div>
+            <div class="pp-acc"><span>ACCESSORIES</span><b id="partnerAccessories">ear cuff · choker · guitar-pick chain · stage headphones</b></div>
+          </div>
           <div class="panel">
             <div class="panel-title">CONTROLS</div>
             <div class="keyrow"><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd><kbd>L</kbd><kbd>;</kbd></div>
@@ -275,6 +311,39 @@
         </div>
       </div>
     </section>
+
+    <!-- ======================= STORY / BAND FILE ======================= -->
+    <section id="storyScreen" class="story-screen" aria-hidden="true">
+      <div class="story-shell">
+        <header class="story-head">
+          <div>
+            <div class="eyebrow"><i></i> BAND FILE / CRYOUT</div>
+            <h2>THREE CHAIRS.<br><span>TWO PEOPLE.</span></h2>
+          </div>
+          <button id="storyClose" class="story-close" aria-label="Close band file">CLOSE <b>✕</b></button>
+        </header>
+        <p class="story-lore" id="storyLore"></p>
+        <div class="story-cards" id="storyCards"></div>
+        <footer class="story-foot">
+          <span>THREE YEARS / ONE VAN / NO LABEL</span>
+          <span>THE THIRD CHAIR IS STILL SET</span>
+        </footer>
+      </div>
+    </section>
+
+    <!-- ======================= IN-GAME STORY CARD ======================= -->
+    <div id="storyCard" class="story-card" aria-hidden="true">
+      <div class="sc-frame">
+        <img id="scPortrait" src="./art/kai.svg" alt="KAI memory frame" />
+        <i class="sc-scan"></i>
+      </div>
+      <div class="sc-copy">
+        <span id="scChapter">CHAPTER 01 // THE LAST FLYER</span>
+        <b id="scTitle">KAI</b>
+        <em id="scSub">THE ONE WHO STILL BELIEVES</em>
+        <span id="scName" class="sc-name">KAI</span>
+      </div>
+    </div>
 
     <div id="toast"></div>
     <div id="flash"></div>
