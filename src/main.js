@@ -1,4 +1,5 @@
-import { TRACKS, DEFAULT_TRACK_ID, TRACK_BY_ID } from './tracks.js';
+import { TRACKS, DEFAULT_TRACK_ID, TRACK_BY_ID, CHAOS_CHARTS } from './tracks.js';
+import { PARTNERS, MISSING, BAND, getPartner, applyPartnerCss } from './partners.js';
 import { createScene } from './scene.js';
 import { AudioEngine } from './audio.js';
 
@@ -7,7 +8,7 @@ const KEYMAP = {
   KeyA: 0, KeyS: 1, KeyD: 2, KeyF: 3, KeyJ: 4, KeyK: 5, KeyL: 6, Semicolon: 7,
   Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3, Numpad5: 4, Numpad6: 5, Numpad7: 6, Numpad8: 7,
 };
-const ACTIVE = { 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7] };
+const ACTIVE = { 1: [3], 2: [2, 4], 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7] };
 const HIT_WINDOW = 0.185;
 const EARLY_WINDOW = 0.16;
 const WIN = { perfect: 0.045, great: 0.09, good: 0.135, bad: 0.185 };
@@ -49,13 +50,29 @@ const dom = {
   intentText: $('intentGlitchText'), intentTextSub: $('intentGlitchSub'),
   yellow: $('yellowVignette'), rainbow: $('rainbowWash'), whiteout: $('whiteout'),
   syncEl: document.querySelector('.sync'),
+  partnerButtons: [...document.querySelectorAll('.partner-chip')],
+  partnerStory: $('partnerStory'), partnerName: $('partnerName'), partnerRole: $('partnerRole'),
+  partnerQuote: $('partnerQuote'), partnerPortrait: $('partnerPortrait'),
+  partnerFile: $('partnerFile'), partnerAcc: $('partnerAccessories'),
+  storyBtn: $('storyBtn'), storyScreen: $('storyScreen'), storyClose: $('storyClose'),
+  storyCards: $('storyCards'), storyLore: $('storyLore'),
+  modeRow: $('modeRow'), modeNormal: $('modeNormal'), modeChaos: $('modeChaos'),
+  storyCard: $('storyCard'), scChapter: $('scChapter'), scTitle: $('scTitle'),
+  scSub: $('scSub'), scName: $('scName'), scPortrait: $('scPortrait'),
 };
 
 // ---------------------------------------------------------------- state
 const scene = createScene(dom.canvas);
 const audio = new AudioEngine();
+const PARTNER_KEY = 'cryout-partner-v1';
+let partner = getPartner((() => {
+  try { return localStorage.getItem(PARTNER_KEY) || 'kai'; } catch { return 'kai'; }
+})());
+let chaosMode = false;
 let selectedTrack = TRACK_BY_ID[DEFAULT_TRACK_ID] || TRACKS[0];
 let chart = selectedTrack.chart;
+let storyTimer = 0;
+let storyGlideTimer = 0;
 let noteObjects = [];
 let swingNotes = [];
 let swingMode = false;
@@ -156,19 +173,179 @@ function readBestMap() {
 let bestMap = readBestMap();
 let personalBest = bestMap[selectedTrack.id] || null;
 
+function bestIdFor() {
+  return chaosMode && selectedTrack.id === 'intention' ? 'intention-chaos' : selectedTrack.id;
+}
+function isChaos() {
+  return !!chaosMode && selectedTrack.id === 'intention';
+}
+function chartFor(track, chaos = false) {
+  if (chaos && track.id === 'intention' && CHAOS_CHARTS.intention) return CHAOS_CHARTS.intention;
+  return track.chart;
+}
+
+function parsePortrait(path) {
+  return path || './art/kai.svg';
+}
+
+function renderPartner() {
+  applyPartnerCss(partner);
+  document.body.classList.toggle('partner-kai', partner.id === 'kai');
+  document.body.classList.toggle('partner-rei', partner.id === 'rei');
+  document.body.dataset.partner = partner.id;
+  for (const btn of dom.partnerButtons) {
+    const on = btn.dataset.partner === partner.id;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  }
+  if (dom.partnerName) dom.partnerName.textContent = partner.name;
+  if (dom.partnerRole) dom.partnerRole.textContent = partner.role;
+  if (dom.partnerQuote) dom.partnerQuote.textContent = partner.quote;
+  if (dom.partnerFile) dom.partnerFile.textContent = partner.file;
+  if (dom.partnerAcc) dom.partnerAcc.textContent = partner.accessories;
+  if (dom.partnerStory) {
+    dom.partnerStory.innerHTML = partner.story.map((line) => `<p>${line}</p>`).join('');
+  }
+  if (dom.partnerPortrait) {
+    dom.partnerPortrait.src = parsePortrait(partner.portrait);
+    dom.partnerPortrait.alt = `${partner.name} — ${partner.role}`;
+  }
+  if (dom.startBtn && audio.loaded) {
+    dom.startLabel.textContent = isChaos() ? 'ENTER CHAOS' : 'START SESSION';
+  }
+  scene.setPartner?.(partner.id);
+}
+
+function selectPartner(id) {
+  const next = PARTNERS.find((p) => p.id === id);
+  if (!next || next.id === partner.id) return;
+  partner = next;
+  try { localStorage.setItem(PARTNER_KEY, next.id); } catch { /* storage unavailable */ }
+  renderPartner();
+  toast(`${next.name} // ${next.role}`, 1200);
+}
+
+function renderStoryScreen() {
+  if (!dom.storyCards) return;
+  const cards = PARTNERS.map((p) => `
+    <article class="story-char" style="--char:${p.accent};--char2:${p.accent2}">
+      <div class="story-char-art"><img src="${parsePortrait(p.portrait)}" alt="${p.name}"/></div>
+      <div class="story-char-copy">
+        <span>${p.num} / ${p.role}</span>
+        <b>${p.name}</b>
+        <em>${p.tagline}</em>
+        <p>${p.story[0]}</p>
+        <q>${p.quote}</q>
+      </div>
+    </article>`).join('');
+  const missing = `
+    <article class="story-char missing" style="--char:${MISSING.accent};--char2:#65e5ff">
+      <div class="story-char-art glitch"><img src="${parsePortrait(MISSING.portrait)}" alt="Unknown missing member"/></div>
+      <div class="story-char-copy">
+        <span>${MISSING.num} / ${MISSING.role}</span>
+        <b>${MISSING.name}</b>
+        <em>SIGNAL NOT FOUND</em>
+        <p>The third chair is still set. The jacket still smells like rain. REI will not move it, and KAI will not ask why.</p>
+        <q>${MISSING.quote}</q>
+      </div>
+    </article>`;
+  dom.storyCards.innerHTML = cards + missing;
+  if (dom.storyLore) dom.storyLore.textContent = BAND.lore;
+}
+
+function openStory() {
+  renderStoryScreen();
+  dom.storyScreen?.classList.add('show');
+  dom.storyScreen?.setAttribute('aria-hidden', 'false');
+}
+function closeStory() {
+  dom.storyScreen?.classList.remove('show');
+  dom.storyScreen?.setAttribute('aria-hidden', 'true');
+}
+
+function hideStoryCard() {
+  clearTimeout(storyTimer);
+  clearTimeout(storyGlideTimer);
+  dom.storyCard?.classList.remove('on', 'nova', 'glide-left', 'glide-right', 'glide-up');
+  dom.storyCard?.setAttribute('aria-hidden', 'true');
+  scene.intentionCutscene?.(false);
+}
+
+function showStoryCard(ev) {
+  if (!dom.storyCard) return;
+  const char = ev.partner === 'nova' ? MISSING : getPartner(ev.partner || partner.id);
+  clearTimeout(storyTimer);
+  clearTimeout(storyGlideTimer);
+  dom.scChapter.textContent = ev.chapter || char.file;
+  dom.scTitle.textContent = ev.title || char.name;
+  dom.scSub.textContent = ev.sub || char.quote;
+  dom.scName.textContent = char.name;
+  dom.scPortrait.src = parsePortrait(char.portrait);
+  dom.scPortrait.alt = `${char.name} memory frame`;
+  dom.storyCard.classList.toggle('nova', char.id === 'nova');
+  dom.storyCard.classList.remove('glide-left', 'glide-right', 'glide-up');
+  if (ev.glide === 'left') dom.storyCard.classList.add('glide-left');
+  else if (ev.glide === 'right') dom.storyCard.classList.add('glide-right');
+  else if (ev.glide === 'up') dom.storyCard.classList.add('glide-up');
+  dom.storyCard.setAttribute('aria-hidden', 'false');
+  void dom.storyCard.offsetWidth;
+  dom.storyCard.classList.add('on');
+  if (ev.glide) {
+    scene.intentionCutscene?.(true, ev.glide, ev.glideDur || 2.2);
+    storyGlideTimer = setTimeout(() => scene.intentionCutscene?.(false), (ev.glideDur || 2.2) * 1000);
+  }
+  storyTimer = setTimeout(() => {
+    dom.storyCard.classList.remove('on');
+    dom.storyCard.setAttribute('aria-hidden', 'true');
+    scene.intentionCutscene?.(false);
+  }, Math.max(1.2, ev.hold ?? 3) * 1000);
+}
+
+function applyChartSelection() {
+  chart = chartFor(selectedTrack, chaosMode);
+  chartEnd = chart.song.chartEnd;
+  trackDuration = chart.song.duration || selectedTrack.duration;
+  document.body.classList.toggle('chaos-mode', isChaos());
+  scene.setBoss(selectedTrack.boss ? 'preview' : 'off', selectedTrack.theme || 'untouchable');
+  scene.setChaos?.(isChaos());
+  if (isChaos()) scene.setIntentionPhase?.('chaos');
+  scene.setSection(chart.sections[0]);
+  scene.setTempo(chart.song.bpm, chart.song.beatOffset);
+  scene.setCity(chart.sections[0].city || 0);
+  scene.setPreviewLanes(new Set());
+  buildNotes();
+  resetGame();
+  if (selectedTrack.id === 'chronostasis' && !chaosMode) scene.setClock('run', 0.4);
+}
+
+function setChaosMode(on) {
+  if (gameState !== 'menu' && gameState !== 'boot') return;
+  const next = !!on && selectedTrack.id === 'intention';
+  if (next === chaosMode) return;
+  chaosMode = next;
+  applyChartSelection();
+  applyTrackUI();
+  renderBest();
+  toast(chaosMode
+    ? 'CHAOS // 1200 NOTES · 150 HOLDS · NO OVERTURE'
+    : 'INTENTION // STANDARD FIELD', 2200);
+}
+
 function isCleared(best) {
   return !!best && (best.acc || 0) >= 50;
 }
 
 function renderBest() {
-  personalBest = bestMap[selectedTrack.id] || null;
+  personalBest = bestMap[bestIdFor()] || null;
   const text = personalBest
     ? `${String(personalBest.score).padStart(7, '0')} · ${personalBest.rank || '—'}`
     : '—';
   if (dom.bestScoreLabel) dom.bestScoreLabel.textContent = text;
   if (dom.bestLine) dom.bestLine.innerHTML = `PERSONAL BEST <b>${text}</b>`;
   for (const card of dom.trackCards) {
-    const best = bestMap[card.dataset.track];
+    const id = card.dataset.track;
+    const best = bestMap[id]
+      || (id === 'intention' && chaosMode ? bestMap['intention-chaos'] : null);
     const tag = card.querySelector('.tc-best');
     if (tag) {
       tag.textContent = best ? `PB ${best.rank || '—'}` : '';
@@ -177,7 +354,8 @@ function renderBest() {
     card.classList.toggle('cleared', isCleared(best));
   }
   if (dom.clearCount) {
-    const cleared = TRACKS.filter((t) => isCleared(bestMap[t.id])).length;
+    const cleared = TRACKS.filter((t) => isCleared(bestMap[t.id])
+      || (t.id === 'intention' && isCleared(bestMap['intention-chaos']))).length;
     dom.clearCount.textContent = `${cleared} / ${TRACKS.length} CLEARED`;
     dom.clearCount.classList.toggle('all', cleared === TRACKS.length);
   }
@@ -253,6 +431,7 @@ function resetGame() {
   comboHistory = [];
   comboClock = 0;
   vibeTimer = 0;
+  hideStoryCard();
   scene.clearGhosts();
   scene.clockReset();
   endPendulum();
@@ -458,6 +637,7 @@ function clearIntentClasses() {
 function resetIntentHud() {
   clearTimeout(intentTextTimer);
   clearIntentClasses();
+  hideStoryCard();
   intent.phase = 'off';
   intent.guiltOn = false;
   intent.guilt = 100;
@@ -635,9 +815,12 @@ function updateIntent(dt, t) {
       setHeartbeatPosition(intent.hbBeat);
       const el = dom.heartbeat;
       if (el) {
+        // Restart the beat animation without forcing a synchronous layout.
+        // The CSS animations are transform/opacity driven; a one-frame gap is
+        // enough to replay them and avoids the full-screen reflow that used to
+        // hitch the game on every heartbeat.
         el.classList.remove('beat');
-        void el.offsetWidth;
-        el.classList.add('beat');
+        setTimeout(() => { if (intent.heartOn) el.classList.add('beat'); }, 18);
       }
     }
   } else {
@@ -1026,17 +1209,35 @@ async function startGame() {
   dom.hud.classList.remove('hidden');
   dom.hud.setAttribute('aria-hidden', 'false');
   document.body.classList.add('playing');
+  document.body.classList.toggle('chaos-mode', isChaos());
   hideCaption();
+  hideStoryCard();
   dom.bossGlitch?.classList.remove('on');
-  if (selectedTrack.boss) {
+  if (selectedTrack.boss && !isChaos()) {
     scene.setBoss('intro', selectedTrack.theme || 'untouchable');
     setBossIntro(true);
+  } else if (selectedTrack.boss) {
+    // CHAOS has no overture: the chart opens on the playfield with notes and
+    // the flying particle layer already live.
+    scene.setBoss('play', 'intention');
+    setBossIntro(false);
   } else {
     scene.setBoss('off', selectedTrack.theme || 'untouchable');
     setBossIntro(false);
   }
-  setIntentPresentation(selectedTrack.theme === 'intention', true);
+  setIntentPresentation(selectedTrack.theme === 'intention', !isChaos());
   resetGame();
+  if (isChaos()) {
+    scene.setBoss('play', 'intention');
+    scene.setChaos?.(true);
+    // CHAOS starts inside the storm: no void/overture field hide survives a
+    // retry, and the stage is already in its chaos phase on the first frame.
+    scene.setIntentFieldHidden(false);
+    scene.setIntentNoteLayerHidden(false);
+    scene.setIntentionPhase('chaos');
+  } else {
+    scene.setChaos?.(false);
+  }
   gameState = 'starting';
   try {
     await audio.start(0, { fadeStart: selectedTrack.fadeStart, fadeEnd: selectedTrack.fadeEnd });
@@ -1092,8 +1293,10 @@ function quitToMenu() {
   setBossIntro(false);
   setIntentPresentation(false);
   hideCaption();
+  hideStoryCard();
   dom.bossGlitch?.classList.remove('on');
   resetIntentHud();
+  scene.setChaos?.(isChaos());
   for (const n of noteObjects) n.group.visible = false;
   held.fill(false);
   holdNote.fill(null);
@@ -1192,20 +1395,21 @@ function showResults(data) {
   dom.comboFill.setAttribute('d', graph.fill);
   dom.peakCombo.textContent = stats.maxCombo;
 
-  dom.resultTrack.textContent = selectedTrack.title;
-  dom.resultDiff.textContent = selectedTrack.difficulty;
-  dom.resultBpm.textContent = selectedTrack.bpmLabel || `${selectedTrack.bpm} BPM`;
+  dom.resultTrack.textContent = `${selectedTrack.title}${isChaos() ? ' // CHAOS' : ''}`;
+  dom.resultDiff.textContent = isChaos() ? 'CHAOS' : selectedTrack.difficulty;
+  dom.resultBpm.textContent = isChaos() ? (chart.song.bpmLabel || 'CHAOS') : (selectedTrack.bpmLabel || `${selectedTrack.bpm} BPM`);
   dom.footTrack.textContent = selectedTrack.shortTitle;
-  dom.footLanes.textContent = selectedTrack.laneLabel;
+  dom.footLanes.textContent = isChaos() ? '8 · 6 · 4' : selectedTrack.laneLabel;
   dom.resultTag.textContent = data.failed ? 'SIGNAL LOST // GAME OVER'
     : full ? 'FULL COMBO // FIELD MASTERED'
     : !data.cleared ? 'SIGNAL LOST // TRY AGAIN'
+    : isChaos() ? 'CHAOS // OCEAN BROKEN OPEN'
     : selectedTrack.boss ? (selectedTrack.clearTag || 'THE UNTOUCHABLE // FELLED')
     : 'CLEARED // SIGNAL COMPLETE';
   dom.fcBadge.classList.toggle('on', full);
   dom.bestBadge.classList.toggle('on', isBest);
 
-  const best = bestMap[selectedTrack.id] || null;
+  const best = bestMap[bestIdFor()] || null;
   dom.bestNote.innerHTML = best
     ? `${String(best.score).padStart(7, '0')} · ${best.rank || '—'}`
     : 'FIRST RUN';
@@ -1269,6 +1473,7 @@ function finishGame(failed = false) {
   dom.hud.setAttribute('aria-hidden', 'true');
   dom.pause.classList.remove('show');
   document.body.classList.remove('playing');
+  document.body.classList.remove('chaos-mode');
   setIntentPresentation(false);
   setBossIntro(false);
 
@@ -1280,14 +1485,15 @@ function finishGame(failed = false) {
   const runScore = stats.score;
   const scored = runScore > 0 && !failed;
   const cleared = scored && acc >= 50;
-  const prevBest = bestMap[selectedTrack.id] || null;
+  const bestKey = bestIdFor();
+  const prevBest = bestMap[bestKey] || null;
   // Skipping to the end (or never touching a lane) must not overwrite a real
   // personal best with a zero-score run. A failed run is not a clear either.
   const isBest = scored && (!prevBest
     || runScore > prevBest.score
     || (runScore === prevBest.score && acc > prevBest.acc));
   if (isBest) {
-    bestMap[selectedTrack.id] = { score: runScore, acc, rank, maxCombo: stats.maxCombo, full, at: Date.now() };
+    bestMap[bestKey] = { score: runScore, acc, rank, maxCombo: stats.maxCombo, full, at: Date.now() };
     try { localStorage.setItem(BEST_KEY, JSON.stringify(bestMap)); } catch { /* storage unavailable */ }
   }
   renderBest();
@@ -1332,9 +1538,8 @@ function retryGame() {
 }
 
 function alignPads(ahead = new Set()) {
-  // Long touch strips follow the projected lane direction. Tapping anywhere
-  // along the lane hits that lane, and a lane with an incoming note is made
-  // live before its section actually starts.
+  // Pad strips are visual affordances for the live lanes; input is global, but
+  // a lane with an incoming note is still surfaced before its section starts.
   const active = new Set(currentSection ? activeLanesFor(currentSection.keys) : []);
   for (const lane of ahead) active.add(lane);
   for (let i = 0; i < 8; i++) {
@@ -1434,6 +1639,9 @@ function updateChartEvents(t) {
       case 'caption':
         showCaption(ev);
         break;
+      case 'cutscene':
+        showStoryCard(ev);
+        break;
       default: break;
     }
   }
@@ -1446,6 +1654,17 @@ function keyDown(e) {
   if (e.code === 'Escape') {
     if (gameState === 'playing') { e.preventDefault(); pauseGame(); }
     else if (gameState === 'paused') { e.preventDefault(); resumeGame(); }
+    return;
+  }
+  if ((gameState === 'menu' || gameState === 'boot') && e.code === 'KeyP') {
+    e.preventDefault();
+    const i = PARTNERS.findIndex((p) => p.id === partner.id);
+    selectPartner(PARTNERS[(i + 1) % PARTNERS.length].id);
+    return;
+  }
+  if ((gameState === 'menu' || gameState === 'boot') && e.code === 'KeyC' && selectedTrack.id === 'intention') {
+    e.preventDefault();
+    setChaosMode(!chaosMode);
     return;
   }
   if (e.code === 'Space') {
@@ -1538,6 +1757,22 @@ for (const card of dom.trackCards) {
     selectTrack(card.dataset.track);
   });
 }
+for (const btn of dom.partnerButtons) {
+  btn.addEventListener('click', () => {
+    if (gameState !== 'boot' && gameState !== 'menu') return;
+    selectPartner(btn.dataset.partner);
+  });
+}
+dom.modeNormal?.addEventListener('click', () => setChaosMode(false));
+dom.modeChaos?.addEventListener('click', () => setChaosMode(true));
+dom.storyBtn?.addEventListener('click', () => {
+  if (gameState !== 'boot' && gameState !== 'menu') return;
+  openStory();
+});
+dom.storyClose?.addEventListener('click', closeStory);
+dom.storyScreen?.addEventListener('click', (e) => {
+  if (e.target === dom.storyScreen) closeStory();
+});
 dom.pauseBtn.addEventListener('click', pauseGame);
 $('resumeBtn').addEventListener('click', resumeGame);
 $('restartBtn').addEventListener('click', () => { dom.pause.classList.remove('show'); startGame(); });
@@ -1556,16 +1791,30 @@ dom.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 // ---------------------------------------------------------------- track select
 function applyTrackUI() {
   const t = selectedTrack;
-  if (dom.startTrack) dom.startTrack.textContent = t.shortTitle;
+  const chaos = isChaos();
+  if (dom.startTrack) dom.startTrack.textContent = chaos ? 'INTENTION // CHAOS' : t.shortTitle;
   if (dom.startLength) dom.startLength.textContent = fmtTime(t.duration);
-  if (dom.startLevel) dom.startLevel.textContent = t.difficulty;
-  if (dom.startLanes) dom.startLanes.textContent = t.laneLabel;
-  if (dom.hudTrack) dom.hudTrack.textContent = t.shortTitle;
-  if (dom.hudBpm) dom.hudBpm.textContent = t.bpmLabel || `${t.bpm} BPM`;
-  if (dom.loadTrack) dom.loadTrack.textContent = `${t.shortTitle} // ${t.difficulty}`;
+  if (dom.startLevel) dom.startLevel.textContent = chaos ? 'CHAOS' : t.difficulty;
+  if (dom.startLanes) dom.startLanes.textContent = chaos ? '8 · 6 · 4' : t.laneLabel;
+  if (dom.hudTrack) dom.hudTrack.textContent = chaos ? 'INTENTION // CHAOS' : t.shortTitle;
+  if (dom.hudBpm) dom.hudBpm.textContent = chaos ? (chart.song.bpmLabel || 'CHAOS') : (t.bpmLabel || `${t.bpm} BPM`);
+  if (dom.loadTrack) dom.loadTrack.textContent = `${chaos ? 'INTENTION CHAOS' : t.shortTitle} // ${chaos ? 'CHAOS' : t.difficulty}`;
   const count = $('trackCount');
   if (count) count.textContent = String(TRACKS.length).padStart(2, '0');
   document.body.classList.toggle('boss-track', !!t.boss);
+  document.body.classList.toggle('chaos-mode', chaos);
+  const canChaos = t.id === 'intention';
+  if (dom.modeRow) dom.modeRow.classList.toggle('show', canChaos);
+  if (dom.modeNormal) {
+    dom.modeNormal.classList.toggle('active', canChaos && !chaos);
+    dom.modeNormal.setAttribute('aria-pressed', String(canChaos && !chaos));
+  }
+  if (dom.modeChaos) {
+    dom.modeChaos.classList.toggle('active', chaos);
+    dom.modeChaos.setAttribute('aria-pressed', String(chaos));
+    dom.modeChaos.disabled = !canChaos;
+  }
+  if (audio.loaded && dom.startLabel) dom.startLabel.textContent = chaos ? 'ENTER CHAOS' : 'START SESSION';
   for (const card of dom.trackCards) {
     const meta = TRACK_BY_ID[card.dataset.track];
     if (meta) card.style.setProperty('--card-accent', meta.accent);
@@ -1573,7 +1822,7 @@ function applyTrackUI() {
     card.classList.toggle('active', on);
     card.setAttribute('aria-selected', String(on));
   }
-  document.documentElement.style.setProperty('--track-accent', t.accent);
+  document.documentElement.style.setProperty('--track-accent', chaos ? '#ff3b5c' : t.accent);
   renderBest();
 }
 
@@ -1581,13 +1830,16 @@ async function selectTrack(id, { autoLoad = true } = {}) {
   const next = TRACK_BY_ID[id];
   if (!next) return;
   selectedTrack = next;
-  chart = next.chart;
+  chaosMode = false;
+  chart = chartFor(next, false);
   chartEnd = chart.song.chartEnd;
   trackDuration = next.duration;
   applyTrackUI();
   setBossIntro(false);
   setIntentPresentation(false);
   hideCaption();
+  hideStoryCard();
+  scene.setChaos?.(false);
   dom.bossGlitch?.classList.remove('on');
   scene.setBoss(next.boss ? 'preview' : 'off', next.theme || 'untouchable');
   scene.setSection(chart.sections[0]);
@@ -1617,7 +1869,7 @@ async function loadAudio(track = selectedTrack) {
     if (token !== loadToken) return;
     audio.setBuffer(buffer);
     dom.loadFill.style.width = '100%';
-    dom.startLabel.textContent = 'START SESSION';
+    dom.startLabel.textContent = isChaos() ? 'ENTER CHAOS' : 'START SESSION';
     dom.startBtn.disabled = false;
     gameState = 'menu';
   } catch (err) {
@@ -1632,6 +1884,7 @@ async function loadAudio(track = selectedTrack) {
 buildNotes();
 resetGame();
 gameState = 'boot';
+renderPartner();
 applyTrackUI();
 loadAudio(selectedTrack);
 
@@ -1682,7 +1935,10 @@ function frame(now) {
 // exposed for automated smoke tests / tinkering
 window.__cryout = {
   audio, stats, scene, pressLane, pressGlobal, releaseLane, selectTrack,
+  selectPartner, setChaosMode, showStoryCard,
   get chart() { return chart; },
+  get partner() { return partner; },
+  get chaos() { return isChaos(); },
   get notes() { return noteObjects; },
   get swings() { return swingNotes; },
   get swingMode() { return swingMode; },

@@ -3,6 +3,7 @@ import { CHART as world } from './charts/world.js';
 import { CHART as chronostasis } from './charts/chronostasis.js';
 import { CHART as untouchable } from './charts/untouchable.js';
 import { CHART as intention } from './charts/intention.js';
+import { CHART as intentionChaos } from './charts/intention-chaos.js';
 
 // Track metadata is intentionally separate from the generated chart: the menu
 // can show a track before its audio has been decoded.
@@ -99,3 +100,6 @@ export const TRACKS = [
 
 export const DEFAULT_TRACK_ID = 'cryout';
 export const TRACK_BY_ID = Object.fromEntries(TRACKS.map((t) => [t.id, t]));
+// The menu's INTENTION CHAOS mode swaps the chart, not the track. Keeping the
+// chart separate means the audio, stage and partner fiction stay shared.
+export const CHAOS_CHARTS = { intention: intentionChaos };

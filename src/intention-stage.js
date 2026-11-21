@@ -156,6 +156,53 @@ function glowTexture() {
   return tex(c);
 }
 
+function staticTexture() {
+  const [c, x] = canvas(256, 320);
+  const img = x.createImageData(256, 320);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.random() < 0.5 ? 0 : 255;
+    img.data[i] = v;
+    img.data[i + 1] = Math.random() < 0.88 ? 0 : 80;
+    img.data[i + 2] = Math.random() < 0.72 ? 40 : 255;
+    img.data[i + 3] = Math.random() < 0.35 ? 230 : 0;
+  }
+  x.putImageData(img, 0, 0);
+  // A few bright scan tears make the static read as a corrupted portrait,
+  // not just television noise.
+  x.fillStyle = 'rgba(255,255,255,.75)';
+  for (let i = 0; i < 9; i++) x.fillRect(0, Math.random() * 320, 256, 1 + Math.random() * 3);
+  x.fillStyle = 'rgba(255,45,90,.55)';
+  for (let i = 0; i < 6; i++) x.fillRect(0, Math.random() * 320, 256, 2 + Math.random() * 5);
+  return tex(c);
+}
+
+function labelTexture(text, color = '#ffd166') {
+  const [c, x] = canvas(512, 128);
+  x.clearRect(0, 0, 512, 128);
+  x.fillStyle = 'rgba(3,6,14,.82)';
+  x.fillRect(0, 0, 512, 128);
+  x.strokeStyle = color;
+  x.globalAlpha = 0.8;
+  x.lineWidth = 3;
+  x.strokeRect(2, 2, 508, 124);
+  x.globalAlpha = 1;
+  x.fillStyle = color;
+  x.font = '700 46px monospace';
+  x.letterSpacing = '8px';
+  x.fillText(text, 26, 72);
+  x.font = '20px monospace';
+  x.fillStyle = 'rgba(220,240,255,.62)';
+  x.fillText('MEMORY FRAME', 26, 104);
+  return tex(c);
+}
+
+function portraitTexture(path) {
+  const t = new THREE.TextureLoader().load(path);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
   const root = new THREE.Group();
   root.name = 'intentionStage';
@@ -165,12 +212,21 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
   const T = {
     sky: skyTexture(), ocean: oceanTexture(), flower: flowerTexture(),
     cloud: cloudTexture(), star: starTexture(), glow: glowTexture(),
+    static: staticTexture(),
+    labelKai: labelTexture('01 / KAI', '#8ffaff'),
+    labelRei: labelTexture('02 / REI', '#ffe9a8'),
+    labelNova: labelTexture('?? / NOVA', '#ff7d9e'),
+    kai: portraitTexture('./art/kai.svg'),
+    rei: portraitTexture('./art/rei.svg'),
+    nova: portraitTexture('./art/nova.svg'),
   };
 
   // ---------------------------------------------------------------- levels
   const level = {
     world: 0, void: 0, flowers: 0, pillars: 0, halo: 0, memory: 0,
     bright: 0, glitch: 0, active: false, phase: 'off', portrait: false,
+    chaos: 0, cutscene: 0, side: 0, partner: 'kai', time: 0,
+    chaosOn: 0, cutsceneOn: 0, cutsceneTarget: 0, sideTarget: 0, cutsceneDur: 2.2, cutsceneT: 0,
   };
   const target = { world: 0, void: 0, flowers: 0, pillars: 0, halo: 0, memory: 0, bright: 0 };
   const phaseTable = {
@@ -193,6 +249,12 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     white: { world: .2, void: .1, flowers: .2, bright: 1 },
     fake: { world: 0, void: .16, flowers: 0, bright: .2 },
     dawn: { world: 1, void: .22, flowers: 1.5, pillars: .12, halo: .8, memory: .2, bright: 1.15 },
+    // CHAOS mode phases: the same ocean, but the sky is torn open.
+    chaos: { world: 1, void: .5, flowers: .72, pillars: .35, halo: .22, memory: .35, bright: .86 },
+    chaos2: { world: 1, void: .34, flowers: .9, pillars: .65, halo: .55, memory: .9, bright: 1 },
+    storm: { world: .7, void: .86, flowers: .42, pillars: .55, halo: .42, memory: .55, bright: .78 },
+    collapse: { world: .52, void: 1, flowers: .28, pillars: .38, halo: .24, memory: 1, bright: .66 },
+    glide: { world: .18, void: .82, flowers: .16, pillars: .28, halo: .18, memory: .8, bright: .48 },
   };
 
   // ---------------------------------------------------------------- sky
@@ -418,6 +480,157 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     });
   }
 
+  // ------------------------------------------------ floating memory portraits
+  // INTENTION's guilt is literal: three framed photographs drift over the
+  // water. KAI (01) and REI (02) are readable; NOVA (??) keeps tearing into
+  // static. The frames follow the selected partner and glide out of the lens
+  // during the far camera moves.
+  const portraitDefs = [
+    { id: 'kai', num: '01', map: T.kai, label: T.labelKai, color: 0x8ffaff, x: -13.5, y: 7.2, z: -25, rot: .24, scale: 1 },
+    { id: 'rei', num: '02', map: T.rei, label: T.labelRei, color: 0xffd166, x: 13.5, y: 6.1, z: -31, rot: -.25, scale: .94 },
+    { id: 'nova', num: '??', map: T.nova, label: T.labelNova, color: 0xff5f7f, x: 0, y: 10.4, z: -40, rot: .04, scale: 1.08 },
+  ];
+  const portraitFrames = portraitDefs.map((d, i) => {
+    const group = new THREE.Group();
+    group.position.set(d.x, d.y, d.z);
+    group.rotation.y = d.rot;
+    group.renderOrder = -7;
+    root.add(group);
+
+    const auraMat = new THREE.SpriteMaterial({
+      map: T.glow, color: d.color, transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    const aura = new THREE.Sprite(auraMat);
+    aura.scale.set(9, 10.8, 1);
+    aura.position.z = -.06;
+    aura.renderOrder = -9;
+    group.add(aura);
+
+    const borderMat = new THREE.MeshBasicMaterial({
+      color: d.color, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+      side: THREE.DoubleSide, fog: false,
+    });
+    const border = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 6.05), borderMat);
+    border.position.z = -.02;
+    border.renderOrder = -8;
+    group.add(border);
+
+    const photoMat = new THREE.MeshBasicMaterial({
+      map: d.map, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+      side: THREE.DoubleSide, fog: false,
+    });
+    const photo = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 5.75), photoMat);
+    photo.renderOrder = -7;
+    group.add(photo);
+
+    // The unknown portrait flickers between the clean art and raw static.
+    const tearMat = new THREE.MeshBasicMaterial({
+      map: T.static, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+      side: THREE.DoubleSide, fog: false,
+    });
+    const tear = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 5.75), tearMat);
+    tear.position.z = .03;
+    tear.renderOrder = -6;
+    group.add(tear);
+
+    const labelMat = new THREE.SpriteMaterial({
+      map: d.label, transparent: true, opacity: 0, depthWrite: false, depthTest: false, fog: false,
+    });
+    const label = new THREE.Sprite(labelMat);
+    label.scale.set(4.6, 1.15, 1);
+    label.position.set(0, -3.5, .08);
+    label.renderOrder = -5;
+    group.add(label);
+
+    return {
+      ...d, group, aura, auraMat, border, borderMat, photo, photoMat, tear, tearMat, label, labelMat,
+      phase: i * 2.1, homeY: d.y, homeX: d.x, homeZ: d.z, glitch: i === 2 ? 1 : 0,
+    };
+  });
+
+  // ------------------------------------------------ chaos field sparks
+  // A second particle layer only exists for CHAOS: fast, streaking motes that
+  // cut across the memory field instead of drifting upward. The buffer is
+  // allocated once and skipped entirely when the mode is off.
+  const SPARKS = 560;
+  const sPos = new Float32Array(SPARKS * 3);
+  const sVel = new Float32Array(SPARKS * 3);
+  const sCol = new Float32Array(SPARKS * 3);
+  const sPhase = new Float32Array(SPARKS);
+  const sparkPalette = [new THREE.Color(0xff3b5c), new THREE.Color(0xff5fd2), new THREE.Color(0x8ffaff), new THREE.Color(0xffd166)];
+  for (let i = 0; i < SPARKS; i++) {
+    sPos[i * 3] = (Math.random() - .5) * 92;
+    sPos[i * 3 + 1] = -5 + Math.random() * 34;
+    sPos[i * 3 + 2] = -8 - Math.random() * 46;
+    sVel[i * 3] = (Math.random() < .5 ? -1 : 1) * (7 + Math.random() * 18);
+    sVel[i * 3 + 1] = 1.5 + Math.random() * 7;
+    sVel[i * 3 + 2] = (Math.random() - .5) * 6;
+    const c = sparkPalette[i % sparkPalette.length];
+    sCol[i * 3] = c.r; sCol[i * 3 + 1] = c.g; sCol[i * 3 + 2] = c.b;
+    sPhase[i] = Math.random() * 6.28;
+  }
+  const sGeo = new THREE.BufferGeometry();
+  sGeo.setAttribute('position', new THREE.BufferAttribute(sPos, 3));
+  sGeo.setAttribute('color', new THREE.BufferAttribute(sCol, 3));
+  const sMat = new THREE.PointsMaterial({
+    size: .42, map: T.glow, vertexColors: true, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    sizeAttenuation: true, fog: false,
+  });
+  const sparks = new THREE.Points(sGeo, sMat);
+  sparks.renderOrder = 7;
+  sparks.visible = false;
+  root.add(sparks);
+
+  // ------------------------------------------------ broken altar (boss map)
+  // The libra stands inside a shattered ring map: three broken gold circles,
+  // eight sinking obelisks and a rune path leading out of the lens.
+  const altar = new THREE.Group();
+  altar.position.set(0, -.02, 0);
+  libra.add(altar);
+  const altarMats = [];
+  for (let i = 0; i < 3; i++) {
+    const radius = 5.4 + i * 3.2;
+    const mat = new THREE.MeshBasicMaterial({
+      color: i === 1 ? 0xffe9a8 : 0xffc54a, transparent: true, opacity: 0,
+      depthWrite: false, fog: false,
+    });
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(radius, .055 + i * .012, 4, 96), mat);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = .1 + i * .01;
+    altar.add(ring);
+    altarMats.push({ mat, base: .46 - i * .1, ring, spin: (i % 2 ? -1 : 1) * (.04 + i * .012) });
+  }
+  const obeliskMats = [];
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + .2;
+    const mat = new THREE.MeshBasicMaterial({
+      color: i % 3 ? 0x2c5a82 : 0x7d5a22, transparent: true, opacity: 0,
+      depthWrite: false, fog: false,
+    });
+    const ob = new THREE.Mesh(new THREE.CylinderGeometry(.16, .5, 2.8 + (i % 3), 4), mat);
+    ob.position.set(Math.cos(a) * (12 + (i % 2) * 2.4), 1.4, Math.sin(a) * (12 + (i % 2) * 2.4));
+    ob.rotation.y = a;
+    altar.add(ob);
+    obeliskMats.push({ mat, mesh: ob, phase: i * .8, baseY: ob.position.y });
+  }
+  // Rune path: small gold glows set into the water toward the altar.
+  const runeMats = [];
+  for (let i = 0; i < 14; i++) {
+    const mat = new THREE.SpriteMaterial({
+      map: T.glow, color: i % 4 === 0 ? 0xfff3cf : 0xffc54a, transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    const s = new THREE.Sprite(mat);
+    const z = 10 - i * 2.6;
+    const x = Math.sin(i * .8) * (1.6 + i * .18);
+    s.position.set(x, .08, z);
+    s.scale.set(.5 + (i % 3) * .18, .5 + (i % 3) * .18, 1);
+    altar.add(s);
+    runeMats.push({ mat, sprite: s, phase: i * .55 });
+  }
+
   // ---------------------------------------------------------------- update
   let time = 0;
   let pulse = 0;
@@ -461,11 +674,41 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     level.glitch = Math.min(2.2, level.glitch + power);
   }
 
+  function setPartner(id) {
+    level.partner = id === 'rei' || id === 'nova' ? id : 'kai';
+  }
+
+  function setChaos(on) {
+    level.chaosOn = on ? 1 : 0;
+    level.chaos = on ? Math.max(level.chaos, .18) : level.chaos;
+    if (!on) {
+      level.chaos = 0;
+      sparks.visible = false;
+      sMat.opacity = 0;
+    }
+  }
+
+  function setCutscene(on, side = 'center', dur = 2.2) {
+    level.cutsceneTarget = on ? 1 : 0;
+    if (on) {
+      level.sideTarget = side === 'left' ? -1 : side === 'right' ? 1 : 0;
+      level.cutsceneDur = Math.max(.35, dur);
+      level.cutsceneT = 0;
+      if (!level.cutscene) level.cutscene = .0001;
+    } else {
+      level.sideTarget = 0;
+    }
+  }
+
   function update(dt, songTime) {
     if (!level.active) return;
     time = songTime;
     pulse *= Math.exp(-dt * 4.2);
     level.glitch *= Math.exp(-dt * 4.8);
+    level.chaos += ((level.chaosOn ? 1 : 0) - level.chaos) * (1 - Math.exp(-dt * 2.2));
+    level.cutscene += ((level.cutsceneTarget ? 1 : 0) - level.cutscene) * (1 - Math.exp(-dt * 4.6));
+    level.side += (level.sideTarget - level.side) * (1 - Math.exp(-dt * 3.6));
+    level.cutsceneT += dt;
     for (const k of Object.keys(target)) {
       level[k] += (target[k] - level[k]) * (1 - Math.exp(-dt * 2.6));
     }
@@ -473,13 +716,17 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     const world = level.world;
     const voidA = level.void;
     const gl = level.glitch;
+    const chaos = level.chaos;
+    const cs = level.cutscene;
+    const side = level.side;
+    const glideX = side * cs * 11;
 
     root.visible = world > .012 || voidA > .012 || level.flowers > .01;
     skyMat.opacity = world * (.9 + level.bright * .08);
     oceanMat.opacity = world * .94;
-    T.ocean.offset.x = (time * .005) % 1;
-    T.ocean.offset.y = (time * .013) % 1;
-    ocean.position.x = Math.sin(time * .04) * 2;
+    T.ocean.offset.x = (time * (.005 + chaos * .009)) % 1;
+    T.ocean.offset.y = (time * (.013 + chaos * .02)) % 1;
+    ocean.position.x = Math.sin(time * .04) * 2 + glideX * .4;
 
     // The libra breathes with the pulse and tilts like a real balance.
     libra.position.y = -5.4 + Math.sin(time * .38) * .08;
@@ -487,9 +734,22 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     beam.rotation.z = Math.sin(time * .5) * .025 + Math.sin(time * .17) * .012;
     beam.rotation.y = Math.sin(time * .2) * .03;
     beamCap.scale.setScalar(1 + pulse * .18);
-    halo.rotation.y += dt * (1.1 + pulse * 2.2);
+    halo.rotation.y += dt * (1.1 + pulse * 2.2 + chaos * .6);
     halo.rotation.z += dt * .45;
     halo.rotation.x = Math.sin(time * .3) * .12;
+    altar.rotation.y += dt * (.035 + chaos * .12);
+    for (const r of altarMats) {
+      r.mat.opacity = world * r.base * (.82 + pulse * .18);
+    }
+    for (const o of obeliskMats) {
+      o.mat.opacity = world * .36 * (.72 + .28 * Math.sin(time * .7 + o.phase));
+      o.mesh.position.y = o.baseY + Math.sin(time * .55 + o.phase) * .1;
+    }
+    for (const r of runeMats) {
+      r.mat.opacity = world * (.16 + .2 * Math.sin(time * 1.6 - r.phase)) + (world * .1 + pulse * .2);
+      const run = .7 + .25 * Math.sin(time * 1.3 + r.phase);
+      r.sprite.scale.set(.5 * run + .2, .5 * run + .2, 1);
+    }
     const hf = level.halo;
     star.scale.set(4.2 * (1 + pulse * .16), 4.2 * (1 + pulse * .16), 1);
     starMat.opacity = (world * .55 + hf * .4) * (0.85 + pulse * .15);
@@ -530,6 +790,8 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     fGeo.attributes.position.needsUpdate = true;
 
     // Pillars grow out of the ocean, then keep a slow ember pulse.
+    const ember = new THREE.Color(0xffd166);
+    const edgeGold = new THREE.Color(0xfff1c0);
     for (const p of pillars) {
       const wanted = level.pillars * (1 + Math.sin(time * .33 + p.def.x * .04) * .012);
       p.grow += (wanted - p.grow) * (1 - Math.exp(-dt * 1.7));
@@ -545,8 +807,8 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
       p.mat.opacity = world * (.3 + p.flash * .5);
       p.edgeMat.opacity = world * (.14 + p.flash * .45);
       p.capMat.opacity = world * (.04 + p.flash * .2 + pulse * .05);
-      p.mat.color.set(p.def.hue).lerp(new THREE.Color(0xffd166), Math.min(1, p.flash));
-      p.edgeMat.color.set(0x9fd8ff).lerp(new THREE.Color(0xfff1c0), Math.min(1, p.flash));
+      p.mat.color.set(p.def.hue).lerp(ember, Math.min(1, p.flash));
+      p.edgeMat.color.set(0x9fd8ff).lerp(edgeGold, Math.min(1, p.flash));
     }
 
     // Memory wisps rise toward the sky during the MEMORY phase.
@@ -565,29 +827,80 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
       m.sprite.visible = m.mat.opacity > .004;
     }
 
+    // Floating guilt memories: three framed photographs orbit the libra.
+    // They brighten in the MEMORY/CHAOS phases, follow the selected partner,
+    // and slide far out of the lens during the authored glide cutscenes.
+    const focus = Math.min(1.4, mem + cs * .4 + chaos * .2);
+    for (let i = 0; i < portraitFrames.length; i++) {
+      const f = portraitFrames[i];
+      const isFocus = f.id === level.partner;
+      const bob = Math.sin(time * .42 + f.phase) * .42;
+      const orbit = Math.sin(time * .16 + f.phase) * 1.5;
+      const tear = f.glitch && Math.sin(time * 11.3 + f.phase) > .68;
+      const jitter = tear ? (Math.random() - .5) * .34 : 0;
+      f.group.position.set(
+        f.homeX + orbit + side * cs * 9 + jitter + (i - 1) * focus * .7,
+        f.homeY + bob + cs * (isFocus ? 1.1 : -.35) + (isFocus ? .55 : 0) * mem,
+        f.homeZ + Math.cos(time * .18 + f.phase) * .8 - cs * 4,
+      );
+      f.group.rotation.y = f.rot + Math.sin(time * .22 + f.phase) * .045 + side * cs * .16;
+      const gs = (0.88 + Math.min(1.6, focus) * .2) * f.scale * (1 + pulse * .012);
+      f.group.scale.setScalar(gs);
+      const base = (.05 + mem * .7 + cs * .17 + chaos * .08) * (isFocus ? 1.18 : .86);
+      const flicker = .82 + .18 * Math.sin(time * 1.7 + f.phase);
+      f.auraMat.opacity = base * .32 * flicker;
+      f.borderMat.opacity = base * .76 * flicker;
+      f.photoMat.opacity = Math.min(1, base * 1.16) * flicker;
+      f.labelMat.opacity = Math.min(1, base * 1.3);
+      f.tearMat.opacity = f.glitch ? base * (.1 + (tear ? .8 : .06)) : 0;
+      f.photo.position.x = tear ? (Math.random() - .5) * .16 : 0;
+      f.group.visible = f.photoMat.opacity > .004;
+    }
+
+    // CHAOS sparks: fast lateral streaks that cut across the memory field.
+    sMat.opacity = chaos * .68;
+    sparks.visible = chaos > .012;
+    if (sparks.visible) {
+      for (let i = 0; i < SPARKS; i++) {
+        sPos[i * 3] += sVel[i * 3] * dt * (.7 + chaos * .9);
+        sPos[i * 3 + 1] += sVel[i * 3 + 1] * dt;
+        sPos[i * 3 + 2] += sVel[i * 3 + 2] * dt;
+        if (sPos[i * 3] > 52) sPos[i * 3] = -52;
+        else if (sPos[i * 3] < -52) sPos[i * 3] = 52;
+        if (sPos[i * 3 + 1] > 34) sPos[i * 3 + 1] = -5;
+        if (sPos[i * 3 + 2] > 4) sPos[i * 3 + 2] = -54;
+        else if (sPos[i * 3 + 2] < -58) sPos[i * 3 + 2] = 4;
+        // A little vertical sine keeps the streaks from reading as a grid.
+        sPos[i * 3 + 1] += Math.sin(time * 2.2 + sPhase[i]) * dt * .5;
+      }
+      sGeo.attributes.position.needsUpdate = true;
+    }
+
     // Void motes: slow upward drift and drift-around, brightest when there is
-    // no world behind them.
+    // no world behind them. CHAOS accelerates the whole field.
+    const moteBoost = 1 + chaos * 3.6;
     mMat.opacity = Math.max(voidA, world * .26) * .84;
-    mMat.size = .3 + voidA * .08;
+    mMat.size = .3 + voidA * .08 + chaos * .07;
     for (let i = 0; i < MOTES; i++) {
       const ph = mPhase[i];
       mPos[i * 3] = mBase[i * 3] + Math.sin(time * .11 + ph) * 1.7;
       mPos[i * 3 + 1] = mBase[i * 3 + 1] + Math.sin(time * .17 + ph * 1.7) * 1.3
-        + ((time * (0.16 + (i % 5) * .035) + ph * 2.4) % 22) - 8;
+        + ((time * (0.16 + (i % 5) * .035) * moteBoost + ph * 2.4) % 22) - 8;
       mPos[i * 3 + 2] = mBase[i * 3 + 2] + Math.cos(time * .09 + ph) * 1.3;
     }
     mGeo.attributes.position.needsUpdate = true;
 
     // world glitch: cramped, jittered geometry during the fracture sections
+    const homeZ = libraHomeZ - cs * 5;
     if (gl > .005) {
       const k = gl * .12;
-      libra.position.x = (Math.random() - .5) * k;
-      libra.position.z = libraHomeZ + (Math.random() - .5) * k;
+      libra.position.x = glideX + (Math.random() - .5) * k;
+      libra.position.z = homeZ + (Math.random() - .5) * k;
       for (const c of clouds) c.sprite.position.x += (Math.random() - .5) * k * .4;
       sky.rotation.z = (Math.random() - .5) * gl * .01;
     } else {
-      libra.position.x *= .92;
-      libra.position.z = libraHomeZ + (libra.position.z - libraHomeZ) * .92;
+      libra.position.x += (glideX - libra.position.x) * .08;
+      libra.position.z = homeZ + (libra.position.z - homeZ) * .92;
       sky.rotation.z *= .9;
     }
   }
@@ -610,5 +923,8 @@ export function createIntentionStage({ scene, camera, lanes, stage, TEX }) {
     }
   }
 
-  return { root, setPhase, setActive, update, beat, glitch, layout, level };
+  return {
+    root, setPhase, setActive, update, beat, glitch, layout, level,
+    setPartner, setChaos, setCutscene,
+  };
 }

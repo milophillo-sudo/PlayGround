@@ -1,0 +1,344 @@
+// Builds INTENTION // CHAOS, a menu-selected remix chart for the same record.
+//
+// It keeps the record's clock and the stage's authored phases, but replaces the
+// careful 4/6-lane reading chart with an 8-lane, chord-heavy chart:
+//   * 1200 notes, at least 150 sustained holds;
+//   * deterministic lane grammar with two- and three-finger chords;
+//   * far-glide camera cuts, story cards, static/guilt/heartbeat HUD cues;
+//   * no overture: the chart starts in normal play with flying particles.
+//
+// Run: node tools/build-chaos-chart.mjs
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CHART as BASE } from '../src/charts/intention.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = resolve(here, '..');
+const OUT = resolve(root, 'src/charts/intention-chaos.js');
+
+const rng = (() => {
+  let s = 0x1a2b3c4d;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+})();
+const pick = (arr) => arr[Math.floor(rng() * arr.length)];
+const round = (n, p = 3) => Number(n.toFixed(p));
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+const ACTIVE = { 1: [3], 2: [2, 4], 4: [2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6], 8: [0, 1, 2, 3, 4, 5, 6, 7] };
+
+// ---------------------------------------------------------------- sections
+// The original song structure is the backbone; the chaos remix widens the
+// reading field and turns the quiet intro into an immediate ignition burst.
+const sectionDefs = [
+  ['IGNITION', 0, 17.5, 8, 150, 'chaos', 'The field starts hot. No overture.'],
+  ['SURGE', 17.5, 33.5, 8, 150, 'chaos'],
+  ['FRACTURE', 33.5, 46, 8, 165, 'storm'],
+  ['LIBRA', 46, 61.5, 6, 150, 'chaos'],
+  ['HALO', 61.5, 72, 8, 150, 'chaos2'],
+  ['GUILT', 72, 88, 4, 180, 'glide'],
+  ['FASTBEAT', 88, 104, 8, 195, 'storm'],
+  ['TIDE', 104, 117, 8, 160, 'chaos'],
+  ['MEMORY', 117, 139, 6, 150, 'memory'],
+  ['STATIC', 139, 157, 8, 170, 'collapse'],
+  ['DETERMINATION', 157, 181, 8, 165, 'chaos2'],
+  ['FAKE GUILT', 181, 204.5, 8, 180, 'chaos2'],
+  ['DAWN', 204.5, 213.505, 4, 150, 'dawn'],
+];
+
+const baseByStart = new Map(BASE.sections.map((s) => [s.start, s]));
+const sections = sectionDefs.map(([name, start, end, keys, bpm, phase, blurb], i) => {
+  const base = baseByStart.get(start) || BASE.sections[Math.min(i, BASE.sections.length - 1)];
+  return {
+    name,
+    start,
+    end,
+    keys,
+    bpm,
+    beatOffset: BASE.song.beatOffset || 0,
+    color: '#ffffff',
+    accent: phase === 'collapse' ? '#ff3b5c' : phase === 'memory' ? '#ffd166' : '#ffffff',
+    energy: 0.9,
+    bloom: phase === 'dawn' ? 0.9 : 0.72,
+    intro: false,
+    phase,
+    notes: phase !== 'dawn',
+    camZ: base.camZ ?? 17,
+    camY: base.camY ?? 6.5,
+    rotY: base.rotY ?? 0,
+    rotZ: base.rotZ ?? 0,
+    tilt: base.tilt ?? 0,
+    spread: 1.08,
+    y: base.y ?? 0.06,
+    spin: phase === 'storm' || phase === 'collapse' ? 0.18 : 0.06,
+    motion: phase === 'storm' ? 'zigzag' : phase === 'collapse' ? 'orbit' : 'fan',
+    noteSpeed: phase === 'storm' || phase === 'collapse' ? 1.12 : 1,
+    ...(blurb ? { blurb } : {}),
+  };
+});
+
+// ---------------------------------------------------------------- notes
+const TARGET = 1200;
+const HOLD_MIN = 150;
+const notes = [];
+const laneFree = new Array(8).fill(-1);
+const lanePrimary = [0, 3, 1, 4, 2, 5, 7, 6, 3, 0, 5, 2, 4, 7, 1, 6, 2, 6, 0, 4, 5, 1, 7, 3];
+
+function place(t, lane, type = 'tap', dur = 0) {
+  if (t < 0 || t > 204.2) return false;
+  if (t < laneFree[lane] + 0.085) return false;
+  if (type === 'hold') {
+    laneFree[lane] = t + dur + 0.12;
+    notes.push({ t: round(t), lane, type: 'hold', dur: round(dur) });
+  } else {
+    laneFree[lane] = t;
+    notes.push({ t: round(t), lane });
+  }
+  return true;
+}
+
+function chordLanes(primary, active, count) {
+  const set = new Set([primary]);
+  const candidates = active.filter((l) => l !== primary);
+  while (set.size < Math.min(count, active.length)) {
+    const lane = pick(candidates);
+    set.add(lane);
+    candidates.splice(candidates.indexOf(lane), 1);
+  }
+  return [...set];
+}
+
+let accepted = 0;
+let holdCount = 0;
+let cursor = 0;
+const noteSections = sections.filter((s) => s.notes);
+const totalSpan = noteSections.reduce((sum, s) => sum + (s.end - s.start), 0);
+for (let si = 0; si < noteSections.length; si++) {
+  const sec = noteSections[si];
+  const step = 60 / sec.bpm / 4;
+  const active = ACTIVE[sec.keys] || ACTIVE[8];
+  const start = Math.max(1.05, sec.start);
+  const end = sec.end - 0.16;
+  // Spread the 1200 notes across the whole record. Each section gets a slice
+  // proportional to its length, so the last chorus is not starved by a dense
+  // opening.
+  const share = (sec.end - sec.start) / totalSpan;
+  const sectionTarget = Math.round(TARGET * share);
+  let secAccepted = 0;
+  // Every section gets its own lane path so the charts read as movements,
+  // not one endless random stream.
+  let phase = Math.floor(rng() * lanePrimary.length);
+  for (let t = start; t < end; t += step) {
+    if (accepted >= TARGET) break;
+    if (secAccepted >= sectionTarget) break;
+    const beat = (t - sec.start) / (60 / sec.bpm);
+    const sixteenth = Math.round((t - sec.start) / step);
+    // Leave a little air on the first beat of each bar; the rest is dense.
+    if (sixteenth % 16 === 0 && rng() < 0.32) continue;
+    if (sixteenth % 4 === 2 && rng() < 0.16) continue;
+    if (rng() > (sec.phase === 'storm' || sec.phase === 'collapse' ? 0.66 : 0.54)) continue;
+
+    phase = (phase + 1 + (rng() < 0.25 ? 3 : 0)) % lanePrimary.length;
+    let primary = lanePrimary[phase] % 8;
+    if (!active.includes(primary)) primary = active[Math.floor(rng() * active.length)];
+
+    const chordRoll = rng();
+    const barBeat = ((Math.floor(beat) % 4) + 4) % 4;
+    const chord = chordRoll < (barBeat === 0 ? 0.18 : 0.08) ? 3
+      : chordRoll < (barBeat === 2 ? 0.4 : 0.26) ? 2 : 1;
+    const wantHold = holdCount < HOLD_MIN
+      ? accepted % 7 === 3
+      : accepted % 23 === 5;
+    if (wantHold && chord === 1) {
+      const dur = 0.34 + rng() * 0.82;
+      if (place(t, primary, 'hold', dur)) {
+        accepted++;
+        secAccepted++;
+        holdCount++;
+        continue;
+      }
+    }
+    const lanes = chordLanes(primary, active, chord);
+    let placed = 0;
+    for (const lane of lanes) {
+      if (place(t, lane)) { accepted++; secAccepted++; placed++; }
+      if (accepted >= TARGET || secAccepted >= sectionTarget) break;
+    }
+    if (!placed) {
+      // The lane path got pinned by a hold. Nudge to the next free lane.
+      const free = active.filter((l) => t >= laneFree[l] + 0.085);
+      if (free.length) { place(t, pick(free)); accepted++; secAccepted++; }
+    }
+  }
+}
+
+notes.sort((a, b) => a.t - b.t || a.lane - b.lane);
+
+// Top up to exactly 1200 notes if the phrase grammar came in short. Scan the
+// whole record once, keeping the same lane safety, so the final chorus is as
+// populated as the opening.
+if (notes.length < TARGET) {
+  for (let topT = 2.0; topT < 204 && notes.length < TARGET; topT += 0.047) {
+    const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
+    if (!sec) continue;
+    const active = ACTIVE[sec.keys] || ACTIVE[8];
+    const lane = active[Math.floor(rng() * active.length)];
+    place(topT, lane);
+  }
+}
+notes.sort((a, b) => a.t - b.t || a.lane - b.lane);
+if (notes.length > TARGET) notes.length = TARGET;
+
+// If lane safety swallowed the hold target, convert safe taps into holds.
+for (let i = 0; i < notes.length && holdCount < HOLD_MIN; i++) {
+  const n = notes[i];
+  if (n.type === 'hold') continue;
+  const next = notes.find((m) => m !== n && m.lane === n.lane && m.t > n.t);
+  const dur = Math.min(0.75, (next ? next.t - n.t : 1.2) - 0.18);
+  if (dur >= 0.28) {
+    n.type = 'hold';
+    n.dur = round(dur);
+    holdCount++;
+  }
+}
+
+// ---------------------------------------------------------------- events
+const ev = [];
+const push = (t, e) => ev.push({ t: round(t), ...e });
+
+push(0, { type: 'intent', mode: 'phase', phase: 'chaos' });
+push(0.05, { type: 'intent', mode: 'hud', hud: 'clear' });
+push(0.1, { type: 'intent', mode: 'hud', hud: 'black', on: false });
+push(0.2, { type: 'intent', mode: 'hud', hud: 'rainbow', on: false });
+push(0.3, { type: 'cutscene', chapter: 'CHAOS // 00', title: 'NO OVERTURE', sub: 'THE FIELD IS ALREADY BURNING', partner: 'kai', hold: 2.2 });
+
+for (const sec of sections) {
+  push(sec.start, { type: 'intent', mode: 'phase', phase: sec.phase });
+  if (sec.phase === 'dawn') {
+    push(sec.start, { type: 'intent', mode: 'hud', hud: 'clear' });
+    push(sec.start, { type: 'intent', mode: 'hud', hud: 'rainbow', on: true });
+    push(sec.start, { type: 'cutscene', chapter: 'CHAPTER 03 // DAWN', title: 'STILL HERE', sub: 'THE OCEAN KEEPS THE MISSING PART', partner: 'rei', hold: 5.2 });
+  }
+}
+
+// Far-glide camera cuts. Positions deliberately leave the normal framing:
+// the field slides to the edge of the lens, then snaps back to play.
+const glides = [
+  [18.5, [-25, 12, 8], [0, 4.6, -24], 38, -0.12, 1.5, 'left'],
+  [34.0, [27, 16, 4], [0, 4.2, -18], 42, 0.15, 1.7, 'right'],
+  [47.0, [0, 28, 6], [0, 4.0, -20], 52, 0, 1.3, 'up'],
+  [62.0, [-30, 5, -4], [0, 6.0, -34], 34, -0.2, 1.8, 'left'],
+  [73.0, [24, 3, 14], [0, 3.6, -14], 60, 0.18, 1.2, 'right'],
+  [89.0, [-18, 22, 18], [0, 5.0, -28], 58, -0.1, 1.4, 'left'],
+  [105.0, [32, 10, 8], [0, 5.0, -26], 36, 0.22, 1.8, 'right'],
+  [118.0, [0, 36, 12], [0, 2.0, -34], 62, 0, 2.0, 'up'],
+  [140.0, [-38, 14, 2], [0, 4.8, -20], 33, -0.25, 1.6, 'left'],
+  [158.0, [34, 24, -8], [0, 5.6, -32], 46, 0.24, 1.7, 'right'],
+  [182.0, [-26, 4, 18], [0, 3.8, -12], 64, -0.16, 1.2, 'left'],
+  [196.0, [0, 42, 2], [0, 2.5, -26], 70, 0, 2.2, 'up'],
+];
+for (const [t, pos, look, fov, roll, dur, side] of glides) {
+  push(t, { type: 'bossCamera', pos, look, fov, roll, dur });
+  push(t, { type: 'cutscene', chapter: 'CHAOS // GLIDE', title: side === 'up' ? 'LOOK UP' : side === 'left' ? 'HOLD THE LEFT' : 'HOLD THE RIGHT', sub: 'THE FIELD MOVES. KEEP YOUR HANDS ON THE LINE.', partner: side === 'left' ? 'kai' : 'rei', hold: Math.min(2.4, dur + 0.6), glide: side, glideDur: dur });
+  // After the glide, return to a playable lens.
+  push(t + dur + 0.05, { type: 'bossCamera', pos: [0, 7.4, 17.4], look: [0, 4.05, 0], fov: 46, roll: 0, dur: 0.55 });
+}
+
+// HUD pressure: alternate heartbeat, static, glitch, guilt, whiteouts.
+const hudBeats = [
+  [8, 'heartbeat', { on: true, bpm: 168 }],
+  [18, 'glitch', { on: true }],
+  [24, 'static', { on: true, power: 0.65 }],
+  [30, 'static', { on: false }],
+  [34, 'heartbeat', { on: true, bpm: 184 }],
+  [46, 'guilt', { on: true, value: 100 }],
+  [61.5, 'guilt', { on: false }],
+  [62, 'glitch', { on: true }],
+  [72, 'fakeGuilt', { on: true, value: 18 }],
+  [76, 'heartbeat', { on: true, bpm: 195 }],
+  [81, 'fakeGuilt', { on: false }],
+  [88, 'distort', { on: true }],
+  [96, 'distort', { on: false }],
+  [104, 'heartbeat', { on: false }],
+  [105, 'yellow', { on: true }],
+  [113, 'yellow', { on: false }],
+  [118, 'static', { on: true, power: 0.55 }],
+  [139, 'static', { on: true, power: 1 }],
+  [145, 'static', { on: false }],
+  [146, 'bright', { on: true }],
+  [157, 'bright', { on: false }],
+  [158, 'rainbow', { on: true }],
+  [181, 'white', { on: true }],
+  [182, 'white', { on: false }],
+  [182.1, 'fakeGuilt', { on: true, value: 14 }],
+  [199, 'fakeGuilt', { on: false }],
+  [199.2, 'static', { on: true, power: 1 }],
+  [204.5, 'static', { on: false }],
+];
+for (const [t, hud, data] of hudBeats) {
+  push(t, { type: 'intent', mode: 'hud', hud, ...data });
+}
+
+// Every four bars: a glitch/shake accent and a field pulse.
+for (let t = 6; t < 204; t += 8) {
+  push(t, { type: 'bossGlitch', power: 0.55 + rng() * 0.5 });
+  push(t, { type: 'vibe', power: 0.8 });
+  push(t + 0.03, { type: 'pulse', power: 1.1 });
+}
+
+// Story cards at movement boundaries, independent of the glide cards.
+const storyCards = [
+  [20, 'CHAPTER 01 // THE LAST FLYER', 'PLAY LIKE SOMEONE IS STILL LISTENING', 'KAI', 'kai'],
+  [48, 'CHAPTER 01 // THE LAST FLYER', 'TWELVE SONGS. SMALLER ROOMS.', 'KAI', 'kai'],
+  [82, 'CHAPTER 02 // THE EMPTY CHAIR', 'REI COUNTS THE MISSING BARS', 'REI', 'rei'],
+  [119, 'MEMORY // 01 / 02 / ??', 'THE PICTURES DO NOT AGREE', 'REI', 'rei'],
+  [160, 'CHAPTER 03 // STILL HERE', 'DO NOT MOVE THE JACKET', 'KAI', 'kai'],
+  [183, 'CHAPTER ?? // SIGNAL NOT FOUND', 'THE THIRD VOICE IS UNDER THE STATIC', 'NOVA', 'nova'],
+  [205.2, 'CHAPTER 03 // DAWN', 'THE BAND IS QUIET. THE OCEAN IS NOT.', 'REI', 'rei'],
+];
+for (const [t, chapter, title, sub, partner] of storyCards) {
+  push(t, { type: 'cutscene', chapter, title, sub, partner, hold: 3.2, glow: partner === 'nova' });
+}
+
+ev.sort((a, b) => a.t - b.t);
+
+// ---------------------------------------------------------------- chart
+const chart = {
+  song: {
+    ...BASE.song,
+    title: 'INTENTION // CHAOS',
+    shortTitle: 'INTENTION CHAOS',
+    bpm: 180,
+    bpmLabel: 'CHAOS / 195',
+    difficulty: 'CHAOS',
+    laneLabel: '8 · 6 · 4',
+    chartEnd: 212.8,
+    chaos: true,
+    freeNotes: false,
+  },
+  sections,
+  notes,
+  events: ev,
+  swings: [],
+};
+
+const out = `// Generated by tools/build-chaos-chart.mjs — do not hand-edit.\nexport const CHART = ${JSON.stringify(chart, null, 2)};\n`;
+mkdirSync(dirname(OUT), { recursive: true });
+writeFileSync(OUT, out);
+console.log(JSON.stringify({
+  out: OUT,
+  notes: notes.length,
+  holds: notes.filter((n) => n.type === 'hold').length,
+  events: ev.length,
+  sections: sections.length,
+  first: notes[0],
+  last: notes[notes.length - 1],
+  maxChord: Math.max(...Object.values(notes.reduce((m, n) => {
+    const k = n.t.toFixed(3);
+    m[k] = (m[k] || 0) + 1;
+    return m;
+  }, {}))),
+}, null, 2));

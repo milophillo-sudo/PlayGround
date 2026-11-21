@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 900" role="img" aria-label="KAI — vocalist and guitarist">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#050916"/>
+      <stop offset=".46" stop-color="#0c1835"/>
+      <stop offset="1" stop-color="#160a25"/>
+    </linearGradient>
+    <radialGradient id="spot" cx=".5" cy=".18" r=".8">
+      <stop offset="0" stop-color="#54f4ff" stop-opacity=".46"/>
+      <stop offset=".45" stop-color="#1667ff" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#050916" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="spot2" cx=".2" cy=".8" r=".6">
+      <stop offset="0" stop-color="#ff3cb4" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#ff3cb4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="skin" x1="0" y1="0" x2=".8" y2="1">
+      <stop offset="0" stop-color="#ffe7d6"/>
+      <stop offset=".55" stop-color="#f5c6b0"/>
+      <stop offset="1" stop-color="#c98d7d"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#161a2e"/>
+      <stop offset=".5" stop-color="#090c18"/>
+      <stop offset="1" stop-color="#02040b"/>
+    </linearGradient>
+    <linearGradient id="streak" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9ffbff"/>
+      <stop offset=".5" stop-color="#32d6ff"/>
+      <stop offset="1" stop-color="#8b5cff"/>
+    </linearGradient>
+    <linearGradient id="jacket" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#11182b"/>
+      <stop offset=".5" stop-color="#070b17"/>
+      <stop offset="1" stop-color="#1a0d23"/>
+    </linearGradient>
+    <linearGradient id="iris" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff2b8"/>
+      <stop offset=".36" stop-color="#ffc440"/>
+      <stop offset=".7" stop-color="#e87618"/>
+      <stop offset="1" stop-color="#6d2409"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#79f8ff" stop-opacity=".95"/>
+      <stop offset="1" stop-color="#ff5fd2" stop-opacity=".5"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14"/>
+    </filter>
+    <filter id="tinyGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="3.2"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="card"><rect width="720" height="900" rx="0"/></clipPath>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="720" height="900" fill="url(#bg)"/>
+    <rect width="720" height="900" fill="url(#spot)"/>
+    <rect width="720" height="900" fill="url(#spot2)"/>
+    <!-- stage beams -->
+    <g opacity=".33" filter="url(#soft)">
+      <path d="M110 0 L380 760 L520 760 L250 0Z" fill="#28e7ff" opacity=".34"/>
+      <path d="M610 0 L420 740 L300 740 L500 0Z" fill="#ff46c8" opacity=".2"/>
+      <path d="M360 0 L300 900 L420 900 L390 0Z" fill="#ffffff" opacity=".12"/>
+    </g>
+    <!-- bokeh -->
+    <g opacity=".5">
+      <circle cx="92" cy="188" r="44" fill="#1bd7ff" opacity=".18"/>
+      <circle cx="632" cy="242" r="62" fill="#ff4fc8" opacity=".14"/>
+      <circle cx="574" cy="126" r="26" fill="#8b5cff" opacity=".22"/>
+      <circle cx="166" cy="420" r="16" fill="#46faff" opacity=".28"/>
+      <circle cx="672" cy="510" r="34" fill="#ffb45e" opacity=".12"/>
+      <circle cx="54" cy="650" r="20" fill="#ff5fd2" opacity=".16"/>
+    </g>
+    <!-- shoulders / jacket -->
+    <path d="M108 900 C118 720 186 642 300 618 L360 690 L420 618 C534 642 602 720 612 900Z" fill="url(#jacket)"/>
+    <path d="M108 900 C118 720 186 642 300 618 L336 654 L286 900Z" fill="#0a0f1e"/>
+    <path d="M612 900 C602 720 534 642 420 618 L384 654 L434 900Z" fill="#160d20"/>
+    <path d="M108 900 C118 720 186 642 300 618" fill="none" stroke="url(#rim)" stroke-width="4" opacity=".8"/>
+    <path d="M612 900 C602 720 534 642 420 618" fill="none" stroke="#ff5fd2" stroke-width="3" opacity=".5"/>
+    <!-- jacket lapels and zips -->
+    <path d="M300 618 L336 654 L356 900 L258 900 L268 676Z" fill="#0a0d19" stroke="#37dfff" stroke-opacity=".42" stroke-width="2"/>
+    <path d="M420 618 L384 654 L364 900 L462 900 L452 676Z" fill="#0b0a16" stroke="#ff5fd2" stroke-opacity=".32" stroke-width="2"/>
+    <g stroke="#66efff" stroke-opacity=".55" stroke-width="2">
+      <path d="M196 690 L164 900"/><path d="M522 686 L554 900"/>
+      <path d="M212 760 L186 900" opacity=".45"/><path d="M508 754 L532 900" opacity=".45"/>
+    </g>
+    <g fill="#b9fbff" opacity=".8">
+      <circle cx="200" cy="738" r="3"/><circle cx="514" cy="736" r="3"/>
+      <circle cx="176" cy="824" r="2.4"/><circle cx="540" cy="824" r="2.4"/>
+    </g>
+    <!-- neck -->
+    <path d="M304 538 L298 638 C320 672 398 674 424 636 L418 536Z" fill="url(#skin)"/>
+    <path d="M304 566 C330 642 402 646 422 566 L422 616 C398 658 328 656 300 618Z" fill="#b7776d" opacity=".55"/>
+    <!-- choker and chain -->
+    <path d="M304 590 C340 620 394 622 426 592 L428 610 C392 642 338 642 302 610Z" fill="#080912" stroke="#26ddff" stroke-width="2.5"/>
+    <circle cx="365" cy="620" r="5" fill="#8ffaff" filter="url(#tinyGlow)"/>
+    <path d="M304 628 C332 694 400 704 438 640" fill="none" stroke="#a6bdd6" stroke-width="2" opacity=".85"/>
+    <path d="M374 690 L404 720 L372 758 L344 720Z" fill="#11cde8" stroke="#d8ffff" stroke-width="2.5" filter="url(#tinyGlow)"/>
+    <path d="M368 706 L382 722 L370 738 L356 722Z" fill="#04121d" opacity=".8"/>
+    <!-- head -->
+    <path d="M258 318 C264 234 314 190 366 190 C432 190 472 244 474 330 C475 404 446 494 402 532 C378 556 344 558 320 536 C274 496 256 404 258 318Z" fill="url(#skin)"/>
+    <!-- ears -->
+    <path d="M256 338 C238 324 224 340 232 378 C238 408 248 428 264 430Z" fill="#eeb39f"/>
+    <path d="M476 338 C494 324 508 340 500 378 C494 408 484 428 468 430Z" fill="#eeb39f"/>
+    <path d="M246 358 C242 382 250 406 260 416" fill="none" stroke="#b7776d" stroke-width="3" opacity=".7"/>
+    <!-- ear cuff accessories -->
+    <g fill="none" stroke="#bffcff" stroke-width="3" filter="url(#tinyGlow)">
+      <path d="M474 344 C490 352 494 372 486 392"/>
+      <path d="M480 360 C494 372 496 392 488 408" opacity=".7"/>
+    </g>
+    <circle cx="486" cy="410" r="5" fill="#ff5fd2" filter="url(#tinyGlow)"/>
+    <circle cx="236" cy="394" r="4" fill="#7ff7ff"/>
+    <!-- back hair -->
+    <path d="M248 330 C224 234 288 148 372 142 C468 136 526 212 496 332 C518 284 512 214 468 178 C414 132 308 148 266 214 C236 262 238 300 248 330Z" fill="url(#hair)"/>
+    <path d="M246 320 C214 376 220 456 248 510 L286 458 C262 414 254 360 262 322Z" fill="url(#hair)"/>
+    <path d="M486 318 C516 372 514 452 486 506 L450 454 C472 414 480 360 472 322Z" fill="url(#hair)"/>
+    <!-- spiky front hair -->
+    <path d="M256 312 C230 280 246 222 292 196 C278 240 286 268 314 286 C298 240 318 204 354 186 C346 230 358 258 388 278 C382 232 408 198 446 188 C432 228 438 262 468 290 C502 246 500 210 486 176 C528 226 522 302 486 340 C458 314 430 300 404 302 C372 306 344 322 322 346 C294 328 274 326 256 312Z" fill="url(#hair)"/>
+    <path d="M282 228 C332 188 398 180 452 208 C420 190 356 190 306 222Z" fill="#28304f" opacity=".55"/>
+    <!-- cyan streaks -->
+    <g fill="none" stroke="url(#streak)" stroke-linecap="round" filter="url(#tinyGlow)">
+      <path d="M296 202 C282 238 286 268 310 288" stroke-width="8" opacity=".95"/>
+      <path d="M430 190 C442 226 440 258 466 286" stroke-width="6" opacity=".9"/>
+      <path d="M338 188 C332 212 338 232 354 248" stroke-width="3.5" opacity=".75"/>
+      <path d="M486 292 C498 322 494 356 478 382" stroke-width="3" opacity=".6"/>
+    </g>
+    <!-- eyebrows -->
+    <path d="M292 334 C314 320 340 322 354 334" fill="none" stroke="#1a1522" stroke-width="7" stroke-linecap="round"/>
+    <path d="M394 332 C410 320 438 320 456 334" fill="none" stroke="#1a1522" stroke-width="7" stroke-linecap="round"/>
+    <!-- eyes -->
+    <g>
+      <path d="M286 370 C310 348 348 350 366 374 C348 396 312 402 286 370Z" fill="#fff8ef"/>
+      <path d="M398 370 C420 348 454 350 474 374 C454 398 418 400 398 370Z" fill="#fff8ef"/>
+      <ellipse cx="330" cy="374" rx="17" ry="23" fill="url(#iris)"/>
+      <ellipse cx="438" cy="374" rx="17" ry="23" fill="url(#iris)"/>
+      <ellipse cx="330" cy="378" rx="8" ry="15" fill="#1c0904"/>
+      <ellipse cx="438" cy="378" rx="8" ry="15" fill="#1c0904"/>
+      <circle cx="324" cy="362" r="6" fill="#fff"/>
+      <circle cx="432" cy="362" r="6" fill="#fff"/>
+      <circle cx="336" cy="388" r="3" fill="#fff" opacity=".8"/>
+      <circle cx="444" cy="388" r="3" fill="#fff" opacity=".8"/>
+      <path d="M286 368 C310 344 348 346 368 372" fill="none" stroke="#120f1a" stroke-width="6" stroke-linecap="round"/>
+      <path d="M396 368 C418 344 454 346 476 372" fill="none" stroke="#120f1a" stroke-width="6" stroke-linecap="round"/>
+      <path d="M288 366 L274 356" stroke="#120f1a" stroke-width="4" stroke-linecap="round"/>
+      <path d="M474 366 L490 356" stroke="#120f1a" stroke-width="4" stroke-linecap="round"/>
+    </g>
+    <!-- nose + mouth -->
+    <path d="M372 400 C364 430 366 446 378 454" fill="none" stroke="#b97c6f" stroke-width="3.4" stroke-linecap="round" opacity=".8"/>
+    <path d="M342 488 C358 498 380 500 400 486" fill="none" stroke="#8e3f4a" stroke-width="4" stroke-linecap="round"/>
+    <path d="M350 490 C366 502 384 501 396 490" fill="none" stroke="#ffd9d2" stroke-width="1.6" opacity=".5"/>
+    <!-- cheek marks -->
+    <path d="M278 414 C292 420 304 420 316 416" stroke="#d98e86" stroke-width="2" opacity=".45"/>
+    <path d="M428 416 C440 421 454 420 466 414" stroke="#d98e86" stroke-width="2" opacity=".45"/>
+    <!-- small scar -->
+    <path d="M462 326 L478 310 M470 328 L484 316" stroke="#d7938b" stroke-width="2.2" opacity=".7"/>
+    <!-- headphone arc around neck -->
+    <path d="M280 576 C276 668 310 716 366 722 C422 716 454 666 448 576" fill="none" stroke="#141b2d" stroke-width="18" stroke-linecap="round"/>
+    <path d="M280 576 C276 668 310 716 366 722 C422 716 454 666 448 576" fill="none" stroke="#55efff" stroke-width="4" stroke-linecap="round" opacity=".8" filter="url(#tinyGlow)"/>
+    <g>
+      <rect x="250" y="552" width="42" height="64" rx="18" fill="#101728" stroke="#7ff7ff" stroke-width="3"/>
+      <rect x="441" y="552" width="42" height="64" rx="18" fill="#101728" stroke="#ff5fd2" stroke-width="3"/>
+      <circle cx="271" cy="584" r="7" fill="#55efff" opacity=".8"/>
+      <circle cx="462" cy="584" r="7" fill="#ff5fd2" opacity=".8"/>
+    </g>
+    <!-- rings / glove hints -->
+    <g fill="none" stroke="#c8faff" stroke-width="2.4" opacity=".75">
+      <path d="M222 862 C250 846 284 842 310 854"/>
+      <path d="M410 854 C438 842 472 848 498 866"/>
+    </g>
+    <!-- frame corners -->
+    <g stroke="#7ff7ff" stroke-width="2" opacity=".6">
+      <path d="M24 76 L24 24 L92 24"/><path d="M628 24 L696 24 L696 76"/>
+      <path d="M24 824 L24 876 L92 876"/><path d="M628 876 L696 876 L696 824"/>
+    </g>
+    <text x="44" y="64" font-family="monospace" font-size="13" letter-spacing="5" fill="#8ffaff">01 / KAI</text>
+    <text x="470" y="854" font-family="monospace" font-size="11" letter-spacing="4" fill="#ff9fe2">VOCAL / GUITAR</text>
+    <g opacity=".7">
+      <rect x="510" y="52" width="146" height="18" fill="#081221" stroke="#3be8ff" stroke-width="1"/>
+      <text x="520" y="65" font-family="monospace" font-size="9" letter-spacing="2.4" fill="#8ffaff">SIGNAL / STEADY</text>
+    </g>
+  </g>
+</svg>
