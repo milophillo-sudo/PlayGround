@@ -1935,8 +1935,12 @@ export function createScene(canvasEl) {
 
   // 0 = the authored shot already frames the field; 1 = the field is behind
   // the lens or so far outside the frame that the safe pose has to take over.
+  // Only the current section's lanes count. Preview lanes from the next section
+  // can sit far outside a one- or two-lane layout, and letting them drive the
+  // guard would yank the camera away from the field the player is actually
+  // reading.
   function bossFieldStress() {
-    const live = state.live.size ? state.live : state.active;
+    const live = state.active;
     if (!live.size) return 0;
     camera.updateMatrixWorld();
     const ringR = Math.max(0.6, state.view.ring || 1.6);
@@ -2007,7 +2011,7 @@ export function createScene(canvasEl) {
   }
 
   function bossPlayFraming(roll = 0, dt = 0.016) {
-    if (!state.live.size) return;
+    if (!state.active.size) return;
     collectBossRings();
 
     // Ease a "return to playable" weight. Fast when a glide has just broken the
@@ -2017,7 +2021,7 @@ export function createScene(canvasEl) {
     boss.fieldGuard += (stress - boss.fieldGuard) * (1 - Math.exp(-dt * guardRate));
     applyGameplayPose(boss.fieldGuard);
 
-    const live = state.live;
+    const live = state.active;
     const fovCap = state.portrait ? 68 : 58;
     const rollX = Math.sin(roll) / camera.aspect;
     let fov = Math.max(46, camera.fov);

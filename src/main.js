@@ -130,9 +130,9 @@ const gameOver = {
 // Menu modifiers. Persisted so a practice setup survives a reload, but never
 // allowed to write personal bests.
 const MODS_KEY = 'cryout-mods-v1';
-const MOD_IDS = ['autoplay', 'suddenFail', 'perfectPlay', 'noFail'];
+const MOD_IDS = ['suddenFail', 'perfectPlay', 'noFail'];
 const mods = (() => {
-  const base = { autoplay: false, suddenFail: false, perfectPlay: false, noFail: false };
+  const base = { suddenFail: false, perfectPlay: false, noFail: false };
   try {
     const raw = JSON.parse(localStorage.getItem(MODS_KEY) || '{}');
     for (const id of MOD_IDS) base[id] = !!raw[id];
@@ -159,7 +159,7 @@ const holdNote = new Array(8).fill(null);
 const touchPoints = new Set();
 const keysHeld = new Set();
 const padFlashTimers = new Array(8).fill(0);
-function inputHeld() { return mods.autoplay || touchPoints.size > 0 || keysHeld.size > 0; }
+function inputHeld() { return touchPoints.size > 0 || keysHeld.size > 0; }
 function touching() { return inputHeld(); }
 let toastTimer = 0;
 let ghostCursor = 0;
@@ -1205,22 +1205,6 @@ function swingTap() {
   judgeSwing(best, t - best.t);
 }
 
-// Autoplay resolves every due note at its exact chart time, so timing never
-// drifts on a slow frame. Holds stay alive through inputHeld(), and the
-// pendulum is answered through the same judge path a player uses.
-function autoplayTick(t) {
-  if (!mods.autoplay || gameState !== 'playing') return;
-  if (swingMode) {
-    for (const n of swingNotes) {
-      if (n.state === 'pending' && t >= n.t) judgeSwing(n, 0);
-    }
-    return;
-  }
-  for (const n of noteObjects) {
-    if (n.state === 'pending' && t >= n.data.t) hitNote(n, n.data.t);
-  }
-}
-
 // ---------------------------------------------------------------- note render
 const SPEED = 8.4;
 let noteSpeed = SPEED;
@@ -2017,7 +2001,6 @@ function frame(now) {
     updateGhostEvents(t);
     updateChartEvents(t);
     updateIntent(dt, t);
-    autoplayTick(t);
     updateSwing(t);
     updateNotes(t);
     updateHUD(t);
@@ -2049,7 +2032,7 @@ function frame(now) {
 window.__cryout = {
   audio, stats, scene, pressLane, pressGlobal, releaseLane, selectTrack,
   selectPartner, setChaosMode, showStoryCard,
-  mods, setMod, modsActive, openMods, closeMods, autoplayTick,
+  mods, setMod, modsActive, openMods, closeMods,
   get chart() { return chart; },
   get partner() { return partner; },
   get chaos() { return isChaos(); },

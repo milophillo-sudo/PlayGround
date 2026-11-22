@@ -1287,7 +1287,6 @@ body.intent-clean .go-title{display:none}
   box-shadow:0 0 28px color-mix(in srgb,var(--mod) 12%,transparent);
 }
 .mod-item.active::before{opacity:1;box-shadow:0 0 12px var(--mod)}
-.mod-item[data-mod="autoplay"]{--mod:#5ee7ff}
 .mod-item[data-mod="suddenFail"]{--mod:#ff4d6d}
 .mod-item[data-mod="perfectPlay"]{--mod:#ffd166}
 .mod-item[data-mod="noFail"]{--mod:#4dffc3}
