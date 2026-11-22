@@ -53,6 +53,11 @@ const TRACKS = {
     minFirstNote: 19.6,
     seed: 0x1f04a3d7,
   },
+  sleeve: {
+    analysis: 'sleeve-analysis.json',
+    minFirstNote: 0.07,
+    seed: 0x51ee11,
+  },
 };
 
 // ---------------------------------------------------------------- helpers

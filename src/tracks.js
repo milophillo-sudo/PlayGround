@@ -4,6 +4,7 @@ import { CHART as chronostasis } from './charts/chronostasis.js';
 import { CHART as untouchable } from './charts/untouchable.js';
 import { CHART as intention } from './charts/intention.js';
 import { CHART as intentionChaos } from './charts/intention-chaos.js';
+import { CHART as sleeve } from './charts/sleeve.js';
 
 // Track metadata is intentionally separate from the generated chart: the menu
 // can show a track before its audio has been decoded.
@@ -95,6 +96,23 @@ export const TRACKS = [
     fadeStart: 209.6,
     fadeEnd: 212.2,
     clearTag: 'INTENTION // FORGIVEN',
+  },
+  {
+    id: 'sleeve',
+    title: 'ONE TRICK LEFT UP MY SLEEVE',
+    shortTitle: 'ONE TRICK LEFT',
+    artist: 'ORIGINAL TRACK',
+    bpm: 120,
+    duration: 205.129,
+    audio: './audio/one-trick-left.mp3',
+    difficulty: 'EXPERT',
+    laneLabel: '4 · 6 · 8',
+    blurb: 'Scarlet ruin • shattered glass • burned memory',
+    accent: '#ff3b5c',
+    chart: sleeve,
+    theme: 'sleeve',
+    fadeStart: 198.7,
+    fadeEnd: 201.9,
   },
 ];
 

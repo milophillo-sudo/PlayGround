@@ -4719,17 +4719,17 @@ export const CHART = {
       "power": 1.2
     },
     {
-      "t": 182,
-      "type": "intent",
-      "mode": "phase",
-      "phase": "fake"
-    },
-    {
-      "t": 182,
+      "t": 181.4,
       "type": "intent",
       "mode": "hud",
       "hud": "white",
       "on": false
+    },
+    {
+      "t": 182,
+      "type": "intent",
+      "mode": "phase",
+      "phase": "fake"
     },
     {
       "t": 182,

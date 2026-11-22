@@ -371,6 +371,7 @@ function applyChartSelection() {
   trackDuration = chart.song.duration || selectedTrack.duration;
   document.body.classList.toggle('chaos-mode', isChaos());
   scene.setBoss(selectedTrack.boss ? 'preview' : 'off', selectedTrack.theme || 'untouchable');
+  scene.setTheme?.(selectedTrack.theme || 'untouchable');
   scene.setChaos?.(isChaos());
   if (isChaos()) scene.setIntentionPhase?.('chaos');
   scene.setSection(chart.sections[0]);
@@ -430,6 +431,7 @@ scene.setSection(chart.sections[0]);
 scene.setTempo(chart.song.bpm, chart.song.beatOffset);
 scene.setCity(chart.sections[0].city || 0);
 scene.setBoss(selectedTrack.boss ? 'preview' : 'off', selectedTrack.theme || 'untouchable');
+scene.setTheme?.(selectedTrack.theme || 'untouchable');
 
 function clearNoteObjects() {
   for (const n of noteObjects) {
@@ -1937,6 +1939,7 @@ async function selectTrack(id, { autoLoad = true } = {}) {
   scene.setChaos?.(false);
   dom.bossGlitch?.classList.remove('on');
   scene.setBoss(next.boss ? 'preview' : 'off', next.theme || 'untouchable');
+  scene.setTheme?.(next.theme || 'untouchable');
   scene.setSection(chart.sections[0]);
   scene.setTempo(chart.song.bpm, chart.song.beatOffset);
   scene.setCity(chart.sections[0].city || 0);

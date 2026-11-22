@@ -14,6 +14,13 @@ const LANE_COLORS = [
 // carries all of the colour, so the lane language stays absolutely readable.
 const INTENTION_LANE_COLORS = Array.from({ length: 8 }, () => '#ffffff');
 
+// Sleeve is scarlet, hot, and fractured: cool white glass catches only at the
+// needle-bright edges, while the lower field stays in deep crimson smoke.
+const SLEEVE_LANE_COLORS = [
+  '#ffb3c1', '#ff6f88', '#ff3b5c', '#ff1744',
+  '#ff1744', '#ff3b5c', '#ff6f88', '#ffb3c1',
+];
+
 
 // The boss field trades the neon palette for candlelight: mirror-symmetric
 // crimson edges, gold inner lanes, and bone-white centres.
@@ -2362,6 +2369,11 @@ export function createScene(canvasEl) {
     state.keyCount = sec.keys;
     if (sec.bpm) setTempo(sec.bpm, sec.beatOffset ?? 0);
     if (boss.active) applyBossPalette(true);
+    else if (boss.palette === 'sleeve') {
+      for (let i = 0; i < 8; i++) {
+        lanes[i].targetColor.set(SLEEVE_LANE_COLORS[i]);
+      }
+    }
     rememberFrame(sec.keys);
     state.target.rotY = sec.rotY;
     state.target.rotZ = sec.rotZ;
@@ -2703,8 +2715,9 @@ export function createScene(canvasEl) {
     updateBoss(dt, t);
 
     // stage motion
-    stage.position.y = v.y + Math.sin(t * 0.65) * 0.035 + pulse * 0.03;
+    stage.position.y = v.y + Math.sin(t * 0.65) * 0.035 + pulse * (boss.palette === 'sleeve' ? 0.16 : 0.03);
     stage.rotation.y = v.rotY + Math.sin(t * 0.22) * 0.02 + Math.sin(t * 0.09) * v.spin
+      + (boss.palette === 'sleeve' ? pulse * Math.sin(t * 1.4) * 0.012 : 0)
       + (boss.glitch > 0.01 ? (Math.random() - 0.5) * boss.glitch * 0.012 : 0);
     stage.rotation.z = v.rotZ + Math.sin(t * 0.37) * 0.006
       + (boss.glitch > 0.01 ? (Math.random() - 0.5) * boss.glitch * 0.01 : 0);
@@ -3060,6 +3073,17 @@ export function createScene(canvasEl) {
     makeNote, setSection, animate, render, laneX, laneZ, worldPoint,
     laneScreenXs, laneScreenPoints, laneScreenGeometry, laneScreenAngle,
     setPreviewLanes, setCity, setTempo,
+    setTheme(theme) {
+      boss.theme = theme === 'intention' ? 'intention' : 'untouchable';
+      if (theme === 'sleeve') {
+        boss.palette = 'sleeve';
+        for (let i = 0; i < 8; i++) {
+          lanes[i].color.set(SLEEVE_LANE_COLORS[i]);
+          lanes[i].targetColor.copy(lanes[i].color);
+        }
+        hitLineMat.color.set('#ff1744');
+      }
+    },
     setClock, clockTick, clockReset,
     setBoss, bossCameraEvent, bossGlitch, bossTick, windFx, freeNotePose,
     startGameOver, resetGameOver,
