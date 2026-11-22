@@ -1759,6 +1759,7 @@ export function createScene(canvasEl) {
   const boss = {
     active: false, mode: 'off', intro: false, theme: 'untouchable',
     fieldFade: 1, fieldTarget: 1, fieldHidden: false,
+    fieldGuard: 0,
     intentFocus: 0, intentFocusTarget: 0,
     churchFade: 0, churchTarget: 0,
     clockFade: 0, clockTarget: 0,
@@ -1826,6 +1827,7 @@ export function createScene(canvasEl) {
     if (next === 'off' || next === 'preview' || next === 'intro') {
       boss.intentFocus = 0;
       boss.intentFocusTarget = 0;
+      boss.fieldGuard = 0;
     }
     if (next === 'intro') {
       // Start the cinematic from a wide shot; the chart's first camera event
@@ -1890,18 +1892,31 @@ export function createScene(canvasEl) {
 
   // ------------------------------------------------------ gameplay framing
   // The camera score above is authored for looks. This guard keeps the playable
-  // field honest: during the clock stage every live lane ring has to sit in the
-  // lower part of the screen (where the player hits) and the clock crown has to
-  // stay under the top edge, on any aspect ratio. It leaves the authored shot
-  // alone whenever that shot already complies, so the direction survives.
+  // field honest: whatever the shot, every live lane ring has to sit in the
+  // lower part of the screen (where the player hits), with enough of the lane
+  // above it to read the fall. It leaves the authored shot alone whenever that
+  // shot already complies, so the direction survives.
+  //
+  // The boss glides can swing the lens far away from the lane field (the first
+  // boss even crosses behind it). When that happens the guard eases the camera
+  // back toward the normal gameplay pose, just far enough to make the field
+  // playable again, then hands the shot back as the glide returns. This also
+  // covers the one-lane and two-lane INTENTION sections, where the field is a
+  // thin centre line and is easy to lose at the edge of the frame.
   const RING_TARGET_Y = 0.785;
   const RING_EDGE_NDC = 0.84;   // outer rings stay inside 8%..92% of the width
   const CROWN_EDGE_NDC = 0.93;  // crown stays below the top 3.5% of the frame
   const frameProj = new THREE.Vector3();
+  const frameSide = new THREE.Vector3();
+  const frameView = new THREE.Vector3();
   const frameCrown = new THREE.Vector3();
   const frameForward = new THREE.Vector3();
   const frameLook = new THREE.Vector3();
+  const frameSafePos = new THREE.Vector3();
+  const frameSafeLook = new THREE.Vector3(0, 4.05, 0);
   const frameRings = Array.from({ length: 8 }, () => new THREE.Vector3());
+  const frameTops = Array.from({ length: 8 }, () => new THREE.Vector3());
+  const frameHighs = Array.from({ length: 8 }, () => new THREE.Vector3());
 
   // The rings hang off the stage, which lifts, tilts and rotates with the
   // section. Read their real world position so the guard measures what the
@@ -1911,14 +1926,99 @@ export function createScene(canvasEl) {
     laneRoot.updateWorldMatrix(false, false);
     for (let i = 0; i < 8; i++) {
       lanes[i].group.updateWorldMatrix(false, false);
-      frameRings[i].set(0, 0.02, 0.22).applyMatrix4(lanes[i].group.matrixWorld);
+      const m = lanes[i].group.matrixWorld;
+      frameRings[i].set(0, 0.02, 0.22).applyMatrix4(m);
+      frameTops[i].set(0, 6.4, 0.22).applyMatrix4(m);
+      frameHighs[i].set(0, 10.5, 0.22).applyMatrix4(m);
     }
   }
 
-  function bossPlayFraming(roll = 0) {
-    const crown = bossClockGroup.position.y + 10.5 * bossClockGroup.scale.y;
-    const live = state.active;
-    const fovCap = state.portrait ? 66 : 57;
+  // 0 = the authored shot already frames the field; 1 = the field is behind
+  // the lens or so far outside the frame that the safe pose has to take over.
+  function bossFieldStress() {
+    const live = state.live.size ? state.live : state.active;
+    if (!live.size) return 0;
+    camera.updateMatrixWorld();
+    const ringR = Math.max(0.6, state.view.ring || 1.6);
+    const narrow = state.keyCount <= 2;
+    let stress = 0;
+    let highest = -Infinity;
+    for (const i of live) {
+      // A ring behind the near plane cannot be rescued by pitch or FOV.
+      frameView.copy(frameRings[i]).applyMatrix4(camera.matrixWorldInverse);
+      if (frameView.z > -0.6) return 1;
+
+      frameProj.copy(frameRings[i]).project(camera);
+      const ax = Math.abs(frameProj.x);
+      if (ax > 0.68) stress = Math.max(stress, (ax - 0.68) / 0.1);
+      if (frameProj.y < -0.88) stress = Math.max(stress, (-0.88 - frameProj.y) / 0.12);
+      if (frameProj.y > 0.22) stress = Math.max(stress, (frameProj.y - 0.22) / 0.15);
+      if (frameProj.y > highest) highest = frameProj.y;
+
+      // Keep the hit ring readable even when a glide pulls the lens far back.
+      frameSide.copy(frameRings[i]);
+      frameSide.x += ringR;
+      frameSide.project(camera);
+      const diam = Math.hypot(frameSide.x - frameProj.x, frameSide.y - frameProj.y);
+      if (diam < 0.12) stress = Math.max(stress, (0.12 - diam) / 0.1);
+
+      // The approach has to read from above the hit line, not from below it.
+      frameView.copy(frameTops[i]).applyMatrix4(camera.matrixWorldInverse);
+      if (frameView.z > -0.6) return 1;
+      frameProj.copy(frameTops[i]).project(camera);
+      if (frameProj.y < highest + 0.05) {
+        stress = Math.max(stress, (highest + 0.05 - frameProj.y) / 0.3);
+      }
+
+      // A one- or two-lane field is only a thin centre line, so its whole fall
+      // path has to stay in the frame. Wide fields are allowed to splay past
+      // the sides at the far end; the notes still enter along the lane.
+      if (narrow) {
+        frameView.copy(frameHighs[i]).applyMatrix4(camera.matrixWorldInverse);
+        if (frameView.z > -0.6) return 1;
+        frameProj.copy(frameHighs[i]).project(camera);
+        const highX = Math.abs(frameProj.x);
+        if (highX > 0.9) stress = Math.max(stress, (highX - 0.9) / 0.12);
+      }
+    }
+    return Math.min(1, stress);
+  }
+
+  // Blend the lens onto the normal gameplay pose. Position and forward target
+  // are both interpolated, so handing the shot back to the authored camera is a
+  // smooth move rather than a cut.
+  function applyGameplayPose(weight) {
+    const guard = Math.max(0, Math.min(1, weight));
+    if (guard <= 0.001) return;
+    const v = state.view;
+    frameSafePos.set(
+      state.mouse.x * 0.55,
+      v.camY + state.mouse.y * 0.18,
+      v.camZ - state.zoomKick * 1.05,
+    );
+    camera.getWorldDirection(frameForward);
+    frameLook.copy(camera.position).addScaledVector(frameForward, 40);
+    camera.position.lerp(frameSafePos, guard);
+    frameLook.lerp(frameSafeLook, guard);
+    camera.lookAt(frameLook);
+    camera.fov += ((state.portrait ? 52 : 46) - camera.fov) * guard;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+  }
+
+  function bossPlayFraming(roll = 0, dt = 0.016) {
+    if (!state.live.size) return;
+    collectBossRings();
+
+    // Ease a "return to playable" weight. Fast when a glide has just broken the
+    // frame, slower when the authored shot recovers, so cuts stay smooth.
+    const stress = bossFieldStress();
+    const guardRate = stress > boss.fieldGuard ? 14 : 2.6;
+    boss.fieldGuard += (stress - boss.fieldGuard) * (1 - Math.exp(-dt * guardRate));
+    applyGameplayPose(boss.fieldGuard);
+
+    const live = state.live;
+    const fovCap = state.portrait ? 68 : 58;
     const rollX = Math.sin(roll) / camera.aspect;
     let fov = Math.max(46, camera.fov);
 
@@ -1931,7 +2031,6 @@ export function createScene(canvasEl) {
       camera.lookAt(frameLook);
     }
 
-    collectBossRings();
     for (let pass = 0; pass < 14; pass++) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
@@ -1949,10 +2048,12 @@ export function createScene(canvasEl) {
         camera.updateMatrixWorld();
       }
 
-      // Widen the lens if the crown or an outer ring broke the frame.
+      // Widen the lens if the clock crown or an outer ring broke the frame.
       let factor = 1;
-      frameCrown.set(0, crown, bossClockGroup.position.z).project(camera);
-      if (frameCrown.y > CROWN_EDGE_NDC) factor = frameCrown.y / CROWN_EDGE_NDC;
+      if (bossClockGroup.visible && boss.clockFade > 0.05) {
+        frameCrown.set(0, crownY(), bossClockGroup.position.z).project(camera);
+        if (frameCrown.y > CROWN_EDGE_NDC) factor = frameCrown.y / CROWN_EDGE_NDC;
+      }
       for (const i of live) {
         frameProj.copy(frameRings[i]).project(camera);
         const edge = Math.abs(frameProj.x + frameProj.y * rollX) / RING_EDGE_NDC;
@@ -1979,6 +2080,30 @@ export function createScene(canvasEl) {
     }
     camera.fov = fov;
     camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+
+    // Last resort: if the refined shot still is not playable, take the safe
+    // pose outright for this frame rather than showing an unplayable field.
+    // This catches authored glides that turn far enough to put the lane end
+    // behind the lens, where widening the FOV cannot help.
+    if (bossFieldStress() > 0.45) {
+      applyGameplayPose(1);
+      let low = Infinity;
+      for (const i of live) {
+        frameProj.copy(frameRings[i]).project(camera);
+        if (frameProj.y < low) low = frameProj.y;
+      }
+      if (low !== Infinity) {
+        const T = Math.tan((camera.fov * Math.PI) / 360);
+        camera.rotateX(Math.atan(low * T) - Math.atan((1 - 2 * RING_TARGET_Y) * T));
+        camera.updateMatrixWorld();
+      }
+      boss.fieldGuard = 1;
+    }
+  }
+
+  function crownY() {
+    return bossClockGroup.position.y + 10.5 * bossClockGroup.scale.y;
   }
 
   function bossGlitch(power = 1) {
@@ -2716,10 +2841,10 @@ export function createScene(canvasEl) {
       camera.updateProjectionMatrix();
       camera.lookAt(bc.look.x + boss.intentFocus * 0.82, bc.look.y, bc.look.z);
       // Gameplay shots are re-framed so the hit rings never fall off the
-      // bottom; the overture keeps its pure cinematic framing. INTENTION's
-      // camera is authored around the ring row already, including its
-      // top-down and libra-glide shots, so it is left uncorrected.
-      if (!boss.intro && boss.theme !== 'intention') bossPlayFraming(bc.roll);
+      // bottom or leave the sides; the overture keeps its pure cinematic
+      // framing. This runs for both boss maps, including INTENTION's 360°
+      // libra glides and its one-lane guilt sections.
+      if (!boss.intro) bossPlayFraming(bc.roll, dt);
       camera.rotation.z += bc.roll;
       if (boss.glitch > 0.01) {
         camera.position.x += (Math.random() - .5) * boss.glitch * 0.24;

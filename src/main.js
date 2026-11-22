@@ -59,6 +59,8 @@ const dom = {
   modeRow: $('modeRow'), modeNormal: $('modeNormal'), modeChaos: $('modeChaos'),
   storyCard: $('storyCard'), scChapter: $('scChapter'), scTitle: $('scTitle'),
   scSub: $('scSub'), scName: $('scName'), scPortrait: $('scPortrait'),
+  modBtn: $('modBtn'), modScreen: $('modScreen'), modClose: $('modClose'),
+  modCount: $('modCount'), modItems: [...document.querySelectorAll('.mod-item')],
 };
 
 // ---------------------------------------------------------------- state
@@ -125,6 +127,24 @@ const gameOver = {
   finished: false,
 };
 
+// Menu modifiers. Persisted so a practice setup survives a reload, but never
+// allowed to write personal bests.
+const MODS_KEY = 'cryout-mods-v1';
+const MOD_IDS = ['autoplay', 'suddenFail', 'perfectPlay', 'noFail'];
+const mods = (() => {
+  const base = { autoplay: false, suddenFail: false, perfectPlay: false, noFail: false };
+  try {
+    const raw = JSON.parse(localStorage.getItem(MODS_KEY) || '{}');
+    for (const id of MOD_IDS) base[id] = !!raw[id];
+  } catch { /* storage unavailable */ }
+  if (base.suddenFail) base.noFail = false;
+  return base;
+})();
+function modsActive() { return MOD_IDS.some((id) => mods[id]); }
+function saveMods() {
+  try { localStorage.setItem(MODS_KEY, JSON.stringify(mods)); } catch { /* storage unavailable */ }
+}
+
 const stats = {
   score: 0, combo: 0, maxCombo: 0, judged: 0, weight: 0,
   perfect: 0, great: 0, good: 0, bad: 0, miss: 0, dropped: 0,
@@ -139,7 +159,7 @@ const holdNote = new Array(8).fill(null);
 const touchPoints = new Set();
 const keysHeld = new Set();
 const padFlashTimers = new Array(8).fill(0);
-function inputHeld() { return touchPoints.size > 0 || keysHeld.size > 0; }
+function inputHeld() { return mods.autoplay || touchPoints.size > 0 || keysHeld.size > 0; }
 function touching() { return inputHeld(); }
 let toastTimer = 0;
 let ghostCursor = 0;
@@ -223,6 +243,50 @@ function selectPartner(id) {
   try { localStorage.setItem(PARTNER_KEY, next.id); } catch { /* storage unavailable */ }
   renderPartner();
   toast(`${next.name} // ${next.role}`, 1200);
+}
+
+// ---------------------------------------------------------------- modifiers
+function applyModsUI() {
+  const count = MOD_IDS.filter((id) => mods[id]).length;
+  for (const item of dom.modItems) {
+    const on = !!mods[item.dataset.mod];
+    item.classList.toggle('active', on);
+    item.setAttribute('aria-checked', String(on));
+  }
+  document.body.classList.toggle('mods-active', count > 0);
+  dom.modBtn?.classList.toggle('has-mods', count > 0);
+  if (dom.modCount) {
+    dom.modCount.textContent = String(count);
+    dom.modCount.hidden = count === 0;
+  }
+}
+
+function setMod(id, on) {
+  if (!MOD_IDS.includes(id)) return;
+  mods[id] = !!on;
+  // SUDDEN FAIL and NO FAIL are contradictory, so choosing one clears the
+  // other instead of leaving a run in an ambiguous state.
+  if (mods[id] && id === 'suddenFail') mods.noFail = false;
+  if (mods[id] && id === 'noFail') mods.suddenFail = false;
+  saveMods();
+  applyModsUI();
+}
+
+function openMods() {
+  if (gameState !== 'menu' && gameState !== 'boot') return;
+  dom.modScreen?.classList.add('show');
+  dom.modScreen?.setAttribute('aria-hidden', 'false');
+  dom.modBtn?.setAttribute('aria-expanded', 'true');
+  setTimeout(() => {
+    if (dom.modScreen?.classList.contains('show')) dom.modItems[0]?.focus({ preventScroll: true });
+  }, 40);
+}
+
+function closeMods() {
+  dom.modScreen?.classList.remove('show');
+  dom.modScreen?.setAttribute('aria-hidden', 'true');
+  dom.modBtn?.setAttribute('aria-expanded', 'false');
+  dom.modBtn?.focus({ preventScroll: true });
 }
 
 function renderStoryScreen() {
@@ -779,7 +843,7 @@ function intentJudged(kind) {
     : kind === 'good' ? 0.5
     : kind === 'bad' ? -2.2
     : -6;
-  intent.guilt = Math.max(0, Math.min(100, intent.guilt + gain));
+  intent.guilt = Math.max(mods.noFail ? 1 : 0, Math.min(100, intent.guilt + gain));
   paintGuilt();
 }
 
@@ -793,7 +857,7 @@ function updateIntent(dt, t) {
     }
     const density = ahead / 2.4;
     const drain = 0.5 + Math.min(1.5, density * 0.55);
-    intent.guilt = Math.max(0, Math.min(100, intent.guilt - drain * dt));
+    intent.guilt = Math.max(mods.noFail ? 1 : 0, Math.min(100, intent.guilt - drain * dt));
     paintGuilt();
   }
   if (intent.fakeGuilt) {
@@ -875,7 +939,8 @@ function findSection(t) {
 function judgeHit(note, offset) {
   const a = Math.abs(offset);
   let kind;
-  if (a <= WIN.perfect) kind = 'perfect';
+  if (mods.perfectPlay) kind = 'perfect';
+  else if (a <= WIN.perfect) kind = 'perfect';
   else if (a <= WIN.great) kind = 'great';
   else if (a <= WIN.good) kind = 'good';
   else kind = 'bad';
@@ -908,6 +973,9 @@ function judgeHit(note, offset) {
   showJudge(kind, text);
   scene.hitFx(note.lane, kind);
   audio.click(note.lane, kind === 'perfect' ? 0.52 : 0.38);
+  // Full-combo means no BAD and no MISS. A BAD breaks the combo, so under
+  // SUDDEN FAIL it is already game over.
+  if (mods.suddenFail && kind === 'bad') startGameOver();
 }
 
 function missNote(note) {
@@ -916,12 +984,13 @@ function missNote(note) {
   note.group.visible = false;
   stats.miss++;
   stats.judged++;
-  stats.health = Math.max(0, stats.health - 5);
+  stats.health = Math.max(mods.noFail ? 1 : 0, stats.health - 5);
   setCombo(0, false);
   showJudge('miss', 'MISS');
   scene.missFx(note.lane);
   audio.thud();
   intentJudged('miss');
+  if (mods.suddenFail) startGameOver();
 }
 
 function dropHold(note) {
@@ -932,12 +1001,13 @@ function dropHold(note) {
   stats.dropped++;
   stats.miss++;
   stats.judged++;
-  stats.health = Math.max(0, stats.health - 4);
+  stats.health = Math.max(mods.noFail ? 1 : 0, stats.health - 4);
   setCombo(0, false);
   showJudge('miss', 'HOLD LOST');
   scene.missFx(note.lane);
   audio.thud();
   intentJudged('miss');
+  if (mods.suddenFail) startGameOver();
 }
 
 function completeHold(note) {
@@ -1073,7 +1143,8 @@ function alignCenterPad() {
 function judgeSwing(note, offset) {
   const a = Math.abs(offset);
   let kind;
-  if (a <= WIN.perfect) kind = 'perfect';
+  if (mods.perfectPlay) kind = 'perfect';
+  else if (a <= WIN.perfect) kind = 'perfect';
   else if (a <= WIN.great) kind = 'great';
   else if (a <= WIN.good) kind = 'good';
   else kind = 'bad';
@@ -1091,6 +1162,7 @@ function judgeSwing(note, offset) {
   showJudge(kind, kind === 'perfect' ? 'PERFECT' : kind === 'great' ? 'GREAT' : kind === 'good' ? 'GOOD' : 'BAD');
   scene.swingResolve(note.index, 'hit');
   audio.click(3, kind === 'perfect' ? 0.56 : 0.4);
+  if (mods.suddenFail && kind === 'bad') startGameOver();
 }
 
 function missSwing(note) {
@@ -1098,11 +1170,12 @@ function missSwing(note) {
   note.state = 'miss';
   stats.miss++;
   stats.judged++;
-  stats.health = Math.max(0, stats.health - 5);
+  stats.health = Math.max(mods.noFail ? 1 : 0, stats.health - 5);
   setCombo(0, false);
   showJudge('miss', 'MISS');
   scene.swingResolve(note.index, 'miss');
   audio.thud();
+  if (mods.suddenFail) startGameOver();
 }
 
 function updateSwing(t) {
@@ -1130,6 +1203,22 @@ function swingTap() {
     return;
   }
   judgeSwing(best, t - best.t);
+}
+
+// Autoplay resolves every due note at its exact chart time, so timing never
+// drifts on a slow frame. Holds stay alive through inputHeld(), and the
+// pendulum is answered through the same judge path a player uses.
+function autoplayTick(t) {
+  if (!mods.autoplay || gameState !== 'playing') return;
+  if (swingMode) {
+    for (const n of swingNotes) {
+      if (n.state === 'pending' && t >= n.t) judgeSwing(n, 0);
+    }
+    return;
+  }
+  for (const n of noteObjects) {
+    if (n.state === 'pending' && t >= n.data.t) hitNote(n, n.data.t);
+  }
 }
 
 // ---------------------------------------------------------------- note render
@@ -1202,6 +1291,9 @@ function updateNotes(t) {
 async function startGame() {
   if (!audio.loaded) return;
   resultToken++;
+  dom.modScreen?.classList.remove('show');
+  dom.modScreen?.setAttribute('aria-hidden', 'true');
+  dom.modBtn?.setAttribute('aria-expanded', 'false');
   dom.start.classList.remove('show');
   dom.result.classList.remove('show');
   dom.resultLoading.classList.remove('show');
@@ -1401,6 +1493,7 @@ function showResults(data) {
   dom.footTrack.textContent = selectedTrack.shortTitle;
   dom.footLanes.textContent = isChaos() ? '8 · 6 · 4' : selectedTrack.laneLabel;
   dom.resultTag.textContent = data.failed ? 'SIGNAL LOST // GAME OVER'
+    : data.assisted ? (full ? 'ASSISTED // FULL COMBO · PB NOT SAVED' : 'ASSISTED RUN // PB NOT SAVED')
     : full ? 'FULL COMBO // FIELD MASTERED'
     : !data.cleared ? 'SIGNAL LOST // TRY AGAIN'
     : isChaos() ? 'CHAOS // OCEAN BROKEN OPEN'
@@ -1414,7 +1507,9 @@ function showResults(data) {
     ? `${String(best.score).padStart(7, '0')} · ${best.rank || '—'}`
     : 'FIRST RUN';
   const gap = Math.max(0, (best?.score || 0) - data.score);
-  dom.scoreDelta.textContent = isBest
+  dom.scoreDelta.textContent = data.assisted
+    ? (full ? 'ASSISTED // FULL COMBO' : 'ASSISTED // NOT RECORDED')
+    : isBest
     ? (prevBest ? `NEW BEST +${String(Math.max(0, data.score - prevBest.score)).padStart(5, '0')}`
       : data.cleared ? 'FIRST CLEAR' : 'FIRST SCORE')
     : !data.scored ? 'NO SCORE RECORDED'
@@ -1485,11 +1580,13 @@ function finishGame(failed = false) {
   const runScore = stats.score;
   const scored = runScore > 0 && !failed;
   const cleared = scored && acc >= 50;
+  const assisted = modsActive();
   const bestKey = bestIdFor();
   const prevBest = bestMap[bestKey] || null;
   // Skipping to the end (or never touching a lane) must not overwrite a real
-  // personal best with a zero-score run. A failed run is not a clear either.
-  const isBest = scored && (!prevBest
+  // personal best with a zero-score run. A failed run is not a clear either,
+  // and an assisted run is practice, never a record.
+  const isBest = !assisted && scored && (!prevBest
     || runScore > prevBest.score
     || (runScore === prevBest.score && acc > prevBest.acc));
   if (isBest) {
@@ -1500,7 +1597,7 @@ function finishGame(failed = false) {
 
   const data = {
     score: runScore, acc, rank, full, isBest, prevBest, scored, cleared, failed,
-    maxCombo: stats.maxCombo, counts: { ...stats }, judgeTotals: stats.judged,
+    assisted, maxCombo: stats.maxCombo, counts: { ...stats }, judgeTotals: stats.judged,
   };
 
   const token = ++resultToken;
@@ -1651,6 +1748,12 @@ function updateChartEvents(t) {
 // Lane keys are accepted as a convenience, but the destination lane is chosen
 // by the chart: the closest note to the hit line always answers first.
 function keyDown(e) {
+  if (e.code === 'Escape' && dom.modScreen?.classList.contains('show')) {
+    e.preventDefault();
+    closeMods();
+    return;
+  }
+  if (dom.modScreen?.classList.contains('show')) return;
   if (e.code === 'Escape') {
     if (gameState === 'playing') { e.preventDefault(); pauseGame(); }
     else if (gameState === 'paused') { e.preventDefault(); resumeGame(); }
@@ -1773,6 +1876,14 @@ dom.storyClose?.addEventListener('click', closeStory);
 dom.storyScreen?.addEventListener('click', (e) => {
   if (e.target === dom.storyScreen) closeStory();
 });
+dom.modBtn?.addEventListener('click', openMods);
+dom.modClose?.addEventListener('click', closeMods);
+dom.modScreen?.addEventListener('click', (e) => {
+  if (e.target === dom.modScreen) closeMods();
+});
+for (const item of dom.modItems) {
+  item.addEventListener('click', () => setMod(item.dataset.mod, !mods[item.dataset.mod]));
+}
 dom.pauseBtn.addEventListener('click', pauseGame);
 $('resumeBtn').addEventListener('click', resumeGame);
 $('restartBtn').addEventListener('click', () => { dom.pause.classList.remove('show'); startGame(); });
@@ -1886,6 +1997,7 @@ resetGame();
 gameState = 'boot';
 renderPartner();
 applyTrackUI();
+applyModsUI();
 loadAudio(selectedTrack);
 
 // ---------------------------------------------------------------- loop
@@ -1905,13 +2017,14 @@ function frame(now) {
     updateGhostEvents(t);
     updateChartEvents(t);
     updateIntent(dt, t);
+    autoplayTick(t);
     updateSwing(t);
     updateNotes(t);
     updateHUD(t);
     scene.animate(dt, t, true);
     alignPads(ahead);
-    const failed = stats.health <= 0.001
-      || (intent.guiltOn && !intent.fakeGuilt && intent.guilt <= 0.001);
+    const failed = !mods.noFail && (stats.health <= 0.001
+      || (intent.guiltOn && !intent.fakeGuilt && intent.guilt <= 0.001));
     if (t >= chartEnd) finishGame();
     else if (failed) startGameOver();
   } else if (gameState === 'gameover') {
@@ -1936,6 +2049,7 @@ function frame(now) {
 window.__cryout = {
   audio, stats, scene, pressLane, pressGlobal, releaseLane, selectTrack,
   selectPartner, setChaosMode, showStoryCard,
+  mods, setMod, modsActive, openMods, closeMods, autoplayTick,
   get chart() { return chart; },
   get partner() { return partner; },
   get chaos() { return isChaos(); },
