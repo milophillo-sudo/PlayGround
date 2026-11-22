@@ -501,7 +501,24 @@ function quizPose(a, dt) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// INTRO — school day, report cards, lockdown
+// shared school-bell sounds
+// ─────────────────────────────────────────────────────────────
+function bellLine(audio) {
+  if (!audio?.ctx) return;
+  const t = audio.ctx.currentTime;
+  for (let i = 0; i < 3; i++) {
+    audio.tone(880, 0.35, 0.07, 'square', 820, t + i * 0.42);
+    audio.tone(1320, 0.35, 0.03, 'sine', 1180, t + i * 0.42);
+  }
+}
+function intercom(audio) {
+  if (!audio?.ctx) return;
+  audio.noise(0.22, 0.025, 1600, 'bandpass');
+  audio.tone(740, 0.18, 0.03, 'sine', 620);
+}
+
+// ─────────────────────────────────────────────────────────────
+// INTRO — school day, report cards, the decision to skip
 // ─────────────────────────────────────────────────────────────
 export function introShots(cine) {
   const game = cine.game;
@@ -562,20 +579,6 @@ export function introShots(cine) {
     a.model.rotation.y = (i % 2 ? 0.16 : -0.12);
     extras.push(a);
   }
-
-  const bellLine = (audio) => {
-    if (!audio?.ctx) return;
-    const t = audio.ctx.currentTime;
-    for (let i = 0; i < 3; i++) {
-      audio.tone(880, 0.35, 0.07, 'square', 820, t + i * 0.42);
-      audio.tone(1320, 0.35, 0.03, 'sine', 1180, t + i * 0.42);
-    }
-  };
-  const intercom = (audio) => {
-    if (!audio?.ctx) return;
-    audio.noise(0.22, 0.025, 1600, 'bandpass');
-    audio.tone(740, 0.18, 0.03, 'sine', 620);
-  };
 
   return [
     // 1 — establishing
@@ -711,26 +714,130 @@ export function introShots(cine) {
       onEnd: (c) => { teacher.yaw = Math.PI; teacher.model.rotation.y = Math.PI; UI.cineHideCard(); }
     },
 
-    // 5 — bell / lockdown
+    // 5 — the plan
     {
-      dur: 7.0, fov: 52, fovTo: 42, handheld: 0.025, shake: 0.006,
-      from: v(-24, 2.9, 1.5), to: v(-10, 2.2, 0.4),
-      lookFrom: v(-8, 1.8, 0), lookTo: v(6, 1.6, -0.2),
+      dur: 6.8, fov: 46, fovTo: 55, handheld: 0.014,
+      from: v(-6.35, 1.72, 8.2), to: v(-7.1, 1.62, 6.1),
+      lookFrom: v(-4.8, 1.25, 10.4), lookTo: v(-8.0, 1.35, 3.6),
+      onStart: (c) => {
+        teacher.yaw = 0; teacher.model.rotation.y = 0;
+        jake.seated = false;
+        jake.quizStyle = null;
+        jake.model.position.set(-4.4, 0, 10.9);
+        jake.model.rotation.y = Math.PI;
+        c.game.audio?.ui();
+        UI.cineCard('12:01 PM — FOURTH PERIOD', 'THE PLAN', 'left');
+      },
+      lines: [
+        { at: 0.4, who: 'JAKE', text: 'Psst. Bathroom. Now. Before she assigns us a personality.', actor: jake, dur: 3.0 },
+        { at: 3.6, who: 'MS. VELLA', text: 'I can hear whispering. Whispering is a gateway drug.', actor: teacher, dur: 2.6 },
+        { at: 5.9, who: 'JAKE', text: 'Go. Go. Go.', actor: jake, dur: 1.2 }
+      ],
+      onUpdate: (c, st, dt) => {
+        // Jake slips down the aisle toward the door; the player follows.
+        if (st > 5.7) {
+          const p = jake.model.position;
+          p.x += (-8.45 - p.x) * Math.min(1, dt * 2.4);
+          p.z += (4.4 - p.z) * Math.min(1, dt * 2.2);
+          jake.mode = 'walk';
+        } else {
+          jake.mode = 'idle';
+        }
+      },
+      cards: [{ at: 0.2, kicker: 'CHAPTER ZERO', title: 'SKIP CLASS', align: 'center', dur: 2.6 }],
+      onEnd: (c) => { UI.cineHideCard(); jake.model.visible = false; }
+    }
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOCKDOWN — triggered by reaching the toilets
+// ─────────────────────────────────────────────────────────────
+export function lockdownShots(cine) {
+  const game = cine.game;
+  const world = game.world;
+  world.setLighting('day');
+  world.setBodiesVisible(false);
+
+  const jake = cine.person({
+    shirt: 0x2a3550, pants: 0x22252d, hair: 0x241a14, hairStyle: 'short',
+    skin: 0xc79b7d, height: 1.82, backpack: 0x3d4f64
+  }, -3.5, -6.4, 0);
+  cine.light(0xdff3ff, 2.0, 10, -3, 2.8, -7);
+
+  let lockdownOn = false;
+
+  return [
+    // 1 — six seconds of peace in the toilets
+    {
+      dur: 6.4, fov: 58, fovTo: 45, handheld: 0.02, shake: 0.004,
+      from: v(-2.45, 1.66, -4.35), to: v(-2.35, 1.5, -7.0),
+      lookFrom: v(-3.5, 1.42, -6.4), lookTo: v(-3.45, 1.3, -7.2),
+      onStart: (c) => {
+        UI.cineCard('12:04 PM — BOYS\u2019 TOILETS', 'MADE IT', 'left');
+        c.game.audio?.setTension(0.12);
+      },
+      lines: [
+        { at: 0.4, who: 'JAKE', text: 'We made it. Nobody saw us. We are <span class="em">ghosts</span>.', actor: jake, dur: 2.7 },
+        { at: 3.6, who: 'JAKE', text: 'That bell is early. That bell is early, right?', actor: jake, dur: 2.2 },
+        { at: 5.6, who: 'JAKE', text: 'Why is the intercom crackling?', actor: jake, dur: 1.0 }
+      ],
+      onUpdate: (c, st, dt) => {
+        if (!lockdownOn && st > 3.1) {
+          lockdownOn = true;
+          world.setLighting('lockdown');
+          bellLine(c.game.audio);
+          intercom(c.game.audio);
+          c.game.audio?.alarmStart();
+          c.game.audio?.stinger();
+          UI.cineFlash();
+          jake.reaction = 1;
+        }
+        if (st > 3.1) {
+          jake.mode = 'walk';
+          jake.model.position.z -= dt * 0.8;
+        } else {
+          jake.mode = 'idle';
+        }
+      },
+      cards: [{ at: 3.2, kicker: '12:04 PM', title: 'LOCKDOWN', align: 'center', dur: 2.6 }],
+      onEnd: (c) => { UI.cineHideCard(); jake.model.visible = false; }
+    },
+
+    // 2 — the corridor fills up
+    {
+      // Stage this in the central corridor outside the toilets, not the
+      // empty senior wing. The camera travels with the stampede so the
+      // hallway never reads as a deserted room.
+      dur: 7.4, fov: 55, fovTo: 43, handheld: 0.024, shake: 0.006,
+      from: v(-12, 2.7, 1.3), to: v(2, 2.0, 0.3),
+      lookFrom: v(8, 1.8, 0), lookTo: v(14, 1.6, -0.2),
       onStart: (c) => {
         world.setLighting('lockdown');
         bellLine(c.game.audio);
         intercom(c.game.audio);
-        // students pour into the corridor
-        for (let i = 0; i < 7; i++) {
+        // Two streams of students pour past the toilets. Keep the crowd
+        // dense for the whole shot instead of letting it drain out of frame.
+        const shirts = [0x445d46, 0x6b5a3a, 0x4d4660, 0x7a343e, 0x2f4f52, 0x7a6a58];
+        const skins = [0xd9b49b, 0x8a5b3e, 0xa9724f, 0xe4c3a8];
+        for (let i = 0; i < 12; i++) {
+          const east = i < 7;
+          const x = east ? -30 + i * 4.1 : 22 - (i - 7) * 5.2;
           const a = cine.person({
-            shirt: [0x445d46, 0x6b5a3a, 0x4d4660, 0x7a343e][i % 4],
-            pants: 0x2a3040, hair: 0x241a14, skin: [0xd9b49b, 0x8a5b3e, 0xa9724f][i % 3],
-            height: 1.55 + (i % 4) * 0.05
-          }, -34 + i * 2.6, -1.0 + (i % 3) * 0.9, Math.PI / 2);
-          a.mode = 'run'; a.speed = 4.2; a.panic = 0.7;
-          a.runTo = -5 + i * 3.4;
+            shirt: shirts[i % shirts.length],
+            pants: 0x2a3040,
+            hair: [0x241a14, 0x3a2618, 0x151210][i % 3],
+            skin: skins[i % skins.length],
+            height: 1.55 + (i % 4) * 0.06,
+            backpack: i % 3 === 0 ? [0x3e4f6b, 0x7a3b4a, 0x8a6a3a][i % 3] : null
+          }, x, -1.4 + (i % 4) * 0.95, east ? -Math.PI / 2 : Math.PI / 2);
+          a.mode = 'run';
+          a.speed = 2.6 + (i % 4) * 0.45;
+          a.panic = 0.75;
+          a.studentRun = east ? 1 : -1;
+          a.runSpeed = a.speed;
+          a.laneZ = a.model.position.z;
         }
-        c._siren = true;
         c.game.audio?.alarmStart();
       },
       lines: [
@@ -740,20 +847,22 @@ export function introShots(cine) {
       cards: [{ at: 0.25, kicker: '12:04 PM', title: 'LOCKDOWN', align: 'left', dur: 3.4 }],
       onUpdate: (c, st, dt) => {
         for (const a of c.actors) {
-          if (a.runTo === undefined) continue;
-          a.model.position.x += dt * 3.2;
-          a.model.position.z += Math.sin(c.total * 2 + a.baseZ) * dt * 0.4;
-          if (a.model.position.x > a.runTo) a.model.visible = false;
+          if (!a.studentRun) continue;
+          const p = a.model.position;
+          p.x += dt * a.runSpeed * a.studentRun;
+          p.z = a.laneZ + Math.sin(c.total * 2.2 + a.baseZ) * 0.28;
+          a.yaw = a.studentRun > 0 ? -Math.PI / 2 : Math.PI / 2;
+          a.model.rotation.y = a.yaw;
         }
       },
       onEnd: (c) => {
         UI.cineHideCard();
         c.game.audio?.alarmStop();
-        for (const a of c.actors) if (a.runTo !== undefined) a.model.visible = false;
+        for (const a of c.actors) if (a.studentRun) a.model.visible = false;
       }
     },
 
-    // 6 — the hall monitor
+    // 3 — the hall monitor
     {
       dur: 10.2, fov: 44, fovTo: 33, handheld: 0.018, shake: 0.01, shakeEase: t => t > 0.72 ? (t - 0.72) * 8 : 0,
       from: v(-6, 1.35, 1.7), to: v(-1.2, 0.95, 1.15),
@@ -804,6 +913,94 @@ export function introShots(cine) {
       },
       onEnd: (c) => {
         UI.cineHideCard();
+        c.game.audio?.stinger();
+        c.game.fadeToBlack();
+      }
+    }
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────
+// FORGOT JAKE — the group gets out without him
+// ─────────────────────────────────────────────────────────────
+export function forgotJakeShots(cine) {
+  const game = cine.game;
+  const world = game.world;
+  world.setLighting('lockdown');
+  world.setBodiesVisible(false);
+
+  const jake = cine.person({
+    shirt: 0x2a3550, pants: 0x22252d, hair: 0x241a14, hairStyle: 'short',
+    skin: 0xc79b7d, height: 1.82, backpack: null
+  }, -4.7, -18.2, Math.PI);
+  jake.mode = 'idle';
+
+  const stallLight = cine.light(0xd8f2ff, 4.0, 9, -4.6, 2.7, -20.4);
+  const flicker = cine.light(0xff3344, 0.8, 8, -2, 2.6, -16);
+  flicker.intensity = 0.3;
+  // Jake is backlit by the stalls. Fill him from the camera side so the
+  // forgotten kid reads as a person and not a black cutout.
+  cine.light(0xbcd6ff, 11.0, 10, -3.9, 2.3, -15.0);
+  cine.light(0x8fb4d8, 3.5, 7, -5.6, 1.4, -16.8);
+
+  return [
+    // 1 — alone with the toilets
+    {
+      dur: 8.4, fov: 49, fovTo: 36, handheld: 0.02, shake: 0.004,
+      from: v(-2.7, 1.62, -13.0), to: v(-3.4, 1.48, -15.4),
+      lookFrom: v(-4.7, 1.38, -18.2), lookTo: v(-4.7, 1.34, -18.2),
+      onStart: (c) => {
+        c.game.audio?.setTension(0.25);
+        c.game.audio?.heartbeat(0.2);
+        UI.cineCard('MEANWHILE — THE TOILETS', 'THE FORGOTTEN', 'left');
+      },
+      lines: [
+        { at: 0.4, who: 'JAKE', text: 'Hello? ...Guys? ...You left me in the toilet.', actor: jake, dur: 3.2 },
+        { at: 3.9, who: 'JAKE', text: 'I heard the exit gate. I heard the police. I heard my report card laughing.', actor: jake, dur: 3.2 },
+        { at: 7.2, who: 'JAKE', text: 'Fine. I will walk. It is only a lockdown.', actor: jake, dur: 2.4 }
+      ],
+      onUpdate: (c, st, dt) => {
+        flicker.intensity = 0.2 + Math.abs(Math.sin(c.total * 7)) * 0.5;
+        stallLight.intensity = st > 4 ? 1.1 + Math.sin(c.total * 12) * 0.5 : 1.6;
+        if (st > 4.4) {
+          jake.mode = 'walk';
+          jake.model.position.z += dt * 0.8;
+        } else {
+          jake.mode = 'idle';
+        }
+      },
+      cards: [{ at: 0.3, kicker: '2:16 AM', title: 'STILL HERE', align: 'center', dur: 2.7 }],
+      onEnd: (c) => { UI.cineHideCard(); c.game.audio?.stinger(); }
+    },
+
+    // 2 — the intercom has one more announcement
+    {
+      dur: 6.0, fov: 36, fovTo: 54, handheld: 0.014, shake: 0.012,
+      from: v(-4.4, 1.4, -16.2), to: v(-4.55, 1.3, -17.4),
+      lookFrom: v(-4.7, 1.35, -18.4), lookTo: v(-4.7, 1.4, -18.4),
+      onStart: (c) => {
+        intercom(c.game.audio);
+        c.game.audio?.alarmStart();
+        c.game.audio?.stinger();
+        UI.cineCard('ALL STUDENTS', 'REMAIN IN YOUR ROOMS', 'center');
+      },
+      lines: [
+        { at: 0.5, who: 'INTERCOM', text: 'Reminder: all students must remain in their assigned rooms. Especially the ones we forgot.', dur: 3.6 },
+        { at: 4.4, who: 'JAKE', text: '...Okay. New plan.', actor: jake, dur: 1.8 }
+      ],
+      flashes: [{ at: 4.2 }],
+      onUpdate: (c, st, dt) => {
+        jake.mode = 'idle';
+        const p = jake.model.userData.parts;
+        if (p) {
+          p.headPivot.rotation.x = -0.1;
+          p.armR.rotation.x = -0.6 - st * 0.12;
+        }
+        flicker.intensity = 0.2 + Math.abs(Math.sin(c.total * 9)) * 0.5;
+      },
+      onEnd: (c) => {
+        UI.cineHideCard();
+        c.game.audio?.alarmStop();
         c.game.audio?.stinger();
         c.game.fadeToBlack();
       }
@@ -951,7 +1148,7 @@ export function jakeRevealShots(cine) {
       },
       lines: [
         { at: 0.6, who: 'HALL MONITOR', text: 'No hall pass. No exit. <span class="scare">No witnesses.</span>', dur: 3.0 },
-        { at: 4.1, who: 'YOU', text: '...this is going to be a Q.', dur: 1.8 }
+        { at: 4.1, who: 'MAYA', text: 'Wait. Where is Jake?', dur: 1.8 }
       ],
       onUpdate: (c, st) => {
         killer.model.rotation.y = Math.PI / 2 + Math.sin(st * 0.8) * 0.06;
@@ -972,9 +1169,10 @@ export function jakeRevealShots(cine) {
         UI.cineCard('SOMEONE IS STILL HERE', 'JAKE', 'left');
       },
       lines: [
-        { at: 0.5, who: 'JAKE', text: 'Sorry I am late. I was doing my hair.', actor: jake, dur: 2.7 },
-        { at: 3.7, who: 'HALL MONITOR', text: '...new student?', dur: 1.5 },
-        { at: 5.2, who: 'JAKE', text: 'No. <span class="em">Unfinished business.</span>', actor: jake, dur: 2.1 }
+        { at: 0.5, who: 'JAKE', text: 'You left me in the toilet.', actor: jake, dur: 2.0 },
+        { at: 2.6, who: 'JAKE', text: 'Sorry I am late. I was doing my hair. In the sink.', actor: jake, dur: 2.4 },
+        { at: 5.2, who: 'HALL MONITOR', text: '...new student?', dur: 1.3 },
+        { at: 6.5, who: 'JAKE', text: 'No. <span class="em">Unfinished business.</span>', actor: jake, dur: 1.8 }
       ],
       onUpdate: (c, st, dt) => {
         const target = 51.2;

@@ -67,6 +67,8 @@ export class Bot {
     this.dead = false;
     this.escaped = false;
     this.controlled = false;
+    this.dormant = false;
+    this.classroom = false;
     this.path = [];
     this.pathIndex = 0;
     this.pathTimer = 0;
@@ -229,6 +231,37 @@ export class Bot {
   }
 
   update(dt) {
+    if (this.classroom) {
+      // Fourth period is still going. Sit at the desk, keep quiet, and
+      // do not follow the player out — these three only show up again
+      // once the lockdown starts.
+      this.model.visible = true;
+      this.danger.visible = false;
+      this.model.position.set(this.pos.x, 0, this.pos.z);
+      this.model.rotation.y = this.yaw;
+      this.talk = Math.max(0, this.talk - dt * 1.6);
+      if (this.talkTimer > 0) this.talkTimer -= dt;
+      animatePerson(this.model, dt, {
+        mode: 'idle', speed: 0, talk: this.talk, crouch: 0.32
+      });
+      const p = this.model.userData.parts;
+      if (p) {
+        // seated: thighs forward, knees down, feet on the floor
+        p.legL.rotation.x = -1.28;
+        p.legR.rotation.x = -1.28;
+        p.kneeL.rotation.x = 1.08;
+        p.kneeR.rotation.x = 1.08;
+        p.hips.position.y = 0.58;
+      }
+      const spr = this.model.userData.nameSprite;
+      if (spr) spr.visible = false;
+      return;
+    }
+    if (this.dormant) {
+      this.model.visible = false;
+      this.danger.visible = false;
+      return;
+    }
     if (this.dead) {
       if (this._nearCam) { this._nearCam = false; this.model.visible = true; }
       this.animate(dt);
@@ -621,6 +654,157 @@ export class Bot {
         spr.scale.set(k, k * 0.25, 1);
       }
     }
+  }
+}
+
+// Jake is a story NPC, not a survivor: he leads the skip-class run, then
+// locks himself in the toilets when the lockdown starts. He keeps his own
+// tiny follow loop so he never shows up in the survivor roster.
+export class JakeNPC {
+  constructor(game) {
+    this.game = game;
+    this.pos = new THREE.Vector3(-8.65, 0, 3.9);
+    this.yaw = Math.PI / 2;
+    this.active = false;
+    this.speed = 0;
+    this.path = [];
+    this.pathIndex = 0;
+    this.pathTimer = 0;
+    this.talk = 0;
+    this.talkTimer = 0;
+    this.lineTimer = 4;
+    this.goal = { x: -4.0, z: -8.4 };
+    this.model = makePerson({
+      shirt: 0x2a3550, pants: 0x22252d, hair: 0x241a14, hairStyle: 'short',
+      skin: 0xc79b7d, height: 1.82, backpack: 0x3d4f64, name: 'JAKE'
+    });
+    this.model.position.set(this.pos.x, 0, this.pos.z);
+    this.model.rotation.y = this.yaw;
+    this.model.visible = false;
+    game.scene.add(this.model);
+  }
+
+  spawn(x = -8.65, z = 3.9, yaw = Math.PI / 2) {
+    this.pos.set(x, 0, z);
+    this.yaw = yaw;
+    this.model.position.set(x, 0, z);
+    this.model.rotation.y = yaw;
+    this.active = true;
+    this.model.visible = true;
+    this.path = [];
+    this.pathIndex = 0;
+    this.pathTimer = 0;
+    this.lineTimer = 3.5;
+    this.talk = 0;
+    this.talkTimer = 0;
+  }
+
+  setActive(v) {
+    this.active = v;
+    this.model.visible = v;
+  }
+
+  say(text, dur = 2.4) {
+    this.talk = 1;
+    this.talkTimer = dur;
+    this.game.radio('JAKE', text);
+  }
+
+  repath() {
+    this.path = this.game.world.findPath(this.pos.x, this.pos.z, this.goal.x, this.goal.z) || [];
+    this.pathIndex = 0;
+    this.pathTimer = 1.3 + Math.random() * 0.5;
+  }
+
+  update(dt) {
+    if (!this.active) { this.model.visible = false; return; }
+    this.model.visible = true;
+    this.lineTimer -= dt;
+    this.talk = Math.max(0, this.talk - dt * 1.6);
+    if (this.talkTimer > 0) this.talkTimer -= dt;
+
+    const player = this.game.player;
+    const pd = Math.hypot(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+    const pr = this.game.principal;
+    const bossD = pr && pr.active ? Math.hypot(pr.pos.x - this.pos.x, pr.pos.z - this.pos.z) : 999;
+
+    if (this.lineTimer <= 0) {
+      if (bossD < 9) {
+        this.say([
+          'Okafor. Do not make eye contact. Or any contact.',
+          'Act natural. Natural for us is "about to be expelled".',
+          'He is right there. Do not cough. Do not breathe. Do not exist.'
+        ][(Math.random() * 3) | 0], 2.8);
+        this.lineTimer = 7 + Math.random() * 4;
+      } else if (pd > 5) {
+        this.say('Keep up. If we get separated I am telling everyone you were the slow one.', 2.8);
+        this.lineTimer = 8 + Math.random() * 4;
+      } else {
+        this.say([
+          'Toilets. End of the hall. Try to look like you have a hall pass.',
+          'If anyone asks, we are doing a science project. On toilets.',
+          'This is the best idea I have had all period. Low bar.'
+        ][(Math.random() * 3) | 0], 2.8);
+        this.lineTimer = 9 + Math.random() * 5;
+      }
+    }
+
+    // Wait in the hall until the player actually leaves Room 101, then
+    // lead them to the toilets. Otherwise Jake starts the level already
+    // three rooms ahead of the person he is supposed to be guiding.
+    const playerInClass = player.pos.z > 3.05;
+    let speed = 0;
+    if (playerInClass) {
+      this.speed = 0;
+      // face the classroom door
+      const targetYaw = Math.atan2(player.pos.x - this.pos.x, player.pos.z - this.pos.z);
+      let diff = targetYaw - this.yaw;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      this.yaw += Math.max(-1, Math.min(1, diff)) * dt * 3.5;
+    } else if (pd < 8.5) {
+      speed = pd > 3.4 ? 2.2 : 1.15;
+    }
+
+    if (playerInClass) {
+      // skip pathing while he waits
+    } else if (this.pathTimer <= 0 || !this.path.length) this.repath();
+    this.pathTimer -= dt;
+    if (speed > 0 && this.path.length) {
+      const pt = this.path[this.pathIndex];
+      if (pt) {
+        const dx = pt.x - this.pos.x, dz = pt.z - this.pos.z;
+        const d = Math.hypot(dx, dz);
+        if (d < 0.35) {
+          this.pathIndex++;
+          if (this.pathIndex >= this.path.length) this.path = [];
+        } else {
+          const ty = Math.atan2(dx, dz);
+          let diff = ty - this.yaw;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          this.yaw += Math.max(-1, Math.min(1, diff)) * dt * 7;
+          const step = Math.min(d, speed * dt);
+          this.pos.x += Math.sin(this.yaw) * step;
+          this.pos.z += Math.cos(this.yaw) * step;
+          this.game.world.resolveCircle(this.pos, 0.31);
+          this.game.world.autoOpenDoors(this.pos.x, this.pos.z, 1.5);
+          this.speed = speed;
+        }
+      }
+    } else {
+      this.speed = 0;
+    }
+
+    this.model.position.set(this.pos.x, 0, this.pos.z);
+    this.model.rotation.y = this.yaw;
+    animatePerson(this.model, dt, {
+      mode: this.speed > 2.05 ? 'walk' : this.speed > 0.3 ? 'walk' : 'idle',
+      speed: this.speed,
+      talk: this.talkTimer > 0 ? 1 : 0,
+      lookAt: this.speed < 0.3 ? player.pos : null,
+      panic: bossD < 8 ? 0.35 : 0
+    });
   }
 }
 

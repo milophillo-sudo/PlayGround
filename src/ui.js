@@ -17,7 +17,8 @@ export const UI = {
       'bot-roster', 'health-fill', 'noise-fill', 'stamina-fill', 'battery-fill', 'torch-state',
       'prompt', 'prompt-text', 'prompt-hold', 'pov-banner', 'pov-name', 'subtitle-wrap', 'speaker',
       'subtitle', 'toast', 'detection', 'title-screen', 'controls-screen', 'pause-screen',
-      'caught-screen', 'caught-line', 'caught-tip', 'win-screen', 'win-grade', 'win-stats', 'win-line',
+      'caught-screen', 'caught-kicker', 'caught-title', 'caught-line', 'caught-tip', 'btn-retry',
+      'win-screen', 'win-grade', 'win-stats', 'win-line',
       'report-card', 'card-name', 'card-rows', 'card-foot', 'card-stamp', 'note-popup', 'note-title',
       'note-body', 'letterbox', 'fade', 'chapter-card', 'down-fx', 'down-secs', 'jumpscare-fx',
       'cine-ui', 'cine-subtitle-wrap', 'cine-speaker', 'cine-subtitle', 'cine-card', 'cine-grade',
@@ -300,9 +301,12 @@ export const UI = {
     this.el['win-line'].textContent = line;
     this.showScreen('win-screen');
   },
-  caught(line, tip) {
+  caught(line, tip, opts = {}) {
     if (line) this.el['caught-line'].textContent = line;
     if (tip) this.el['caught-tip'].textContent = tip;
+    if (opts.title) this.el['caught-title'].textContent = opts.title;
+    if (opts.kicker) this.el['caught-kicker'].textContent = opts.kicker;
+    if (opts.button) this.el['btn-retry'].textContent = opts.button;
     this.showScreen('caught-screen');
   }
 };
