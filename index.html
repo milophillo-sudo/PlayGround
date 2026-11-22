@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#04040c" />
   <title>CRYOUT — Dynamic 3D Rhythm</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2238%22 fill=%22none%22 stroke=%22%235ee7ff%22 stroke-width=%226%22/><circle cx=%2250%22 cy=%2250%22 r=%2210%22 fill=%22%23ff5fd2%22/></svg>" />
-  <script type="module" crossorigin src="./assets/index-DW7wK3NB.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CFiD_PwA.css">
+  <script type="module" crossorigin src="./assets/index-C0cveBOC.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-C1rKiHUG.css">
 </head>
 <body>
   <canvas id="scene"></canvas>
@@ -90,7 +90,18 @@
     <section id="startScreen" class="overlay show">
       <div class="start-grid">
         <div class="start-copy">
-          <div class="eyebrow"><i></i> ORBIT SYSTEM / ONLINE</div>
+          <div class="start-head">
+            <div class="eyebrow"><i></i> ORBIT SYSTEM / ONLINE</div>
+            <button id="modBtn" class="mod-trigger" aria-haspopup="dialog" aria-expanded="false" aria-controls="modScreen">
+              <svg class="mod-gear" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.1" />
+                <circle cx="12" cy="12" r="7.6" stroke-dasharray="1.4 2.6" />
+                <path d="M12 2.6v3.1M12 18.3v3.1M2.6 12h3.1M18.3 12h3.1M5.35 5.35l2.2 2.2M16.45 16.45l2.2 2.2M18.65 5.35l-2.2 2.2M7.55 16.45l-2.2 2.2" />
+              </svg>
+              <span>MODIFIERS</span>
+              <b id="modCount" class="mod-count" hidden>0</b>
+            </button>
+          </div>
           <h1>CRY<br>OUT</h1>
           <p class="tagline">A dynamic 3D rhythm ritual.<br>Lines fall. Circles answer.</p>
           <div class="partner-bar" aria-label="Select partner">
@@ -191,6 +202,75 @@
           </div>
           <div class="credit">CHART SYNTHESIZED FROM THE AUDIO<br>BUILT WITH THREE.JS / WEBGL</div>
         </div>
+      </div>
+    </section>
+
+    <!-- ======================= MODIFIERS ======================= -->
+    <section id="modScreen" class="overlay mod-overlay" role="dialog" aria-modal="true" aria-labelledby="modTitle" aria-hidden="true">
+      <div class="modal mod-modal">
+        <button id="modClose" class="mod-close" aria-label="Close modifiers">×</button>
+        <div class="eyebrow"><i></i> SESSION MODIFIERS</div>
+        <h2 id="modTitle">MODS</h2>
+        <p class="modal-sub">Tune the run. Assisted runs are never saved as personal bests.</p>
+        <div class="mod-list" id="modList">
+          <button class="mod-item" data-mod="autoplay" role="switch" aria-checked="false">
+            <span class="mod-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3.1" />
+                <circle cx="12" cy="12" r="7.6" stroke-dasharray="1.4 2.6" />
+                <path d="M12 2.6v3.1M12 18.3v3.1M2.6 12h3.1M18.3 12h3.1M5.35 5.35l2.2 2.2M16.45 16.45l2.2 2.2M18.65 5.35l-2.2 2.2M7.55 16.45l-2.2 2.2" />
+              </svg>
+            </span>
+            <span class="mod-copy">
+              <b>AUTOPLAY</b>
+              <em>Demo mode. The field plays itself — notes, holds and the pendulum included.</em>
+            </span>
+            <span class="mod-switch" aria-hidden="true"><i></i></span>
+          </button>
+
+          <button class="mod-item" data-mod="suddenFail" role="switch" aria-checked="false">
+            <span class="mod-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 20.8s-7.6-4.5-7.6-10C4.4 7.7 6.8 5.3 9.8 5.3c1.3 0 2.1.6 2.6 1.4.5-.8 1.3-1.4 2.6-1.4 3 0 5.4 2.4 5.4 5.5 0 5.5-7.4 10-7.4 10Z" />
+                <path d="M12 5.6v3.1l-1.7 2.1 2.6 1.8-1.3 2.4 1.5 1.6" />
+              </svg>
+            </span>
+            <span class="mod-copy">
+              <b>SUDDEN FAIL <small>FC ONLY</small></b>
+              <em>One broken combo ends the run. A MISS or BAD is instant game over.</em>
+            </span>
+            <span class="mod-switch" aria-hidden="true"><i></i></span>
+          </button>
+
+          <button class="mod-item" data-mod="perfectPlay" role="switch" aria-checked="false">
+            <span class="mod-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M11.2 3.2c.5 3.7 2.2 5.6 6.1 6.2-3.9.6-5.6 2.5-6.1 6.2-.5-3.7-2.2-5.6-6.1-6.2 3.9-.6 5.6-2.5 6.1-6.2Z" />
+                <path d="M18.1 14.7c.2 1.7 1 2.6 2.8 2.9-1.8.3-2.6 1.2-2.8 2.9-.2-1.7-1-2.6-2.8-2.9 1.8-.3 2.6-1.2 2.8-2.9Z" />
+              </svg>
+            </span>
+            <span class="mod-copy">
+              <b>ASTONISHING PLAY <small>PERFECT</small></b>
+              <em>Every note you connect is judged PERFECT. Misses still count.</em>
+            </span>
+            <span class="mod-switch" aria-hidden="true"><i></i></span>
+          </button>
+
+          <button class="mod-item" data-mod="noFail" role="switch" aria-checked="false">
+            <span class="mod-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3.1 19.4 6v5.2c0 4.4-3 8.3-7.4 9.6-4.4-1.3-7.4-5.2-7.4-9.6V6L12 3.1Z" />
+                <path d="m8.5 12.1 2.4 2.4 4.7-4.8" />
+              </svg>
+            </span>
+            <span class="mod-copy">
+              <b>NO FAIL</b>
+              <em>Health and GUILT cannot empty. Every run reaches the results screen.</em>
+            </span>
+            <span class="mod-switch" aria-hidden="true"><i></i></span>
+          </button>
+        </div>
+        <p class="hint mod-hint">Tap a row to toggle. NO FAIL and SUDDEN FAIL lock each other out.</p>
       </div>
     </section>
 
