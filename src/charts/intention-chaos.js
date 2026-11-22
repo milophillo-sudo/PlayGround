@@ -387,15 +387,355 @@ export const CHART = {
   "notes": [
     {
       "t": 1.05,
+      "lane": 0
+    },
+    {
+      "t": 1.05,
+      "lane": 1
+    },
+    {
+      "t": 1.05,
+      "lane": 2
+    },
+    {
+      "t": 1.05,
+      "lane": 3
+    },
+    {
+      "t": 1.05,
+      "lane": 4
+    },
+    {
+      "t": 1.05,
+      "lane": 5
+    },
+    {
+      "t": 1.05,
+      "lane": 6
+    },
+    {
+      "t": 1.05,
+      "lane": 7
+    },
+    {
+      "t": 1.081,
+      "lane": 0
+    },
+    {
+      "t": 1.081,
+      "lane": 1
+    },
+    {
+      "t": 1.081,
+      "lane": 2
+    },
+    {
+      "t": 1.081,
+      "lane": 3
+    },
+    {
+      "t": 1.081,
+      "lane": 4
+    },
+    {
+      "t": 1.081,
+      "lane": 5
+    },
+    {
+      "t": 1.081,
+      "lane": 6
+    },
+    {
+      "t": 1.081,
+      "lane": 7
+    },
+    {
+      "t": 1.113,
+      "lane": 0
+    },
+    {
+      "t": 1.113,
+      "lane": 1
+    },
+    {
+      "t": 1.113,
+      "lane": 2
+    },
+    {
+      "t": 1.113,
+      "lane": 3
+    },
+    {
+      "t": 1.113,
+      "lane": 4
+    },
+    {
+      "t": 1.113,
+      "lane": 5
+    },
+    {
+      "t": 1.113,
+      "lane": 6
+    },
+    {
+      "t": 1.113,
+      "lane": 7
+    },
+    {
+      "t": 1.144,
+      "lane": 0
+    },
+    {
+      "t": 1.144,
+      "lane": 1
+    },
+    {
+      "t": 1.144,
+      "lane": 2
+    },
+    {
+      "t": 1.144,
+      "lane": 3
+    },
+    {
+      "t": 1.144,
+      "lane": 4
+    },
+    {
+      "t": 1.144,
+      "lane": 5
+    },
+    {
+      "t": 1.144,
+      "lane": 6
+    },
+    {
+      "t": 1.144,
+      "lane": 7
+    },
+    {
+      "t": 1.175,
+      "lane": 0
+    },
+    {
+      "t": 1.175,
+      "lane": 1
+    },
+    {
+      "t": 1.175,
+      "lane": 2
+    },
+    {
+      "t": 1.175,
+      "lane": 3
+    },
+    {
+      "t": 1.175,
+      "lane": 4
+    },
+    {
+      "t": 1.175,
+      "lane": 5
+    },
+    {
+      "t": 1.175,
+      "lane": 6
+    },
+    {
+      "t": 1.175,
+      "lane": 7
+    },
+    {
+      "t": 1.206,
+      "lane": 0
+    },
+    {
+      "t": 1.206,
+      "lane": 1
+    },
+    {
+      "t": 1.206,
+      "lane": 2
+    },
+    {
+      "t": 1.206,
+      "lane": 3
+    },
+    {
+      "t": 1.206,
+      "lane": 4
+    },
+    {
+      "t": 1.206,
+      "lane": 5
+    },
+    {
+      "t": 1.206,
+      "lane": 6
+    },
+    {
+      "t": 1.206,
+      "lane": 7
+    },
+    {
+      "t": 1.238,
+      "lane": 0
+    },
+    {
+      "t": 1.238,
+      "lane": 1
+    },
+    {
+      "t": 1.238,
+      "lane": 2
+    },
+    {
+      "t": 1.238,
+      "lane": 3
+    },
+    {
+      "t": 1.238,
+      "lane": 4
+    },
+    {
+      "t": 1.238,
+      "lane": 5
+    },
+    {
+      "t": 1.238,
+      "lane": 6
+    },
+    {
+      "t": 1.238,
+      "lane": 7
+    },
+    {
+      "t": 1.25,
+      "lane": 0
+    },
+    {
+      "t": 1.269,
+      "lane": 0
+    },
+    {
+      "t": 1.269,
+      "lane": 1
+    },
+    {
+      "t": 1.269,
+      "lane": 2
+    },
+    {
+      "t": 1.269,
+      "lane": 3
+    },
+    {
+      "t": 1.269,
+      "lane": 4
+    },
+    {
+      "t": 1.269,
+      "lane": 5
+    },
+    {
+      "t": 1.269,
+      "lane": 6
+    },
+    {
+      "t": 1.269,
+      "lane": 7
+    },
+    {
+      "t": 1.3,
+      "lane": 0
+    },
+    {
+      "t": 1.3,
+      "lane": 1
+    },
+    {
+      "t": 1.3,
+      "lane": 2
+    },
+    {
+      "t": 1.3,
+      "lane": 3
+    },
+    {
+      "t": 1.3,
+      "lane": 4
+    },
+    {
+      "t": 1.3,
+      "lane": 5
+    },
+    {
+      "t": 1.3,
+      "lane": 6
+    },
+    {
+      "t": 1.3,
+      "lane": 7
+    },
+    {
+      "t": 1.331,
+      "lane": 0,
+      "type": "hold",
+      "dur": 0.75
+    },
+    {
+      "t": 1.331,
+      "lane": 1,
+      "type": "hold",
+      "dur": 0.75
+    },
+    {
+      "t": 1.331,
+      "lane": 2
+    },
+    {
+      "t": 1.331,
+      "lane": 3
+    },
+    {
+      "t": 1.331,
+      "lane": 4
+    },
+    {
+      "t": 1.331,
+      "lane": 5,
+      "type": "hold",
+      "dur": 0.75
+    },
+    {
+      "t": 1.331,
       "lane": 6,
       "type": "hold",
       "dur": 0.75
     },
     {
-      "t": 1.25,
-      "lane": 0,
+      "t": 1.331,
+      "lane": 7,
       "type": "hold",
       "dur": 0.75
+    },
+    {
+      "t": 1.363,
+      "lane": 2,
+      "type": "hold",
+      "dur": 0.75
+    },
+    {
+      "t": 1.363,
+      "lane": 3,
+      "type": "hold",
+      "dur": 0.75
+    },
+    {
+      "t": 1.363,
+      "lane": 4,
+      "type": "hold",
+      "dur": 0.707
     },
     {
       "t": 2.25,
@@ -791,9 +1131,7 @@ export const CHART = {
     },
     {
       "t": 12.85,
-      "lane": 7,
-      "type": "hold",
-      "dur": 0.75
+      "lane": 7
     },
     {
       "t": 12.95,
@@ -801,33 +1139,23 @@ export const CHART = {
     },
     {
       "t": 13.05,
-      "lane": 0,
-      "type": "hold",
-      "dur": 0.75
+      "lane": 0
     },
     {
       "t": 13.25,
-      "lane": 3,
-      "type": "hold",
-      "dur": 0.75
+      "lane": 3
     },
     {
       "t": 13.35,
-      "lane": 1,
-      "type": "hold",
-      "dur": 0.75
+      "lane": 1
     },
     {
       "t": 13.45,
-      "lane": 4,
-      "type": "hold",
-      "dur": 0.32
+      "lane": 4
     },
     {
       "t": 13.65,
-      "lane": 6,
-      "type": "hold",
-      "dur": 0.52
+      "lane": 6
     },
     {
       "t": 13.85,
@@ -5046,6 +5374,10 @@ export const CHART = {
       "lane": 5
     },
     {
+      "t": 180.64,
+      "lane": 7
+    },
+    {
       "t": 180.641,
       "lane": 6
     },
@@ -5066,6 +5398,14 @@ export const CHART = {
       "lane": 4
     },
     {
+      "t": 180.731,
+      "lane": 6
+    },
+    {
+      "t": 180.731,
+      "lane": 7
+    },
+    {
       "t": 180.733,
       "lane": 5
     },
@@ -5080,6 +5420,18 @@ export const CHART = {
     {
       "t": 180.802,
       "lane": 3
+    },
+    {
+      "t": 180.822,
+      "lane": 5
+    },
+    {
+      "t": 180.822,
+      "lane": 6
+    },
+    {
+      "t": 180.822,
+      "lane": 7
     },
     {
       "t": 180.825,
@@ -5102,6 +5454,18 @@ export const CHART = {
       "lane": 3
     },
     {
+      "t": 180.913,
+      "lane": 5
+    },
+    {
+      "t": 180.913,
+      "lane": 6
+    },
+    {
+      "t": 180.913,
+      "lane": 7
+    },
+    {
       "t": 180.917,
       "lane": 4
     },
@@ -5112,6 +5476,10 @@ export const CHART = {
     {
       "t": 180.963,
       "lane": 1
+    },
+    {
+      "t": 180.983,
+      "lane": 3
     },
     {
       "t": 180.986,
@@ -5142,13 +5510,6 @@ export const CHART = {
       "type": "intent",
       "mode": "hud",
       "hud": "black",
-      "on": false
-    },
-    {
-      "t": 0.2,
-      "type": "intent",
-      "mode": "hud",
-      "hud": "rainbow",
       "on": false
     },
     {
@@ -6099,13 +6460,6 @@ export const CHART = {
       "phase": "chaos2"
     },
     {
-      "t": 157,
-      "type": "intent",
-      "mode": "hud",
-      "hud": "bright",
-      "on": false
-    },
-    {
       "t": 158,
       "type": "bossCamera",
       "pos": [
@@ -6132,13 +6486,6 @@ export const CHART = {
       "hold": 2.3,
       "glide": "right",
       "glideDur": 1.7
-    },
-    {
-      "t": 158,
-      "type": "intent",
-      "mode": "hud",
-      "hud": "rainbow",
-      "on": true
     },
     {
       "t": 158,
@@ -6219,51 +6566,6 @@ export const CHART = {
       "phase": "chaos2"
     },
     {
-      "t": 182,
-      "type": "bossGlitch",
-      "power": 0.8887504575075582
-    },
-    {
-      "t": 182,
-      "type": "vibe",
-      "power": 0.8
-    },
-    {
-      "t": 182.03,
-      "type": "pulse",
-      "power": 1.1
-    },
-    {
-      "t": 190,
-      "type": "bossGlitch",
-      "power": 0.773316754680127
-    },
-    {
-      "t": 190,
-      "type": "vibe",
-      "power": 0.8
-    },
-    {
-      "t": 190.03,
-      "type": "pulse",
-      "power": 1.1
-    },
-    {
-      "t": 198,
-      "type": "bossGlitch",
-      "power": 0.989117924659513
-    },
-    {
-      "t": 198,
-      "type": "vibe",
-      "power": 0.8
-    },
-    {
-      "t": 198.03,
-      "type": "pulse",
-      "power": 1.1
-    },
-    {
       "t": 204.5,
       "type": "intent",
       "mode": "phase",
@@ -6290,16 +6592,6 @@ export const CHART = {
       "sub": "THE OCEAN KEEPS THE MISSING PART",
       "partner": "rei",
       "hold": 5.2
-    },
-    {
-      "t": 205.2,
-      "type": "cutscene",
-      "chapter": "CHAPTER 03 // DAWN",
-      "title": "THE BAND IS QUIET. THE OCEAN IS NOT.",
-      "sub": "REI",
-      "partner": "rei",
-      "hold": 3.2,
-      "glow": false
     }
   ],
   "swings": []

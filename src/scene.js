@@ -2645,8 +2645,16 @@ export function createScene(canvasEl) {
     l.flash = 1;
     state.shake = Math.min(0.16, state.shake + (quality === 'perfect' ? 0.025 : 0.016));
     const pos = worldPoint(lane, 0.05);
-    spawnBurst(pos, l.color, quality === 'perfect' ? 22 : 14, 3.5);
-    spawnShock(pos, l.color.getHex(), 3.0);
+    const sleeve = boss.palette === 'sleeve';
+    spawnBurst(pos, sleeve ? 0xff7188 : l.color, quality === 'perfect' ? 22 : 14, sleeve ? 4.8 : 3.5);
+    spawnShock(pos, sleeve ? 0xff335f : l.color.getHex(), sleeve ? 3.8 : 3.0);
+    if (sleeve) {
+      // Shards leave the hit point as pale scarlet glass; their velocity and
+      // brief ember memory distinguish Sleeve from the normal lane bursts.
+      spawnBurst(pos, 0xfff0e8, quality === 'perfect' ? 12 : 8, 5.6);
+      state.zoomKick = Math.min(1, state.zoomKick + (quality === 'perfect' ? 0.22 : 0.13));
+      state.energyPulse = Math.min(1.5, state.energyPulse + 0.42);
+    }
     // In INTENTION's libra/halo shots the lens leans toward the lane that just
     // answered, then drifts back to the centre of the four pillars.
     if (boss.active && boss.theme === 'intention') {

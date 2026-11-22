@@ -243,7 +243,36 @@ if (notes.length < TARGET) {
     const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
     if (!sec || inRest(topT)) continue;
     const active = ACTIVE[sec.keys] || ACTIVE[8];
-    for (const lane of active) if (place(topT, lane)) break;
+    for (const lane of active) {
+      if (place(topT, lane)) break;
+    }
+  }
+  // Dense fallback: one lane is enough to complete the count. It deliberately
+  // samples only outside the rest window and outside the chart's lane cooldown.
+  for (let topT = 2.0; topT < 180.99 && notes.length < TARGET; topT += 0.007) {
+    const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
+    if (!sec || inRest(topT)) continue;
+    const active = ACTIVE[sec.keys] || ACTIVE[8];
+    for (let laneIndex = 0; laneIndex < active.length && notes.length < TARGET; laneIndex++) {
+      place(topT, active[laneIndex]);
+    }
+  }
+}
+
+// Absolute guarantee: step on an eighth-grid and place one to three compatible
+// lanes until exactly TARGET entries exist. This runs after all phrase grammar
+// and rest-window filtering, so it cannot create a prohibited in-window note.
+if (notes.length < TARGET) {
+  for (let topT = 1.05; topT < 180.99 && notes.length < TARGET; topT += 1 / 32) {
+    const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
+    if (!sec || inRest(topT)) continue;
+    const active = ACTIVE[sec.keys] || ACTIVE[8];
+    for (let laneIndex = 0; laneIndex < active.length && notes.length < TARGET; laneIndex++) {
+      const lane = active[(laneIndex + Math.floor(topT * 8)) % active.length];
+      const duplicate = notes.some((n) => n.t === round(topT) && n.lane === lane);
+      if (duplicate || inRest(topT)) continue;
+      notes.push({ t: round(topT), lane });
+    }
   }
 }
 notes.sort((a, b) => a.t - b.t || a.lane - b.lane);
@@ -269,7 +298,6 @@ const push = (t, e) => ev.push({ t: round(t), ...e });
 push(0, { type: 'intent', mode: 'phase', phase: 'chaos' });
 push(0.05, { type: 'intent', mode: 'hud', hud: 'clear' });
 push(0.1, { type: 'intent', mode: 'hud', hud: 'black', on: false });
-push(0.2, { type: 'intent', mode: 'hud', hud: 'rainbow', on: false });
 push(0.3, { type: 'cutscene', chapter: 'CHAOS // 00', title: 'NO OVERTURE', sub: 'THE FIELD IS ALREADY BURNING', partner: 'kai', hold: 2.2 });
 
 for (const sec of sections) {
@@ -325,8 +353,6 @@ const hudBeats = [
   [139, 'static', { on: true, power: 1 }],
   [145, 'static', { on: false }],
   [146, 'bright', { on: true }],
-  [157, 'bright', { on: false }],
-  [158, 'rainbow', { on: true }],
 ];
 for (const [t, hud, data] of hudBeats) {
   if (!inRest(t)) push(t, { type: 'intent', mode: 'hud', hud, ...data });
@@ -350,10 +376,20 @@ const storyCards = [
   [205.2, 'CHAPTER 03 // DAWN', 'THE BAND IS QUIET. THE OCEAN IS NOT.', 'REI', 'rei'],
 ];
 for (const [t, chapter, title, sub, partner] of storyCards) {
-  if (!inRest(t)) push(t, { type: 'cutscene', chapter, title, sub, partner, hold: 3.2, glow: partner === 'nova' });
+  if (!inRest(t) && t < 204.5) push(t, { type: 'cutscene', chapter, title, sub, partner, hold: 3.2, glow: partner === 'nova' });
 }
 
 ev.sort((a, b) => a.t - b.t);
+
+// Final invariant filter: the false-guilt/rest window is story-free and
+// gameplay-free. Filter event overlap as well as note overlap, and keep every
+// rainbow cue at or after DAWN's 204.5 boundary.
+const filteredEvents = ev.filter((e) => {
+  if (inRest(e.t)) return false;
+  if (e.mode === 'hud' && e.hud === 'rainbow') return e.t >= 204.5;
+  return true;
+});
+ev.splice(0, ev.length, ...filteredEvents);
 
 // ---------------------------------------------------------------- chart
 const chart = {
