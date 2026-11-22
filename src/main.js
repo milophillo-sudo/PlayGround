@@ -346,13 +346,24 @@ class Game {
       toiletDoor.locked = false;
       toiletDoor.setOpen(true, false);
     }
+    // Doors are randomly left open at construction. Room 101 must start
+    // sealed or Okafor can spot the player through the doorway before
+    // they ever touch the handle.
+    const classDoor = this.world.doors.find(d => d.room && d.room.id === 'class101');
+    if (classDoor) {
+      classDoor.locked = false;
+      classDoor.manual = true; // only the player opens this one
+      classDoor.setOpen(false, false);
+    }
 
-    // Start just inside Room 101, facing the open door. Jake is already
-    // out in the hall, waving you through; the rest of the class is still
-    // seated behind you, so the room does not feel abandoned.
-    this.player.pos.set(-8.0, 0, 4.15);
-    this.player.yaw = 0;
-    this.camYaw = 0;
+    // Start in the aisle between your desk and Jake's. The door starts
+    // closed and must be opened deliberately; Jake is already out in the
+    // hall, waving you through, and the rest of the class is still seated
+    // behind you so the room does not feel abandoned. Spawning nose-to-door
+    // filled the whole screen with wood.
+    this.player.pos.set(-6.85, 0, 4.55);
+    this.player.yaw = -2.55;
+    this.camYaw = -2.55;
     this.pitch = -0.02;
     this.player.hp = 100;
     this.player.stamina = 100;
@@ -365,7 +376,10 @@ class Game {
     this.controlledBot = null;
     this.downEntity = null;
 
-    this.jake.spawn(-8.6, 2.35, 0);
+    // Stand Jake a few metres down the hall, visible through the doorway
+    // but not close enough to fill the frame. Opening the door should
+    // reveal him waving you out, not his chest.
+    this.jake.spawn(-7.35, 0.55, 0.5);
 
     const seats = [[-11.6, 8.5], [-11.6, 6.1], [-9.0, 10.9]];
     this.bots.forEach((b, i) => {
@@ -484,7 +498,7 @@ class Game {
     // caught the group. Face west down the corridor so the first frame
     // shows the hall, the key glow, and the three survivors — not the
     // inside of a door frame.
-    this.player.pos.set(-2.2, 0, -2.4);
+    this.player.pos.set(-2.2, 0, -0.3);
     this.player.yaw = Math.PI / 2;
     this.camYaw = Math.PI / 2;
     this.pitch = -0.02;
@@ -501,10 +515,10 @@ class Game {
     this.controlledBot = null;
     this.downEntity = null;
 
-    // The other three heard the alarm and hid outside the toilets. Keep
-    // them flanking the doorway, not standing in the middle of it and
-    // blocking the first view of the hall.
-    const spots = [[-4.6, -0.9], [-0.2, -1.0], [-6.4, -1.4]];
+    // The other three heard the alarm and hid outside the toilets. Flank
+    // the player so the opening corridor shot is not a close-up of a
+    // classmate's back.
+    const spots = [[-4.6, -2.45], [-3.9, 0.95], [-0.4, -2.55]];
     this.bots.forEach((b, i) => {
       b.dormant = false;
       b.classroom = false;
@@ -739,9 +753,13 @@ Object.assign(Game.prototype, {
         }
       }
       if (this.state !== 'play') return;
-      // The toilets are the finish line for chapter zero.
+      // The toilets are the finish line for chapter zero. Wait for Jake
+      // to catch up before locking the halls — the whole plan depends on
+      // the two of them being in there together.
       const p = this.player.pos;
-      if (p.x > -7 && p.x < 1 && p.z < -3.15) {
+      // Jake counts as "with you" once he is through the toilet doorway.
+      const jakeInside = this.jake.pos.x > -7 && this.jake.pos.x < 1 && this.jake.pos.z < -3.15;
+      if (p.x > -7 && p.x < 1 && p.z < -3.15 && jakeInside) {
         this.beginLockdown();
         return;
       }

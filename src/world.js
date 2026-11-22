@@ -1398,7 +1398,9 @@ export class World {
   autoOpenDoors(x, z, radius = 1.6) {
     let opened = false;
     for (const d of this.doors) {
-      if (d.locked || d.open) continue;
+      // `manual` doors (the Room 101 exit) never swing on their own —
+      // opening it has to be the player's decision.
+      if (d.locked || d.open || d.manual) continue;
       const cx = (d.collider.x1 + d.collider.x2) / 2;
       const cz = (d.collider.z1 + d.collider.z2) / 2;
       if (Math.hypot(cx - x, cz - z) < radius) { d.setOpen(true); opened = true; }

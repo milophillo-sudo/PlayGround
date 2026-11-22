@@ -267,13 +267,18 @@ export class Killer {
         if (ad > 7 && ad < 24) score += 0.9;
         else if (ad <= 7) score -= 0.8;
       }
+      // Bodies are not bait. Hard-veto every node near a downed student
+      // (and near the spot where the last hit landed) so the Hall Monitor
+      // actually leaves instead of orbiting the corpse for a rescuer.
+      let banned = false;
       for (const e of [this.game.player, ...this.game.bots]) {
         if (!e || !e.downed || e.dead) continue;
-        if (Math.hypot(n.x - e.pos.x, n.z - e.pos.z) < 13) score -= 5.5;
+        if (Math.hypot(n.x - e.pos.x, n.z - e.pos.z) < 13) { banned = true; break; }
       }
-      if (this._avoid && now < this._avoid.until) {
-        if (Math.hypot(n.x - this._avoid.x, n.z - this._avoid.z) < 12) score -= 3.5;
+      if (!banned && this._avoid && now < this._avoid.until) {
+        if (Math.hypot(n.x - this._avoid.x, n.z - this._avoid.z) < 12) banned = true;
       }
+      if (banned) continue;
       if (score > bestScore) { bestScore = score; best = n; }
     }
     if (!best) best = { x: this.pos.x + 10, z: 0 };

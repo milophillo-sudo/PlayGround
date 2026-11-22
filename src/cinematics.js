@@ -932,7 +932,7 @@ export function forgotJakeShots(cine) {
   const jake = cine.person({
     shirt: 0x2a3550, pants: 0x22252d, hair: 0x241a14, hairStyle: 'short',
     skin: 0xc79b7d, height: 1.82, backpack: null
-  }, -4.7, -18.2, Math.PI);
+  }, -4.7, -18.2, 0); // face south, back toward the stalls, toward the camera
   jake.mode = 'idle';
 
   const stallLight = cine.light(0xd8f2ff, 4.0, 9, -4.6, 2.7, -20.4);
@@ -969,7 +969,7 @@ export function forgotJakeShots(cine) {
           jake.mode = 'idle';
         }
       },
-      cards: [{ at: 0.3, kicker: '2:16 AM', title: 'STILL HERE', align: 'center', dur: 2.7 }],
+      cards: [{ at: 0.3, kicker: '2:16 AM', title: 'STILL HERE', align: 'left', dur: 2.7 }],
       onEnd: (c) => { UI.cineHideCard(); c.game.audio?.stinger(); }
     },
 

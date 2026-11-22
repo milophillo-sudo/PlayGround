@@ -315,14 +315,21 @@ function decorateToilets(world, r) {
   add(world, makeGraffiti('Q!?'), 0.15, 1.9, z2 - 0.17, Math.PI);
   // Urinals on the west wall. The forgotten-Jake close-up looks that
   // way, so the room needs more than a blank green band.
+  const porc = C(0xe4e8e0, 0.32);
+  const chrome = C(0x9aa5a8, 0.28, 0.85);
   for (let i = 0; i < 3; i++) {
     const u = new THREE.Group();
-    const porc = C(0xe4e8e0, 0.32);
-    u.add(box(0.5, 0.78, 0.34, porc, 0, 0.62, 0));
-    u.add(box(0.4, 0.18, 0.27, C(0xd2d8d2, 0.3), 0, 0.86, 0.03));
-    u.add(cyl(0.02, 0.02, 0.55, C(0x9aa5a8, 0.3, 0.8), 0, 1.16, -0.14));
-    u.add(box(0.05, 0.05, 0.22, C(0x9aa5a8, 0.3, 0.8), 0, 1.4, -0.04));
-    add(world, u, x1 + 0.27, 0, -13.4 - i * 1.7, Math.PI / 2);
+    // bowl, tilted slightly out from the wall
+    u.add(box(0.42, 0.6, 0.3, porc, 0, 0.02, 0));
+    u.add(box(0.46, 0.09, 0.34, C(0xf1f4ee, 0.28), 0, 0.3, 0.03));
+    u.add(box(0.3, 0.16, 0.03, C(0xb9c1bb, 0.5), 0, 0.06, 0.16));
+    u.add(cyl(0.018, 0.018, 0.32, chrome, 0, 0.5, -0.1));
+    u.add(box(0.04, 0.04, 0.22, chrome, 0, 0.66, -0.02));
+    add(world, u, x1 + 0.2, 0.9, -13.4 - i * 1.55, Math.PI / 2);
+  }
+  // Dividers so the row reads as a urinal bank, not three white boxes.
+  for (let i = 0; i < 4; i++) {
+    add(world, box(0.34, 1.0, 0.035, C(0x93a19a, 0.72)), x1 + 0.3, 0.95, -12.62 - i * 1.55);
   }
   add(world, makeWetFloorSign(), x1 + 1.8, 0, z2 - 2.2);
   add(world, makeTrash(), x2 - 1.1, 0, z2 - 1.1);

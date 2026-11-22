@@ -762,7 +762,12 @@ export class JakeNPC {
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       this.yaw += Math.max(-1, Math.min(1, diff)) * dt * 3.5;
-    } else if (pd < 8.5) {
+    } else if (pd > 8.5) {
+      // Do not freeze when the player sprints ahead. Hustle to catch up,
+      // but stay a touch slower than the player's sprint so he only
+      // closes the gap when they slow down.
+      speed = 5.2;
+    } else {
       speed = pd > 3.4 ? 2.2 : 1.15;
     }
 
