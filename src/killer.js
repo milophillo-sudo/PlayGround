@@ -30,6 +30,8 @@ export class Killer {
     this.detect = 0;
     this.footTimer = 0;
     this.roarTimer = 4;
+    this._visited = new Map();
+    this._avoid = null;
     this.axeLight = new THREE.PointLight(0xff3344, 0, 4, 2);
     this.axeLight.position.set(0, 1.2, 0);
     this.model.add(this.axeLight);
@@ -49,6 +51,8 @@ export class Killer {
     this.attackCd = 1.5;
     this.axeLight.intensity = 0.8;
     this.roarTimer = 3;
+    this._visited.clear();
+    this._avoid = null;
     if (this.game.audio) this.game.audio.growl();
   }
 
@@ -219,6 +223,72 @@ export class Killer {
     }
   }
 
+  downedNear(x, z, radius = 10) {
+    const people = [this.game.player, ...this.game.bots];
+    for (const e of people) {
+      if (!e || !e.downed || e.dead) continue;
+      if (Math.hypot(e.pos.x - x, e.pos.z - z) < radius) return e;
+    }
+    return null;
+  }
+
+  // Patrol points are chosen by freshness, not by a fixed route. Repeating
+  // the same four corners made the Hall Monitor look like he was on rails;
+  // worse, once a student went down his "investigate" target was the body,
+  // so he stood over it until a rescuer arrived. Now he scores nodes by how
+  // long ago he visited them and vetoes anywhere near a downed student.
+  pickPatrolTarget() {
+    const w = this.game.world;
+    // A node inside a locked room is a dead end: findPath would return
+    // null and the patrol would grind against that door. Only consider
+    // rooms he can actually walk into right now.
+    const inOpenRoom = (n) => {
+      const r = w.rooms.find(rr =>
+        n.x > rr.x1 + 0.4 && n.x < rr.x2 - 0.4 &&
+        n.z > rr.z1 + 0.4 && n.z < rr.z2 - 0.4);
+      if (!r) return true; // corridor / passage / wing / outside
+      const d = w.doors.find(dd => dd.room === r);
+      return !d || !d.locked || d.open;
+    };
+    const nodes = w.navNodes.filter(n =>
+      n.x > -52 && n.x < 52 && n.z < 2 && n.z > -42 && inOpenRoom(n));
+    const a = this.game.avatar;
+    const now = this.game.time;
+    let best = null, bestScore = -1e9;
+    for (const n of nodes) {
+      const key = Math.round(n.x / 5) + ',' + Math.round(n.z / 5);
+      const last = this._visited.has(key) ? this._visited.get(key) : -999;
+      let score = Math.min(1, (now - last) / 50) * 3.4 + Math.random() * 1.5;
+      const md = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
+      if (md < 7) score -= 3.2;
+      if (md > 42) score -= 1.4;
+      if (a && !a.dead && !a.escaped) {
+        const ad = Math.hypot(n.x - a.pos.x, n.z - a.pos.z);
+        if (ad > 7 && ad < 24) score += 0.9;
+        else if (ad <= 7) score -= 0.8;
+      }
+      // Bodies are not bait. Hard-veto every node near a downed student
+      // (and near the spot where the last hit landed) so the Hall Monitor
+      // actually leaves instead of orbiting the corpse for a rescuer.
+      let banned = false;
+      for (const e of [this.game.player, ...this.game.bots]) {
+        if (!e || !e.downed || e.dead) continue;
+        if (Math.hypot(n.x - e.pos.x, n.z - e.pos.z) < 13) { banned = true; break; }
+      }
+      if (!banned && this._avoid && now < this._avoid.until) {
+        if (Math.hypot(n.x - this._avoid.x, n.z - this._avoid.z) < 12) banned = true;
+      }
+      if (banned) continue;
+      if (score > bestScore) { bestScore = score; best = n; }
+    }
+    if (!best) best = { x: this.pos.x + 10, z: 0 };
+    this._visited.set(Math.round(best.x / 5) + ',' + Math.round(best.z / 5), now);
+    return {
+      x: best.x + (Math.random() - 0.5) * 2.2,
+      z: best.z + (Math.random() - 0.5) * 1.2
+    };
+  }
+
   update(dt) {
     if (!this.active) {
       this.model.visible = false;
@@ -257,9 +327,22 @@ export class Killer {
       case 'chase': {
         const target = this.target;
         if (!target || target.dead || target.escaped || target.downed) {
-          this.state = 'investigate';
-          this.searchTimer = 7;
-          this.target = null;
+          if (target && target.downed) {
+            // The hit landed. Lose interest immediately instead of standing
+            // over the body waiting for a rescuer to walk into the axe.
+            this._avoid = { x: target.pos.x, z: target.pos.z, until: this.game.time + 20 };
+            this.state = 'patrol';
+            this.patrolTimer = 0;
+            this.path = [];
+            this.pathTimer = 0;
+            this.lastSeen = null;
+            this.target = null;
+            this.yaw += Math.PI * 0.35;
+          } else {
+            this.state = 'investigate';
+            this.searchTimer = 7;
+            this.target = null;
+          }
           break;
         }
         if (this.pathTimer <= 0) this.pathTo(target.pos.x, target.pos.z, true);
@@ -270,12 +353,21 @@ export class Killer {
           const targetYaw = Math.atan2(target.pos.x - this.pos.x, target.pos.z - this.pos.z);
           this.yaw += (targetYaw - this.yaw) * Math.min(1, dt * 8);
         } else {
-          this.advance(dt, 4.55 + Math.min(0.6, this.detect * 0.5));
+          // Player sprint is 5.75; chase at 4.6 keeps a clean run 25% faster.
+          this.advance(dt, 4.6);
         }
         break;
       }
       case 'investigate': {
         this.searchTimer -= dt;
+        if (this.lastSeen && this.downedNear(this.lastSeen.x, this.lastSeen.z, 9)) {
+          // Do not investigate a body. Pick a fresh area instead.
+          this.state = 'patrol';
+          this.lastSeen = null;
+          this.patrolTimer = 0;
+          this.path = [];
+          break;
+        }
         if (this.pathTimer <= 0 && this.lastSeen) this.pathTo(this.lastSeen.x, this.lastSeen.z, true);
         this.advance(dt, 2.55);
         if (this.path.length === 0) {
@@ -293,21 +385,9 @@ export class Killer {
       default: {
         this.patrolTimer -= dt;
         if (this.patrolTimer <= 0 || !this.path.length) {
-          // wander, biased toward the player's general area
-          const w = this.game.world;
-          let target = null;
-          if (Math.random() < 0.55 && this.game.avatar) {
-            const a = this.game.avatar.pos;
-            const turn = Math.random() * Math.PI * 2;
-            target = { x: a.x + Math.sin(turn) * (10 + Math.random() * 16), z: a.z + Math.cos(turn) * (10 + Math.random() * 16) };
-          }
-          if (!target) {
-            const nodes = w.navNodes.filter(n => n.x > -56 && n.x < 56 && n.z < 2 && n.z > -42);
-            const n = nodes[(Math.random() * nodes.length) | 0];
-            target = { x: n.x, z: n.z };
-          }
+          const target = this.pickPatrolTarget();
           this.pathTo(target.x, target.z, true);
-          this.patrolTimer = 8 + Math.random() * 6;
+          this.patrolTimer = 7 + Math.random() * 5;
         }
         this.advance(dt, 1.95);
         break;

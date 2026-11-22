@@ -304,12 +304,33 @@ function decorateToilets(world, r) {
     st.position.set(stallXs[i] - 0.67, 0, z1 + 0.3);
     world.propGroup.add(st);
   }
-  // sinks along south wall, avoiding the door at x -3..-1
-  const sink1 = makeSinkCounter(); add(world, sink1, x1 + 2.4, 0, z2 - 0.45, Math.PI);
-  const sink2 = makeSinkCounter(); add(world, sink2, x2 - 2.4, 0, z2 - 0.45, Math.PI);
-  const m1 = makeMirror(2.2, 0.85); add(world, m1, x1 + 2.4, 1.55, z2 - 0.15, Math.PI);
-  const m2 = makeMirror(2.2, 0.85); add(world, m2, x2 - 2.4, 1.55, z2 - 0.15, Math.PI);
-  add(world, makeGraffiti('Q!?'), x1 + 1.4, 1.9, z2 - 0.17, Math.PI);
+  // Sinks must not block the doorway at x -3..-1. The old east sink sat
+  // directly in front of the door, so walking in put a mirror in your
+  // face. Keep one counter west of the door and mount the second on the
+  // east wall instead.
+  const sink1 = makeSinkCounter(); add(world, sink1, x1 + 2.15, 0, z2 - 0.45, Math.PI);
+  const m1 = makeMirror(2.2, 0.85); add(world, m1, x1 + 2.15, 1.55, z2 - 0.15, Math.PI);
+  const sink2 = makeSinkCounter(); add(world, sink2, x2 - 0.45, 0, z1 + 13.5, -Math.PI / 2);
+  const m2 = makeMirror(1.8, 0.85); add(world, m2, x2 - 0.15, 1.55, z1 + 13.5, -Math.PI / 2);
+  add(world, makeGraffiti('Q!?'), 0.15, 1.9, z2 - 0.17, Math.PI);
+  // Urinals on the west wall. The forgotten-Jake close-up looks that
+  // way, so the room needs more than a blank green band.
+  const porc = C(0xe4e8e0, 0.32);
+  const chrome = C(0x9aa5a8, 0.28, 0.85);
+  for (let i = 0; i < 3; i++) {
+    const u = new THREE.Group();
+    // bowl, tilted slightly out from the wall
+    u.add(box(0.42, 0.6, 0.3, porc, 0, 0.02, 0));
+    u.add(box(0.46, 0.09, 0.34, C(0xf1f4ee, 0.28), 0, 0.3, 0.03));
+    u.add(box(0.3, 0.16, 0.03, C(0xb9c1bb, 0.5), 0, 0.06, 0.16));
+    u.add(cyl(0.018, 0.018, 0.32, chrome, 0, 0.5, -0.1));
+    u.add(box(0.04, 0.04, 0.22, chrome, 0, 0.66, -0.02));
+    add(world, u, x1 + 0.2, 0.9, -13.4 - i * 1.55, Math.PI / 2);
+  }
+  // Dividers so the row reads as a urinal bank, not three white boxes.
+  for (let i = 0; i < 4; i++) {
+    add(world, box(0.34, 1.0, 0.035, C(0x93a19a, 0.72)), x1 + 0.3, 0.95, -12.62 - i * 1.55);
+  }
   add(world, makeWetFloorSign(), x1 + 1.8, 0, z2 - 2.2);
   add(world, makeTrash(), x2 - 1.1, 0, z2 - 1.1);
   // mop bucket
@@ -320,7 +341,7 @@ function decorateToilets(world, r) {
   ceilingCable(world, x1 + 1, z1 + 1, x2 - 1, z2 - 1, 3.05);
   paperScatter(world, (x1 + x2) / 2, (z1 + z2) / 2, 4, 4);
   // mirror lights (emissive)
-  const ml = box(2.2, 0.08, 0.14, new THREE.MeshBasicMaterial({ color: 0xe8fff6 }), x1 + 2.4, 2.15, z2 - 0.25);
+  const ml = box(2.2, 0.08, 0.14, new THREE.MeshBasicMaterial({ color: 0xe8fff6 }), x1 + 2.15, 2.15, z2 - 0.25);
   world.propGroup.add(ml);
 }
 

@@ -2,12 +2,15 @@ import * as THREE from 'three';
 import { World } from './world.js';
 import { audio } from './audio.js';
 import { UI, sleep } from './ui.js';
-import { Bot, BOT_DEFS, DOWN_TIME } from './bots.js';
+import { Bot, BOT_DEFS, DOWN_TIME, JakeNPC } from './bots.js';
 import { Killer } from './killer.js';
+import { Principal } from './principal.js';
+import { makePerson, animatePerson } from './props.js';
 import { TownTitle } from './title.js';
 import { VisibilityCuller } from './culling.js';
 import {
-  Cinematic, introShots, jumpscareShots, jakeRevealShots, policeShots
+  Cinematic, introShots, lockdownShots, forgotJakeShots, jumpscareShots,
+  jakeRevealShots, policeShots
 } from './cinematics.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -66,6 +69,11 @@ class Game {
     this._titleAngle = 0;
     this.keysPressed = {};
     this.pendingSwitch = 0;
+    this.phase = 'title';
+    this._detected = false;
+    this._forgotStarted = false;
+    this._jakeStarted = false;
+    this._policeStarted = false;
     this.stats = { notes: 0, started: 0, escaped: 0, finished: false };
     // adaptive resolution: keep the graphics, spend fewer pixels on weak GPUs
     this.baseDpr = 1;
@@ -137,6 +145,9 @@ class Game {
       this.bots.push(b);
     });
 
+    this.principal = new Principal(this);
+    this.jake = new JakeNPC(this);
+    this.classTeacher = null;
     this.cinematic = new Cinematic(this);
     this.bindEvents();
     this.world.setLighting('day');
@@ -309,20 +320,185 @@ class Game {
     this.state = 'cutscene';
     setTimeout(() => {
       UI.fade(false, 900);
-      this.runCutscene('intro', () => introShots(this.cinematic), () => this.beginPlay());
+      this.runCutscene('intro', () => introShots(this.cinematic), () => this.beginSkip());
     }, 420);
   }
 
-  beginPlay() {
+  // ── chapter zero: sneak to the toilets with Jake ─────────────
+  beginSkip() {
+    this.phase = 'skip';
+    this.state = 'play';
+    this.setInputActive(true);
+    this.world.setLighting('day');
+    this.world.setBodiesVisible(false);
+    this.killer.reset(34, 0);
+    this.killer.active = false;
+    // Okafor starts at the far east end walking west. That buys the player
+    // a few seconds to get out of Room 101 before he reaches the doorway,
+    // and makes his first pass feel like a patrol instead of a spawn kill.
+    this.principal.spawn(22, 0.2, -Math.PI / 2);
+    this._detected = false;
+
+    // Jake needs the toilet door open to path through it, and the player
+    // needs somewhere to hide while Okafor walks past.
+    const toiletDoor = this.world.doors.find(d => d.room && d.room.id === 'toilets');
+    if (toiletDoor) {
+      toiletDoor.locked = false;
+      toiletDoor.setOpen(true, false);
+    }
+    // Doors are randomly left open at construction. Room 101 must start
+    // sealed or Okafor can spot the player through the doorway before
+    // they ever touch the handle.
+    const classDoor = this.world.doors.find(d => d.room && d.room.id === 'class101');
+    if (classDoor) {
+      classDoor.locked = false;
+      classDoor.manual = true; // only the player opens this one
+      classDoor.setOpen(false, false);
+    }
+
+    // Start in the aisle between your desk and Jake's. The door starts
+    // closed and must be opened deliberately; Jake is already out in the
+    // hall, waving you through, and the rest of the class is still seated
+    // behind you so the room does not feel abandoned. Spawning nose-to-door
+    // filled the whole screen with wood.
+    this.player.pos.set(-6.85, 0, 4.55);
+    this.player.yaw = -2.55;
+    this.camYaw = -2.55;
+    this.pitch = -0.02;
+    this.player.hp = 100;
+    this.player.stamina = 100;
+    this.player.battery = 100;
+    this.player.crowbar = false;
+    this.player.torchOn = false;
+    this.player.downed = false;
+    this.player.hidden = false;
+    this.avatar = this.player;
+    this.controlledBot = null;
+    this.downEntity = null;
+
+    // Stand Jake a few metres down the hall, visible through the doorway
+    // but not close enough to fill the frame. Opening the door should
+    // reveal him waving you out, not his chest.
+    this.jake.spawn(-7.35, 0.55, 0.5);
+
+    const seats = [[-11.6, 8.5], [-11.6, 6.1], [-9.0, 10.9]];
+    this.bots.forEach((b, i) => {
+      b.dormant = false;
+      b.classroom = true;
+      b.model.visible = true;
+      b.pos.set(seats[i % seats.length][0], 0, seats[i % seats.length][1]);
+      b.yaw = 0; // face the blackboard
+      b.model.position.set(b.pos.x, 0, b.pos.z);
+      b.model.rotation.y = 0;
+      b.model.rotation.z = 0;
+      b.model.position.y = 0;
+      b.hp = 100;
+      b.stamina = 100;
+      b.downed = false;
+      b.dead = false;
+      b.escaped = false;
+      b.state = 'follow';
+      b.danger.visible = false;
+      b.talk = 0;
+      b.talkTimer = 0;
+      const spr = b.model.userData.nameSprite;
+      if (spr) spr.visible = false;
+    });
+
+    // Ms. Vella is still teaching. She is scenery, not a threat.
+    if (!this.classTeacher) {
+      this.classTeacher = makePerson({
+        shirt: 0x6a5a42, pants: 0x30343a, hair: 0x8a8478, hairStyle: 'short',
+        skin: 0xd9b49b, height: 1.7, tie: 0x7a2c36, glasses: true, female: true
+      });
+      this.scene.add(this.classTeacher);
+    }
+    this.classTeacher.position.set(-10.7, 0, 15.1);
+    this.classTeacher.rotation.y = Math.PI;
+    this.classTeacher.visible = true;
+
+    // A few background students so the room still reads as fourth period
+    // and not a green-screen set. They are scenery, not survivors.
+    if (!this.classExtras) {
+      const extraSpots = [
+        [-9.0, 6.1, 0x445d46, 0x241a14, 0xd9b49b],
+        [-4.4, 6.1, 0x4d4660, 0x3a2618, 0x8a5b3e],
+        [-4.4, 8.5, 0x7a6a58, 0x151210, 0xa9724f]
+      ];
+      this.classExtras = extraSpots.map(([x, z, shirt, hair, skin], i) => {
+        const model = makePerson({
+          shirt, pants: 0x2a3040, hair, skin, height: 1.56 + i * 0.05,
+          backpack: i === 1 ? 0x3e4f6b : null
+        });
+        model.position.set(x, 0, z);
+        model.rotation.y = 0;
+        this.scene.add(model);
+        return { model, x, z };
+      });
+    }
+    for (const e of this.classExtras) {
+      e.model.visible = true;
+      e.model.position.set(e.x, 0, e.z);
+      e.model.rotation.y = 0;
+    }
+
+    UI.hideScreens();
+    UI.showHud(true);
+    UI.setTouch(this.touch);
+    UI.fade(false, 900);
+    UI.letterbox(false);
+    UI.showCine(false);
+    UI.chapter('CHAPTER ZERO', 'SKIP CLASS', 3400);
+    UI.toast('Reach the toilets with Jake. Do not let Okafor see you.');
+    audio.startAmbience();
+    audio.alarmStop();
+    audio.chaseStop();
+    audio.setTension(0.16);
+    this.updateObjective(true);
+    this.canvas.requestPointerLock?.();
+  }
+
+  beginLockdown() {
+    if (this.phase !== 'skip' || this.state !== 'play') return;
+    this.phase = 'lockdown';
+    this.setInputActive(false);
+    this.principal.setActive(false);
+    this.jake.setActive(false);
+    if (this.classTeacher) this.classTeacher.visible = false;
+    if (this.classExtras) for (const e of this.classExtras) e.model.visible = false;
+    for (const b of this.bots) {
+      b.classroom = false;
+      b.model.visible = false;
+      b.danger.visible = false;
+    }
+    this.player.speed = 0;
+    UI.showHud(false);
+    UI.setDetection(false);
+    UI.fade(true, 650);
+    this.state = 'cutscene';
+    setTimeout(() => {
+      UI.fade(false, 900);
+      this.runCutscene('lockdown', () => lockdownShots(this.cinematic), () => this.beginPlay(true));
+    }, 700);
+  }
+
+  beginPlay(fromLockdown = false) {
+    this.phase = 'play';
     this.state = 'play';
     this.setInputActive(true);
     this.world.setLighting('lockdown');
     this.world.setBodiesVisible(false);
+    this.principal.setActive(false);
+    this.jake.setActive(false);
+    if (this.classTeacher) this.classTeacher.visible = false;
+    if (this.classExtras) for (const e of this.classExtras) e.model.visible = false;
     this.killer.spawn(34, 0);
-    // Face west down the corridor: Room 101 and its key sit ahead-left,
-    // and the hall reads as one long shot instead of a door filling the
-    // screen. x = -5 leaves room to see the objective glow and the group.
-    this.player.pos.set(-5.0, 0, -1.2);
+
+    // Chapter one starts just outside the toilets, where the lockdown
+    // caught the group. Face west down the corridor so the first frame
+    // shows the hall, the key glow, and the three survivors — not the
+    // inside of a door frame.
+    this.player.pos.set(-2.2, 0, -0.3);
     this.player.yaw = Math.PI / 2;
     this.camYaw = Math.PI / 2;
     this.pitch = -0.02;
@@ -331,15 +507,25 @@ class Game {
     this.player.battery = 100;
     this.player.crowbar = false;
     this.player.torchOn = true;
+    this.player.downed = false;
+    this.player.dead = false;
+    this.player.escaped = false;
+    this.player.hidden = false;
     this.avatar = this.player;
     this.controlledBot = null;
+    this.downEntity = null;
+
+    // The other three heard the alarm and hid outside the toilets. Flank
+    // the player so the opening corridor shot is not a close-up of a
+    // classmate's back.
+    const spots = [[-4.6, -2.45], [-3.9, 0.95], [-0.4, -2.55]];
     this.bots.forEach((b, i) => {
+      b.dormant = false;
+      b.classroom = false;
       b.controlled = false;
       b.model.visible = true;
-      // Spread the group down the hall. Spawning them on top of the player
-      // put elbows and backpacks through the first-person camera.
-      b.pos.set([-13.2, -15.4, -11.2][i % 3], 0, [0.9, -1.3, -0.2][i % 3]);
-      b.yaw = -Math.PI / 2;
+      b.pos.set(spots[i % 3][0], 0, spots[i % 3][1]);
+      b.yaw = 0;
       b.hp = 100;
       b.stamina = 100;
       b.downed = false;
@@ -351,6 +537,7 @@ class Game {
       b.danger.visible = false;
       if (b.model.userData.nameSprite) b.model.userData.nameSprite.visible = true;
     });
+
     UI.hideScreens();
     UI.showHud(true);
     UI.setTouch(this.touch);
@@ -362,8 +549,47 @@ class Game {
     audio.startAmbience();
     audio.alarmStart();
     audio.setTension(0.35);
-    this.updateObjective();
+    this.updateObjective(true);
     this.canvas.requestPointerLock?.();
+
+    // Seed the ending: Jake stayed behind in the toilets.
+    setTimeout(() => {
+      if (this.phase === 'play' && !this.player.dead && !this.player.escaped) {
+        this.radio('JAKE (FROM THE TOILET)', 'I am guarding the toilets. ...You are coming back, right?');
+      }
+    }, 5600);
+  }
+
+  onDetected(principal) {
+    if (this.phase !== 'skip' || this._detected) return;
+    this._detected = true;
+    this.phase = 'detected';
+    this.state = 'cutscene';
+    this.setInputActive(false);
+    this.player.speed = 0;
+    this.jake.speed = 0;
+    UI.showHud(false);
+    UI.setDetection(false);
+    UI.jumpscare(true);
+    UI.cineFlash();
+    principal.fireLaser(this.player);
+    this.shakeScreen(1.2, 1.6);
+    audio.alarmStop();
+    audio.chaseStop();
+    audio.setTension(1);
+    setTimeout(() => {
+      UI.jumpscare(false);
+      UI.caught(
+        '"No hall pass. No witnesses."',
+        'Tip: Okafor patrols the whole corridor. Wait until he walks past, crouch behind the lockers, then move.',
+        {
+          kicker: 'PRINCIPAL OKAFOR — ELECTRIC PIZZA PROTOCOL',
+          title: 'DETECTED',
+          button: 'TRY AGAIN'
+        }
+      );
+      this.state = 'caught';
+    }, 1650);
   }
 
   setInputActive(v) { this.inputActive = v; }
@@ -435,6 +661,12 @@ class Game {
       b.danger.visible = v ? false : b.downed;
     }
     this.killer.model.visible = v ? false : this.killer.active;
+    if (this.principal) this.principal.model.visible = v ? false : this.principal.active;
+    if (this.jake) this.jake.model.visible = v ? false : this.jake.active;
+    if (this.classTeacher) this.classTeacher.visible = !v && this.phase === 'skip';
+    if (this.classExtras) {
+      for (const e of this.classExtras) e.model.visible = !v && this.phase === 'skip';
+    }
     this.world.itemGroup.visible = !v;
     this.world.bodyGroup.visible = !v && this.world.bodiesVisible;
     UI.setDetection(false);
@@ -483,7 +715,8 @@ Object.assign(Game.prototype, {
       this.world.update(dt);
       this.culler.update(dt);
       this.updateEffects(dt);
-    } else if (this.state === 'paused' || this.state === 'win') {
+      if (this.principal && this.principal.laserT > 0) this.principal.updateLaser(dt);
+    } else if (this.state === 'paused' || this.state === 'win' || this.state === 'caught') {
       this.world.update(dt * 0.15);
     } else if (this.noteOpen) {
       this.updateEffects(dt);
@@ -499,11 +732,44 @@ Object.assign(Game.prototype, {
     if (this.noteOpen) return;
     this.updateActive(dt);
     for (const b of this.bots) b.update(dt);
-    this.killer.update(dt);
+    if (this.phase === 'skip') {
+      this.jake.update(dt);
+      this.principal.update(dt);
+      if (this.classTeacher?.visible) {
+        animatePerson(this.classTeacher, dt, { mode: 'idle', speed: 0 });
+      }
+      if (this.classExtras) {
+        for (const e of this.classExtras) {
+          if (!e.model.visible) continue;
+          animatePerson(e.model, dt, { mode: 'idle', speed: 0 });
+          const p = e.model.userData.parts;
+          if (p) {
+            p.legL.rotation.x = -1.28;
+            p.legR.rotation.x = -1.28;
+            p.kneeL.rotation.x = 1.08;
+            p.kneeR.rotation.x = 1.08;
+            p.hips.position.y = 0.58;
+          }
+        }
+      }
+      if (this.state !== 'play') return;
+      // The toilets are the finish line for chapter zero. Wait for Jake
+      // to catch up before locking the halls — the whole plan depends on
+      // the two of them being in there together.
+      const p = this.player.pos;
+      // Jake counts as "with you" once he is through the toilet doorway.
+      const jakeInside = this.jake.pos.x > -7 && this.jake.pos.x < 1 && this.jake.pos.z < -3.15;
+      if (p.x > -7 && p.x < 1 && p.z < -3.15 && jakeInside) {
+        this.beginLockdown();
+        return;
+      }
+    } else {
+      this.killer.update(dt);
+    }
     if (this.state === 'down') this.updateDown(dt);
     // auto-open unlocked doors for anyone walking through
     this.world.autoOpenDoors(this.getControl().pos.x, this.getControl().pos.z, 1.7);
-    for (const b of this.bots) if (!b.dead && !b.escaped) this.world.autoOpenDoors(b.pos.x, b.pos.z, 1.5);
+    for (const b of this.bots) if (!b.dead && !b.escaped && !b.dormant && !b.classroom) this.world.autoOpenDoors(b.pos.x, b.pos.z, 1.5);
     this.updateCamera(dt);
     this.updatePrompt(dt);
     this.updateEffects(dt);
@@ -550,7 +816,9 @@ Object.assign(Game.prototype, {
     const sprint = wantSprint;
     e.crouch = crouch;
     e.sprint = sprint;
-    let speed = crouch ? 1.22 : sprint ? 4.45 : 2.52;
+    // 25% faster than the Hall Monitor's chase speed (4.6), so a clean
+    // sprint can actually break line of sight instead of losing ground.
+    let speed = crouch ? 1.22 : sprint ? 5.75 : 2.52;
     if (sprint) {
       e.stamina = Math.max(0, e.stamina - dt * 19);
       if (e.stamina <= 0.5) speed = 2.15;
@@ -657,7 +925,10 @@ Object.assign(Game.prototype, {
     const bloodEl = document.getElementById('fx-blood');
     if (bloodEl) bloodEl.style.opacity = String(Math.min(0.82, this.blood));
     const active = this.getControl();
-    if (active && this.killer.active) {
+    if (this.phase === 'skip' && this.principal && this.principal.active) {
+      UI.setDetection(this.principal.detect > 0.18);
+      if (this.principal.detect > 0.18) audio.setTension(0.55 + this.principal.detect * 0.45);
+    } else if (active && this.killer.active) {
       const vis = this.killer.state === 'chase' && (this.killer.target === active) && this.killer.canSee(active);
       UI.setDetection(vis);
     } else UI.setDetection(false);
@@ -769,7 +1040,7 @@ Object.assign(Game.prototype, {
     const door = this.world.nearestDoor(e.pos.x, e.pos.z, 2.5);
     if (door) {
       if (door.locked) UI.prompt(`DOOR ${door.label} — KEY ${door.label}`, 0, this.hasKey(door.label) ? 'E' : '!');
-      else UI.prompt(door.open ? 'DOOR OPEN' : 'OPEN DOOR');
+      else UI.prompt(door.open ? 'CLOSE DOOR' : 'OPEN DOOR');
       return;
     }
     const hide = this.world.nearestHide(e.pos.x, e.pos.z, 2.2);
@@ -1199,10 +1470,30 @@ Object.assign(Game.prototype, {
     audio.chaseStop();
     UI.fade(true, 700);
     setTimeout(() => {
-      UI.fade(false, 900);
-      if (anyDead || survivors === 0) this.startJakeReveal(true);
-      else this.startPoliceEnding();
+      if (anyDead || survivors === 0) {
+        UI.fade(false, 900);
+        this.startJakeReveal(true);
+      } else {
+        // Everyone got out... except the one who was guarding the toilets.
+        this.startForgotJake();
+      }
     }, 800);
+  },
+
+  startForgotJake() {
+    if (this._forgotStarted) return;
+    this._forgotStarted = true;
+    this.state = 'cutscene';
+    UI.showHud(false);
+    UI.setDown(false);
+    audio.setUnderwater(false);
+    audio.alarmStop();
+    audio.chaseStop();
+    this.afterCutscene = () => this.startJakeReveal();
+    setTimeout(() => {
+      UI.fade(false, 900);
+      this.cinematic.play('forgot', () => forgotJakeShots(this.cinematic));
+    }, 500);
   },
 
   startJakeReveal(fromEnding = false) {
@@ -1216,6 +1507,7 @@ Object.assign(Game.prototype, {
     audio.chaseStop();
     this.afterCutscene = () => this.startPoliceEnding();
     setTimeout(() => {
+      UI.fade(false, 700);
       this.cinematic.play('jake', () => jakeRevealShots(this.cinematic));
     }, 650);
   },
@@ -1254,7 +1546,7 @@ Object.assign(Game.prototype, {
 
   // ── pause / objective / misc ────────────────────────────────
   togglePause(force) {
-    if (this.state === 'cutscene' || this.state === 'win' || this.noteOpen) return;
+    if (this.state === 'cutscene' || this.state === 'win' || this.state === 'caught' || this.noteOpen) return;
     const pause = force !== undefined ? force : this.state !== 'paused';
     this.paused = pause;
     if (pause) {
@@ -1291,6 +1583,13 @@ Object.assign(Game.prototype, {
     const totalKeys = this.player.keys.size;
     const crowbar = this.player.crowbar ? 'found' : 'missing';
     const sub = `${totalKeys}/8 keys · crowbar ${crowbar}`;
+    if (this.phase === 'skip') {
+      UI.setObjective(
+        'Skip class. Reach the toilets with Jake.',
+        'Principal Okafor patrols the hall. Wait for him to pass, crouch (C), and do not get seen.'
+      );
+      return;
+    }
     if (this.player.escaped || this.controlledBot) {
       if (this.controlledBot) {
         UI.setObjective(`${this.controlledBot.name}: escape through the east exit.`, sub);
