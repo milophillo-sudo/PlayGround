@@ -250,11 +250,6 @@ class Game {
       audio.setVolume(Number(e.target.value) / 100);
     });
     document.getElementById('note-popup').addEventListener('click', () => this.closeNote());
-    document.getElementById('cine-skip').addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (this.state === 'cutscene' && this.cinematic.active) this.cinematic.skip();
-    });
 
     this.bindTouch();
   }
