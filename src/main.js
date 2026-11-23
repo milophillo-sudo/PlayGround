@@ -831,8 +831,9 @@ function applyIntentEvent(ev) {
   if (ev.mode === 'phase') {
     intent.phase = ev.phase;
     scene.setIntentionPhase(ev.phase);
-    // The dawn is note-less; the lane field stays on so the ocean can breathe.
-    setIntentNotesHidden(ev.phase === 'dawn');
+    // The original INTENTION dawn is note-less; the CHAOS remix keeps DAWN
+    // playable to the fade so the finale is not a passive cutscene.
+    setIntentNotesHidden(ev.phase === 'dawn' && !chart.song.chaos);
     return;
   }
   if (ev.mode === 'hud') applyIntentHud(ev);

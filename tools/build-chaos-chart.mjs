@@ -65,7 +65,9 @@ const sections = sectionDefs.map(([name, start, end, keys, bpm, phase, blurb], i
     bloom: phase === 'dawn' ? 0.9 : 0.72,
     intro: false,
     phase,
-    notes: phase !== 'dawn',
+    // FAKE GUILT is intentionally silent, so it must not reserve a note budget
+    // that the fallback would then dump into DAWN as an unplayable cluster.
+    notes: name !== 'FAKE GUILT',
     camZ: base.camZ ?? 17,
     camY: base.camY ?? 6.5,
     rotY: base.rotY ?? 0,
@@ -83,6 +85,10 @@ const sections = sectionDefs.map(([name, start, end, keys, bpm, phase, blurb], i
 // ---------------------------------------------------------------- notes
 const TARGET = 1200;
 const HOLD_MIN = 150;
+// The record fades from 209.6s. DAWN still gets a real, playable phrase, but
+// its last chart entries must stay clear of the fade and the chart end.
+const DAWN_NOTE_END = 208.8;
+const noteEndFor = (sec) => Math.min(sec.end - 0.16, sec.phase === 'dawn' ? DAWN_NOTE_END : Infinity);
 // FAKE GUILT is a deliberately visible, note-free false-guilt window.  Keep
 // this separate from DAWN and the whiteout: the window still has a live field,
 // but there are no chart entries or HUD flash/white/rainbow cues within it.
@@ -93,7 +99,7 @@ const laneFree = new Array(8).fill(-1);
 const lanePrimary = [0, 3, 1, 4, 2, 5, 7, 6, 3, 0, 5, 2, 4, 7, 1, 6, 2, 6, 0, 4, 5, 1, 7, 3];
 
 function place(t, lane, type = 'tap', dur = 0) {
-  if (t < 0 || t > 204.2) return false;
+  if (t < 0 || t > DAWN_NOTE_END) return false;
   if (inRest(t, dur)) return false;
   if (t < laneFree[lane] + 0.085) return false;
   if (type === 'hold') {
@@ -120,7 +126,7 @@ function chordLanes(primary, active, count) {
 let accepted = 0;
 let holdCount = 0;
 const noteSections = sections.filter((s) => s.notes);
-const totalSpan = noteSections.reduce((sum, s) => sum + (s.end - s.start), 0);
+const totalSpan = noteSections.reduce((sum, s) => sum + Math.max(0.5, noteEndFor(s) - s.start), 0);
 
 // Give every section a note budget proportional to its length. The final
 // section takes the rounding remainder so the chart always lands on exactly
@@ -131,7 +137,7 @@ for (let si = 0; si < noteSections.length; si++) {
   const sec = noteSections[si];
   const budget = si === noteSections.length - 1
     ? TARGET - budgeted
-    : Math.round(TARGET * ((sec.end - sec.start) / totalSpan));
+    : Math.round(TARGET * ((Math.max(0.5, noteEndFor(sec) - sec.start)) / totalSpan));
   budgeted += budget;
   budgets.push(budget);
 }
@@ -142,7 +148,7 @@ for (let si = 0; si < noteSections.length; si++) {
   const step = 60 / sec.bpm / 4;
   const active = ACTIVE[sec.keys] || ACTIVE[8];
   const start = Math.max(1.05, sec.start + 0.015);
-  const end = sec.end - 0.16;
+  const end = noteEndFor(sec);
   let secAccepted = 0;
   // Chords are accents, not a default texture. Counting a little over one
   // note per accepted slot lets the pacing pass cover every bar instead of
@@ -215,10 +221,10 @@ notes.sort((a, b) => a.t - b.t || a.lane - b.lane);
 if (notes.length < TARGET) {
   const missing = TARGET - notes.length;
   const topSlots = [];
-  for (let topT = 2.0; topT < 180.99; topT += 0.083) {
+  for (let topT = 2.0; topT < 211.9; topT += 0.083) {
     if (inRest(topT)) continue;
     const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
-    if (!sec) continue;
+    if (!sec || topT > noteEndFor(sec)) continue;
     topSlots.push({ t: topT, sec });
   }
   const stride = topSlots.length / Math.max(1, missing);
@@ -239,9 +245,9 @@ if (notes.length < TARGET) {
 // Last-resort fill keeps the promised 1200 notes even if every evenly spaced
 // top-up slot was pinned by a hold.
 if (notes.length < TARGET) {
-  for (let topT = 2.0; topT < 180.99 && notes.length < TARGET; topT += 0.023) {
+  for (let topT = 2.0; topT < 211.9 && notes.length < TARGET; topT += 0.023) {
     const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
-    if (!sec || inRest(topT)) continue;
+    if (!sec || topT > noteEndFor(sec) || inRest(topT)) continue;
     const active = ACTIVE[sec.keys] || ACTIVE[8];
     for (const lane of active) {
       if (place(topT, lane)) break;
@@ -249,9 +255,9 @@ if (notes.length < TARGET) {
   }
   // Dense fallback: one lane is enough to complete the count. It deliberately
   // samples only outside the rest window and outside the chart's lane cooldown.
-  for (let topT = 2.0; topT < 180.99 && notes.length < TARGET; topT += 0.007) {
+  for (let topT = 2.0; topT < 211.9 && notes.length < TARGET; topT += 0.007) {
     const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
-    if (!sec || inRest(topT)) continue;
+    if (!sec || topT > noteEndFor(sec) || inRest(topT)) continue;
     const active = ACTIVE[sec.keys] || ACTIVE[8];
     for (let laneIndex = 0; laneIndex < active.length && notes.length < TARGET; laneIndex++) {
       place(topT, active[laneIndex]);
@@ -263,9 +269,9 @@ if (notes.length < TARGET) {
 // lanes until exactly TARGET entries exist. This runs after all phrase grammar
 // and rest-window filtering, so it cannot create a prohibited in-window note.
 if (notes.length < TARGET) {
-  for (let topT = 1.05; topT < 180.99 && notes.length < TARGET; topT += 1 / 32) {
+  for (let topT = 1.05; topT < 211.9 && notes.length < TARGET; topT += 1 / 32) {
     const sec = sections.find((s) => topT >= s.start && topT < s.end && s.notes);
-    if (!sec || inRest(topT)) continue;
+    if (!sec || topT > noteEndFor(sec) || inRest(topT)) continue;
     const active = ACTIVE[sec.keys] || ACTIVE[8];
     for (let laneIndex = 0; laneIndex < active.length && notes.length < TARGET; laneIndex++) {
       const lane = active[(laneIndex + Math.floor(topT * 8)) % active.length];
