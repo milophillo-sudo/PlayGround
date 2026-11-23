@@ -423,3 +423,35 @@ button{font-family:var(--mono);cursor:pointer;border:none;outline:none}
   #title-screen .btn-row{justify-content:center}
   #title-screen .tagline{margin-top:18px}
 }
+
+/* Touch HUD: dialogue and interaction prompts must never sit under the
+   thumb controls. The joystick occupies the bottom-left ~160px and the
+   action buttons the bottom-right ~124px, so lift both layers above
+   that band on phones and short landscape windows. */
+@media (pointer:coarse) and (orientation:portrait){
+  #subtitle-wrap{width:86vw;bottom:calc(318px + var(--safe-b))}
+  #subtitle{font-size:14px}
+  #prompt{bottom:calc(252px + var(--safe-b));max-width:84vw;white-space:normal}
+}
+@media (pointer:coarse) and (orientation:landscape){
+  #subtitle-wrap{width:60vw;bottom:calc(178px + var(--safe-b))}
+  #subtitle{font-size:13.5px}
+  #prompt{bottom:calc(230px + var(--safe-b));max-width:60vw;white-space:normal}
+}
+@media (pointer:coarse) and (max-height:430px){
+  #subtitle-wrap{bottom:calc(150px + var(--safe-b));width:44vw}
+  #prompt{bottom:calc(205px + var(--safe-b));max-width:52vw;padding:6px 12px}
+}
+@media (pointer:coarse) and (max-height:380px){
+  /* A 320px-tall landscape window cannot fit the full meter stack between
+     the objective and the joystick. Drop the redundant torch caption and
+     tighten the rows so HEALTH no longer prints over the objective. There
+     is also no control-free horizontal band left for dialogue, so give it
+     a plate to stay readable over the meter stack and minimap edge. */
+  #status-panel{width:170px;bottom:calc(162px + var(--safe-b))}
+  .meter-row{margin-bottom:2px}
+  #torch-state{display:none}
+  #subtitle-wrap{width:44vw;bottom:calc(140px + var(--safe-b));padding:5px 8px;border-radius:7px;
+    background:rgba(2,6,4,.82);border:1px solid rgba(141,255,178,.12);backdrop-filter:blur(2px)}
+  #subtitle{font-size:12.5px;line-height:1.35}
+}
