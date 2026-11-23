@@ -138,9 +138,29 @@ button{font-family:var(--mono);cursor:pointer;border:none;outline:none}
 .win-kicker{font-size:10px;letter-spacing:.5em;color:var(--green)}
 #win-screen h1{font-family:var(--display);font-size:clamp(54px,11vw,140px);margin:10px 0 4px;color:#f0fff4;text-shadow:0 0 40px rgba(141,255,178,.35)}
 #win-grade{font-size:13px;letter-spacing:.4em;color:var(--amber);margin-bottom:18px}
-#win-stats{font-size:11.5px;line-height:2;color:#9fb3a5;margin-bottom:14px}
+#win-stats{display:inline-block;font-size:11.5px;line-height:2;color:#b9cdbf;margin-bottom:16px;
+  padding:9px 24px;border-radius:9px;background:rgba(3,10,7,.66);border:1px solid rgba(141,255,178,.12);
+  backdrop-filter:blur(3px);text-shadow:0 1px 2px rgba(0,0,0,.8)}
 #win-line{font-size:13px;color:#d6e4da;margin-bottom:28px}
 .win-small{margin-top:22px;font-size:9px;letter-spacing:.2em;color:#5c7265}
+
+/* short landscape phones: the win and caught cards must fit without clipping */
+@media (max-height:540px){
+  #win-screen{overflow-y:auto}
+  .win-inner{padding:10px 16px}
+  .win-kicker{font-size:9px;letter-spacing:.4em}
+  #win-screen h1{font-size:clamp(38px,13.5vh,86px);margin:4px 0 2px}
+  #win-grade{font-size:11px;margin-bottom:8px}
+  #win-stats{font-size:10px;line-height:1.5;padding:7px 18px;margin-bottom:9px}
+  #win-line{font-size:11px;margin-bottom:13px}
+  #win-screen .big-btn{padding:11px 30px;font-size:12px}
+  .win-small{margin-top:9px;font-size:8px;line-height:1.4}
+  .caught-inner{padding:12px}
+  #caught-screen h2{font-size:clamp(40px,14vh,92px);margin-top:6px}
+  #caught-line{font-size:13px;margin-top:6px}
+  #caught-tip{margin:10px auto 16px;font-size:10.5px;line-height:1.5}
+  #caught-screen .big-btn{padding:11px 30px;font-size:12px}
+}
 
 /* report card */
 .overlay{position:absolute;inset:0;z-index:24;display:flex;align-items:center;justify-content:center;pointer-events:none}

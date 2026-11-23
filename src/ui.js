@@ -10,6 +10,8 @@ export const UI = {
   _subTimer: 0,
   _toastTimer: 0,
   _promptTimer: 0,
+  _touchOn: false,
+  _hudVisible: false,
 
   init() {
     for (const id of [
@@ -48,8 +50,22 @@ export const UI = {
     }
   },
 
-  showHud(v) { this.el.hud.classList.toggle('hidden', !v); },
-  setTouch(v) { this.el['touch-ui'].classList.toggle('hidden', !v); },
+  showHud(v) {
+    this._hudVisible = !!v;
+    this.el.hud.classList.toggle('hidden', !v);
+    this._syncTouch();
+  },
+  setTouch(v) {
+    this._touchOn = !!v;
+    this._syncTouch();
+  },
+  // Touch controls belong to gameplay only. Leaving them on during the
+  // title, cutscenes, detention and the win screen put stray TORCH/RUN
+  // buttons on top of every overlay on phones.
+  _syncTouch() {
+    const el = this.el['touch-ui'];
+    if (el) el.classList.toggle('hidden', !(this._touchOn && this._hudVisible));
+  },
 
   setObjective(text, sub = '') {
     this.el['objective-text'].textContent = text;
