@@ -88,6 +88,11 @@ const HOLD_MIN = 150;
 // The record fades from 209.6s. DAWN still gets a real, playable phrase, but
 // its last chart entries must stay clear of the fade and the chart end.
 const DAWN_NOTE_END = 208.8;
+// Hold the field clear through the flash, then let the finale phrase fall in.
+// A 1.9s lead-in puts the first DAWN note just outside the ~1.7s approach
+// window, so notes do not pop into view on top of the rainbow flash.
+const DAWN_LEAD_IN = 1.9;
+const DAWN_BUDGET = 18;
 const noteEndFor = (sec) => Math.min(sec.end - 0.16, sec.phase === 'dawn' ? DAWN_NOTE_END : Infinity);
 // FAKE GUILT is a deliberately visible, note-free false-guilt window.  Keep
 // this separate from DAWN and the whiteout: the window still has a live field,
@@ -142,6 +147,26 @@ for (let si = 0; si < noteSections.length; si++) {
   budgets.push(budget);
 }
 
+// DAWN is a short finale, so cap its phrase and give the removed notes back to
+// the earlier movements. This keeps the 1200-note total while avoiding a burst
+// of notes immediately after the rainbow flash.
+const dawnIndex = noteSections.findIndex((s) => s.phase === 'dawn');
+if (dawnIndex >= 0 && budgets[dawnIndex] > DAWN_BUDGET) {
+  let moved = budgets[dawnIndex] - DAWN_BUDGET;
+  budgets[dawnIndex] = DAWN_BUDGET;
+  const recipients = budgets.map((_, i) => i).filter((i) => i !== dawnIndex);
+  const otherTotal = recipients.reduce((sum, i) => sum + budgets[i], 0);
+  for (const i of recipients) {
+    const add = Math.floor(moved * (budgets[i] / otherTotal));
+    budgets[i] += add;
+    moved -= add;
+  }
+  for (let i = 0; moved > 0; i = (i + 1) % recipients.length) {
+    budgets[recipients[i]] += 1;
+    moved -= 1;
+  }
+}
+
 for (let si = 0; si < noteSections.length; si++) {
   const sec = noteSections[si];
   const budget = budgets[si];
@@ -149,7 +174,7 @@ for (let si = 0; si < noteSections.length; si++) {
   const active = ACTIVE[sec.keys] || ACTIVE[8];
   // DAWN gets a short breath after the rainbow flash before the first note
   // reaches the lane, so the transition reads as a flash then a phrase.
-  const start = Math.max(1.05, sec.start + (sec.phase === 'dawn' ? 0.8 : 0.015));
+  const start = Math.max(1.05, sec.start + (sec.phase === 'dawn' ? DAWN_LEAD_IN : 0.015));
   const end = noteEndFor(sec);
   let secAccepted = 0;
   // Chords are accents, not a default texture. Counting a little over one
