@@ -812,6 +812,11 @@ function applyIntentHud(ev) {
       dom.whiteout?.classList.toggle('on', on);
       document.body.classList.toggle('intent-whiteout', on);
       break;
+    case 'notes':
+      // Keep the silent false-guilt window visually empty. DAWN's clear event
+      // turns the note layer back on at 204.5.
+      setIntentNotesHidden(!on);
+      break;
     case 'yellow':
       document.body.classList.toggle('intent-yellow', on);
       dom.yellow?.classList.toggle('on', on);
@@ -831,9 +836,10 @@ function applyIntentEvent(ev) {
   if (ev.mode === 'phase') {
     intent.phase = ev.phase;
     scene.setIntentionPhase(ev.phase);
-    // The original INTENTION dawn is note-less; the CHAOS remix keeps DAWN
-    // playable to the fade so the finale is not a passive cutscene.
-    setIntentNotesHidden(ev.phase === 'dawn' && !chart.song.chaos);
+    // Only the DAWN boundary changes note visibility. The original INTENTION
+    // dawn is note-less; the CHAOS remix keeps DAWN playable to the fade. Other
+    // phases must not undo the silent false-guilt note-layer hide.
+    if (ev.phase === 'dawn') setIntentNotesHidden(!chart.song.chaos);
     return;
   }
   if (ev.mode === 'hud') applyIntentHud(ev);

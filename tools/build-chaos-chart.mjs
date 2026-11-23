@@ -147,7 +147,9 @@ for (let si = 0; si < noteSections.length; si++) {
   const budget = budgets[si];
   const step = 60 / sec.bpm / 4;
   const active = ACTIVE[sec.keys] || ACTIVE[8];
-  const start = Math.max(1.05, sec.start + 0.015);
+  // DAWN gets a short breath after the rainbow flash before the first note
+  // reaches the lane, so the transition reads as a flash then a phrase.
+  const start = Math.max(1.05, sec.start + (sec.phase === 'dawn' ? 0.8 : 0.015));
   const end = noteEndFor(sec);
   let secAccepted = 0;
   // Chords are accents, not a default texture. Counting a little over one
@@ -359,6 +361,15 @@ const hudBeats = [
   [139, 'static', { on: true, power: 1 }],
   [145, 'static', { on: false }],
   [146, 'bright', { on: true }],
+  // The original whiteout transition ran from 181 to 182. The protected
+  // FAKE GUILT window now starts at 181, so flash just before the boundary:
+  // the last pre-rest note is at 180.833 and this lands immediately after it.
+  [180.84, 'white', { on: true }],
+  [180.99, 'white', { on: false }],
+  // Hide the note layer for the silent false-guilt window. DAWN notes render
+  // roughly 1.7s before their hit time, so without this they visibly approach
+  // during the rest window even though their timestamps are after 204.5.
+  [180.99, 'notes', { on: false }],
 ];
 for (const [t, hud, data] of hudBeats) {
   if (!inRest(t)) push(t, { type: 'intent', mode: 'hud', hud, ...data });
