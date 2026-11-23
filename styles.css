@@ -354,8 +354,21 @@ button{font-family:var(--mono);cursor:pointer;border:none;outline:none}
 .cg-sig{font-family:cursive;font-size:13px;color:#2d3c33;border-bottom:1px solid #6b6a55;padding:0 12px}
 #cine-grade.wrong .cg-paper{animation:wrongPaper .42s steps(2) 3}
 @keyframes wrongPaper{0%{transform:rotate(-2.4deg) translate(0,0)}25%{transform:rotate(-4deg) translate(-8px,2px)}50%{transform:rotate(-1deg) translate(7px,-3px)}75%{transform:rotate(-3.4deg) translate(-4px,1px)}100%{transform:rotate(-2.4deg)}}
-#cine-skip{position:absolute;right:calc(2.2vw + var(--safe-r));bottom:calc(2.2vh + var(--safe-b));font-size:9px;letter-spacing:.24em;color:rgba(220,240,225,.42);opacity:0;transition:opacity .4s}
+#cine-skip{position:absolute;right:calc(2.2vw + var(--safe-r));bottom:calc(2.2vh + var(--safe-b));
+  font-family:var(--mono);font-size:9px;letter-spacing:.24em;color:rgba(220,240,225,.42);
+  background:none;border:0;padding:6px 0;opacity:0;pointer-events:none;transition:opacity .4s}
 #cine-ui:hover #cine-skip,#cine-skip.show{opacity:1}
+#cine-skip.show{pointer-events:auto;cursor:pointer}
+#cine-skip .skip-tap{display:none}
+#cine-skip:active{color:#eaffef}
+@media (pointer:coarse){
+  #cine-skip{right:calc(14px + var(--safe-r));bottom:calc(14px + var(--safe-b));
+    min-height:44px;padding:0 18px;font-size:10px;letter-spacing:.18em;color:#dfffe9;
+    background:rgba(3,10,7,.82);border:1px solid rgba(141,255,178,.5);border-radius:8px;
+    backdrop-filter:blur(3px);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+  #cine-skip .skip-key{display:none}
+  #cine-skip .skip-tap{display:inline}
+}
 #letterbox .bar{height:10.5vh}
 #letterbox.on .bar.top{transform:none}
 #app.cinema #scene{filter:contrast(1.06) saturate(1.05)}
