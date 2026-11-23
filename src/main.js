@@ -9,7 +9,7 @@ import { makePerson, animatePerson } from './props.js';
 import { TownTitle } from './title.js';
 import { VisibilityCuller } from './culling.js';
 import {
-  Cinematic, introShots, lockdownShots, forgotJakeShots, jumpscareShots,
+  Cinematic, introShots, lockdownShots, seniorShots, forgotJakeShots, jumpscareShots,
   jakeRevealShots, policeShots
 } from './cinematics.js';
 
@@ -70,10 +70,20 @@ class Game {
     this.keysPressed = {};
     this.pendingSwitch = 0;
     this.phase = 'title';
+    this.mode = 'story';
+    this.versus = false;
     this._detected = false;
     this._forgotStarted = false;
     this._jakeStarted = false;
     this._policeStarted = false;
+    this.killers = [];
+    this.skill = null;
+    this.blockScene = null;
+    this.duelTimer = 0;
+    this.speedBoost = 0;
+    this.consoleHold = 0;
+    this.consoleTarget = null;
+    this.gateHold = 0;
     this.stats = { notes: 0, started: 0, escaped: 0, finished: false };
     // adaptive resolution: keep the graphics, spend fewer pixels on weak GPUs
     this.baseDpr = 1;
@@ -128,7 +138,7 @@ class Game {
 
     this.player = {
       isPlayer: true, name: 'YOU', pos: new THREE.Vector3(-8.0, 0, 4.9), yaw: Math.PI,
-      hp: 100, stamina: 100, battery: 100, crouch: false, sprint: false,
+      hp: 100, stamina: 150, battery: 100, crouch: false, sprint: false,
       torchOn: false, downed: false, dead: false, escaped: false, hidden: false,
       hideSpot: null, downTimer: 0, keys: new Set(), crowbar: false, notes: 0,
       speed: 0, stepPhase: 0, noise: 0, attackTimer: 0, _jump: false
@@ -137,6 +147,9 @@ class Game {
     this.controlledBot = null;
 
     this.killer = new Killer(this, 34, 0);
+    this.killer2 = new Killer(this, -34, 0);
+    this.killer2.model.visible = false;
+    this.killers = [this.killer, this.killer2];
     this.bots = [];
     const spots = [[-12.8, 5.3, 0.8], [-3.4, 5.3, -0.6], [-12.8, 9.3, 0.3]];
     BOT_DEFS.forEach((def, i) => {
@@ -144,6 +157,16 @@ class Game {
       const b = new Bot(this, def, x, z, yaw);
       this.bots.push(b);
     });
+
+    // Third-person stand-in used only for the crowbar block cinematics.
+    // The player is first-person during normal play.
+    this.playerModel = makePerson({
+      shirt: 0x2b3a4a, pants: 0x252a33, hair: 0x2a1d15, hairStyle: 'short',
+      skin: 0xc79b7d, height: 1.8, backpack: 0x3d4f64
+    });
+    this.playerModel.visible = false;
+    this.scene.add(this.playerModel);
+    this.playerCrowbar = null;
 
     this.principal = new Principal(this);
     this.jake = new JakeNPC(this);
@@ -185,7 +208,13 @@ class Game {
       if (k === 'shift') this.sprintHeld = true;
       if (k === 'control' || k === 'c') this.crouchHeld = true;
       if (k === 'f' && !e.repeat) this.toggleTorch();
-      if (k === 'e' && !e.repeat) this.onInteractPress();
+      if (k === 'e' && !e.repeat) {
+        if (this.skill) {
+          const ok = this.skill.needle >= this.skill.zone - 0.09 && this.skill.needle <= this.skill.zone + 0.09;
+          this.resolveCrowbarBlock(ok);
+        } else this.onInteractPress();
+      }
+      if (k === 'q' && !e.repeat) this.tryKickStagger();
       if (k === 'm' && !e.repeat) {
         const m = audio.toggleMute();
         UI.toast(m ? 'Audio muted' : 'Audio on');
@@ -238,6 +267,7 @@ class Game {
 
     // UI buttons
     document.getElementById('btn-play').addEventListener('click', () => this.startGame());
+    document.getElementById('btn-versus').addEventListener('click', () => this.startVersus());
     document.getElementById('btn-controls').addEventListener('click', () => UI.showScreen('controls-screen'));
     document.getElementById('btn-controls-back').addEventListener('click', () => UI.showScreen('title-screen'));
     document.getElementById('btn-resume').addEventListener('click', () => this.togglePause(false));
@@ -307,6 +337,68 @@ class Game {
     bindHold('tb-sprint', () => { this.sprintHeld = true; }, () => { this.sprintHeld = false; });
     bindHold('tb-crouch', () => { this.crouchHeld = !this.crouchHeld; }, () => {});
     document.getElementById('tb-flash').addEventListener('pointerdown', (e) => { e.preventDefault(); this.toggleTorch(); });
+  }
+
+  startVersus() {
+    if (this.state !== 'title') return;
+    audio.init();
+    audio.resume();
+    audio.setVolume(Number(document.getElementById('volume')?.value || 70) / 100);
+    this.versus = true;
+    this.phase = 'chapter';
+    this.state = 'play';
+    UI.hideScreens();
+    UI.showHud(true);
+    this.setInputActive(true);
+    this.world.setLighting('night');
+    this.stats.started = performance.now();
+
+    const spawnPoints = [
+      [-8.0, 5.0], [-11.5, 5.0], [-4.5, 5.0], [-8.0, 8.5], [-12.5, 8.5]
+    ];
+    this.player.pos.set(spawnPoints[0][0], 0, spawnPoints[0][1]);
+    this.player.yaw = Math.PI;
+    this.camYaw = Math.PI;
+    this.player.hp = 100;
+    this.player.stamina = 150;
+    this.player.battery = 100;
+    this.player.crowbar = false;
+    this.player.hidden = false;
+    this.player.downed = false;
+    this.player.dead = false;
+    this.player.escaped = false;
+    this.controlledBot = null;
+    this.avatar = this.player;
+
+    this.bots.forEach((bot, i) => {
+      const [x, z] = spawnPoints[i + 1];
+      bot.spawn?.(x, z, Math.PI);
+      bot.dormant = false;
+      bot.classroom = false;
+      bot.dead = false;
+      bot.downed = false;
+      bot.escaped = false;
+      bot.controlled = false;
+      bot.hp = 100;
+      bot.stamina = 150;
+      bot.model.visible = true;
+      bot.pos.set(x, 0, z);
+      bot.model.position.set(x, 0, z);
+      bot.state = 'follow';
+    });
+
+    this.killer.reset(34, 0);
+    this.killer2.reset(-34, 0);
+    this.killer.spawn(34, 0);
+    this.killer2.spawn(-34, 0);
+
+    this.world.exit.unlocked = false;
+    this.world.exit.barricaded = true;
+    this.world.exit.open = false;
+    this.world.exit.overridden = false;
+    UI.setObjective('Find Key 8 and the shared crowbar.', 'Two Hall Monitors are hunting. Switch survivors with Q.');
+    UI.chapter('5 VS 2', 'FOUR FRIENDS · TWO KILLERS', 2600);
+    this.canvas.requestPointerLock?.();
   }
 
   startGame() {
@@ -478,8 +570,26 @@ class Game {
     this.state = 'cutscene';
     setTimeout(() => {
       UI.fade(false, 900);
-      this.runCutscene('lockdown', () => lockdownShots(this.cinematic), () => this.beginPlay(true));
+      this.runCutscene('lockdown', () => lockdownShots(this.cinematic), () => this.startSeniorBeat());
     }, 700);
+  }
+
+  // The survivors drag you into the senior classroom before chapter one.
+  // It is deliberately a separate beat from the lockdown montage: the
+  // corridor is chaos, this room is unnervingly still, and the empty
+  // senior class is the first real "where is everyone?" moment.
+  startSeniorBeat() {
+    this.state = 'cutscene';
+    this.setInputActive(false);
+    UI.showHud(false);
+    this.afterCutscene = () => {
+      UI.fade(true, 650);
+      setTimeout(() => this.beginPlay(true), 700);
+    };
+    setTimeout(() => {
+      UI.fade(false, 900);
+      this.cinematic.play('senior', () => seniorShots(this.cinematic));
+    }, 550);
   }
 
   beginPlay(fromLockdown = false) {
@@ -765,6 +875,7 @@ Object.assign(Game.prototype, {
       }
     } else {
       this.killer.update(dt);
+      if (this.versus) this.killer2.update(dt);
     }
     if (this.state === 'down') this.updateDown(dt);
     // auto-open unlocked doors for anyone walking through
@@ -944,6 +1055,15 @@ Object.assign(Game.prototype, {
   },
 
   updateUI(dt) {
+    if (this.skill && !this.skill.resolved) {
+      this.skill.timer -= dt;
+      this.skill.needle = (this.skill.needle + dt * (this.skill.dir || 1) * 0.72 + 1) % 2;
+      if (this.skill.needle > 1) this.skill.needle = 2 - this.skill.needle;
+      this.skill.dir = this.skill.needle <= 0.02 ? 1 : this.skill.needle >= 0.98 ? -1 : this.skill.dir;
+      UI.updateSkillCheck(this.skill.needle, this.skill.timer / 1.35);
+      if (this.skill.timer <= 0) this.resolveCrowbarBlock(false);
+    }
+    if (this.speedBoost && this.time > this.speedBoost.until) this.speedBoost = null;
     this._uiTimer -= dt;
     if (this._uiTimer > 0) return;
     this._uiTimer = 0.12;
@@ -986,6 +1106,73 @@ Object.assign(Game.prototype, {
     if (door) { this.handleDoor(door); return; }
     const hide = this.world.nearestHide(e.pos.x, e.pos.z, 2.2);
     if (hide) { this.enterHide(hide); return; }
+  },
+
+  tryCrowbarBlock(entity, killer) {
+    if (!this.versus || !this.player.crowbar || !entity) return false;
+    if ((entity.stamina ?? 150) < 18) {
+      entity.stamina = 0;
+      this.damagePlayer(42, killer);
+      UI.toast('CROWBAR GUARD BROKEN — stamina depleted');
+      return true;
+    }
+    entity.stamina = Math.max(0, (entity.stamina ?? 150) - 18);
+    this.skill = { type: 'block', entity, killer, timer: 1.35, needle: 0, zone: 0.68, dir: 1, resolved: false };
+    this.duelTimer = 1.35;
+    UI.showSkillCheck(true, { kicker: 'CROWBAR GUARD', title: 'TIME THE BLOCK', zone: 0.68, width: 0.18 });
+    UI.duel(true, 'CROWBAR GUARD', 'BLOCK', 'Press E in the marked zone.', 'counter');
+    this.killerDomainInterrupted = true;
+    if (killer) { killer.state = 'stagger'; killer.attackCd = 2.4; }
+    return true;
+  },
+
+  resolveCrowbarBlock(ok) {
+    const s = this.skill;
+    if (!s || s.resolved) return;
+    s.resolved = true;
+    UI.skillResult(!!ok);
+    this.skill = null;
+    this.duelTimer = 0;
+    if (ok) {
+      s.killer.attackCd = 3.2;
+      s.killer._avoid = { x: s.killer.pos.x, z: s.killer.pos.z, until: this.time + 3.2 };
+      s.killer.state = 'patrol';
+      s.killer.speed = 0;
+      s.killer.pos.x += (s.entity.pos.x - s.killer.pos.x) * -0.8;
+      s.killer.pos.z += (s.entity.pos.z - s.killer.pos.z) * -0.8;
+      s.entity.stamina = Math.min(150, (s.entity.stamina ?? 150) + 22);
+      UI.duel(true, 'CROWBAR GUARD', 'STAGGERED', 'Kick [Q] the Hall Monitor.', 'counter');
+      this._kickStagger = s.killer;
+      this.toast('Perfect block · killer staggered');
+    } else {
+      s.entity.stamina = Math.max(0, (s.entity.stamina ?? 150) - 34);
+      s.killer.attackCd = 0.7;
+      this.damagePlayer(58, s.killer);
+      UI.duel(true, 'CROWBAR GUARD', 'GUARD BREAK', 'Find space. The block cost 34 stamina.', 'domain');
+      this.toast('Failed block · guard broken');
+    }
+    setTimeout(() => { UI.showSkillCheck(false); UI.duel(false); }, 650);
+  },
+
+  tryKickStagger() {
+    if (!this.versus || !this._kickStagger) return;
+    const k = this._kickStagger;
+    const e = this.getControl();
+    if (!e || Math.hypot(k.pos.x - e.pos.x, k.pos.z - e.pos.z) > 2.8) return;
+    k.state = 'patrol';
+    k.speed = 0;
+    k.attackCd = 5;
+    k.domainCast = 0;
+    k.domainReady = 0;
+    k.removeDomainVisual?.();
+    k.pos.x += (k.pos.x - e.pos.x) * 1.8;
+    k.pos.z += (k.pos.z - e.pos.z) * 1.8;
+    k._avoid = { x: k.pos.x, z: k.pos.z, until: this.time + 12 };
+    this._kickStagger = null;
+    this.speedBoost = { until: this.time + 4, amount: 1.18 };
+    UI.duel(true, 'COUNTER', 'Riyōki Tenkai', 'The Hall Monitor was knocked back.', 'counter');
+    this.toast('KICK · Riyōki Tenkai knockback');
+    setTimeout(() => UI.duel(false), 900);
   },
 
   nearestDownedBot(max) {

@@ -921,6 +921,53 @@ export function lockdownShots(cine) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// THE EMPTY SENIOR ROOM — the survivors pull you off the corridor
+// ─────────────────────────────────────────────────────────────
+export function seniorShots(cine) {
+  const world = cine.game.world;
+  world.setLighting('lockdown');
+  world.setBodiesVisible(false);
+
+  // The three classmates who pull you inside. Same looks as their bots.
+  const maya = cine.person({
+    shirt: 0x5b3d78, pants: 0x24242c, hair: 0x1f1713, hairStyle: 'pony',
+    female: true, backpack: 0x7a3b4a, skin: 0xb98768
+  }, -14.6, -11.4, Math.PI + 0.12);
+  const devon = cine.person({
+    shirt: 0x3f6b4f, pants: 0x2c3340, hair: 0x402b1d, hairStyle: 'curly', cap: 0x2b3b55,
+    backpack: 0x3e4f6b, skin: 0x8a5b3e
+  }, -11.6, -11.1, Math.PI - 0.12);
+  const priya = cine.person({
+    shirt: 0x7a343e, pants: 0x262b33, hair: 0x241a14, hairStyle: 'bun',
+    female: true, glasses: true, backpack: 0x8a6a3a, skin: 0xa9724f
+  }, -13.2, -12.6, Math.PI);
+  devon.panic = 0.35;
+  devon.reaction = 1;
+
+  cine.light(0xffd0a0, 2.2, 12, -13, 2.5, -8.2);
+  cine.light(0x9fc0ff, 0.8, 10, -10.4, 2.3, -12.4);
+
+  return [
+    {
+      dur: 8.8, fov: 52, fovTo: 42, handheld: 0.017, shake: 0.003,
+      from: v(-13.35, 1.68, -6.2), to: v(-13.05, 1.44, -8.6),
+      lookFrom: v(-13.3, 1.3, -12.0), lookTo: v(-13.15, 1.18, -13.0),
+      onStart: () => {
+        cine.game.audio?.setTension(0.22);
+      },
+      lines: [
+        { at: 0.4, who: 'MAYA', text: 'Inside. Breathe. We are okay. We are <span class="em">okay</span>.', actor: maya, dur: 2.3 },
+        { at: 2.5, who: 'DEVON', text: 'The whole senior class. Where did they <span class="scare">go</span>?', actor: devon, dur: 2.4 },
+        { at: 4.6, who: 'PRIYA', text: 'Bags still here. Phones still here. ...The seniors are all gone.', actor: priya, dur: 3.0 },
+        { at: 7.0, who: 'MAYA', text: 'Then we do not wait to find out. East exit. Stay with me.', actor: maya, dur: 2.0 }
+      ],
+      cards: [{ at: 0.5, kicker: '12:11 PM — SENIOR CLASSROOM', title: 'EMPTY', align: 'left', dur: 3.4 }],
+      onEnd: (c) => { UI.cineHideCard(); }
+    }
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────
 // FORGOT JAKE — the group gets out without him
 // ─────────────────────────────────────────────────────────────
 export function forgotJakeShots(cine) {

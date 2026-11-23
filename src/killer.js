@@ -35,6 +35,11 @@ export class Killer {
     this.axeLight = new THREE.PointLight(0xff3344, 0, 4, 2);
     this.axeLight.position.set(0, 1.2, 0);
     this.model.add(this.axeLight);
+    this.domainTimer = 0;
+    this.domainCast = 0;
+    this.domainTiles = [];
+    this.domainVisual = null;
+    this.domainReady = 0;
   }
 
   spawn(x, z) {
@@ -53,6 +58,10 @@ export class Killer {
     this.roarTimer = 3;
     this._visited.clear();
     this._avoid = null;
+    this.domainTimer = 0;
+    this.domainCast = 0;
+    this.domainTiles = [];
+    this.removeDomainVisual();
     if (this.game.audio) this.game.audio.growl();
   }
 
@@ -178,7 +187,72 @@ export class Killer {
     this.speed = 0;
   }
 
-  // ── damage, attacks ─────────────────────────────────────────
+  // ── domain, damage, attacks ─────────────────────────────────
+  removeDomainVisual() {
+    if (this.domainVisual) {
+      this.game.scene.remove(this.domainVisual);
+      this.domainVisual.traverse?.(o => { if (o.geometry) o.geometry.dispose?.(); if (o.material) o.material.dispose?.(); });
+      this.domainVisual = null;
+    }
+  }
+
+  startDomain() {
+    if (!this.game.versus || this.domainCast > 0) return;
+    this.state = 'domain';
+    this.domainCast = 2.1;
+    this.domainReady = 0;
+    this.domainTiles = [];
+    const origin = { x: this.pos.x, z: this.pos.z };
+    for (let ix = -3; ix <= 3; ix++) for (let iz = -3; iz <= 3; iz++) {
+      if (Math.abs(ix) + Math.abs(iz) <= 4) this.domainTiles.push({ x: origin.x + ix * 1.05, z: origin.z + iz * 1.05, hot: false });
+    }
+    const group = new THREE.Group();
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff2438, transparent: true, opacity: 0.18, depthWrite: false });
+    for (const t of this.domainTiles) {
+      const tile = new THREE.Mesh(new THREE.PlaneGeometry(0.88, 0.88), mat.clone());
+      tile.rotation.x = -Math.PI / 2;
+      tile.position.set(t.x, 0.035, t.z);
+      group.add(tile);
+      t.mesh = tile;
+    }
+    this.game.scene.add(group);
+    this.domainVisual = group;
+  }
+
+  updateDomain(dt) {
+    if (this.domainCast > 0) {
+      this.domainCast -= dt;
+      this.speed = 0;
+      this.attackWindup = Math.max(this.attackWindup, this.domainCast);
+      if (this.domainVisual) this.domainVisual.scale.setScalar(0.85 + Math.sin(this.game.time * 12) * 0.06);
+      if (this.domainCast <= 0) this.domainReady = 1.25;
+      return;
+    }
+    if (this.domainReady > 0) {
+      this.domainReady -= dt;
+      for (const t of this.domainTiles) {
+        t.hot = true;
+        if (t.mesh?.material) t.mesh.material.opacity = 0.55;
+        if (t.mesh?.material?.color) t.mesh.material.color.setHex(0xff0a18);
+      }
+      for (const e of [this.game.player, ...this.game.bots]) {
+        if (!e || e.dead || e.escaped || e.downed) continue;
+        for (const t of this.domainTiles) {
+          if (t.hot && Math.hypot(e.pos.x - t.x, e.pos.z - t.z) < 0.72) {
+            const safe = this.game.world?.exit && e.pos.x > 57 && !this.game.world.exit.open;
+            if (!safe) this.game.damagePlayer?.(18, this);
+          }
+        }
+      }
+      if (this.domainReady <= 0) {
+        this.removeDomainVisual();
+        this.domainTiles = [];
+        this.state = 'patrol';
+        this.attackCd = 4.5;
+      }
+    }
+  }
+
   attack(entity) {
     if (!entity || entity.dead || entity.escaped) return;
     this.attackCd = 1.25;
@@ -187,6 +261,7 @@ export class Killer {
     this.game.audio?.scare();
     this.game.shakeScreen(0.45, 0.6);
     if (entity === this.game.player || entity === this.game.controlledBot) {
+      if (this.game.versus && this.game.tryCrowbarBlock?.(entity, this)) return;
       this.game.damagePlayer(52, this);
     } else if (entity.damage) {
       entity.damage(46, 'killer');
@@ -297,6 +372,14 @@ export class Killer {
     this.model.visible = true;
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.attackWindup = Math.max(0, this.attackWindup - dt);
+    if (this.state === 'domain' || this.domainCast > 0 || this.domainReady > 0) {
+      this.updateDomain(dt);
+      if (this.domainCast <= 0 && this.domainReady <= 0) {
+        // updateDomain restores patrol after the timed detonation
+      }
+    } else if (this.game.versus && this.attackCd <= 0.05 && this.state === 'chase' && Math.random() < dt * 0.055) {
+      this.startDomain();
+    }
     this.pathTimer -= dt;
     this.roarTimer -= dt;
     if (this.roarTimer <= 0) {

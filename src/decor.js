@@ -22,7 +22,7 @@ function add(world, mesh, x, y, z, ry = 0, rx = 0, rz = 0) {
 }
 
 function collide(world, x, z, w, d, sight = false) {
-  world.addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, { sight, type: 'prop' });
+  world.addCollider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, { sight, type: 'prop', floor: 0 });
 }
 
 function poster(world, id, x, y, z, ry = 0, w = 1.05, h = 1.45) {
@@ -825,12 +825,19 @@ function decorateAuditorium(world, r) {
   commonRoom(world, r);
   const stage = makeStage(); add(world, stage, (x1 + x2) / 2, 0, z1 + 3.0, 0);
   collide(world, (x1 + x2) / 2, z1 + 3.0, 18, 4.5);
-  // seats rows
+  // seats rows — keep every row inside the auditorium footprint. The old
+  // z1+9.5 start pushed the last two rows through the back wall and into
+  // the narrow service hall.
+  const seatX0 = x1 + 3.5;
+  const seatZ0 = z1 + 7.4;
   for (let row = 0; row < 5; row++) {
     for (let col = 0; col < 8; col++) {
-      const seat = box(0.55, 0.6, 0.5, C(0x4a1f24, 0.85), x1 + 3.5 + col * 2.0, 0.35, z1 + 9.5 + row * 1.8);
-      add(world, seat, seat.position.x, 0.35, seat.position.z);
-      add(world, box(0.52, 0.5, 0.08, C(0x3b181d, 0.85), x1 + 3.5 + col * 2.0, 0.7, z1 + 9.75 + row * 1.8), x1 + 3.5 + col * 2.0, 0.7, z1 + 9.75 + row * 1.8);
+      const sx = seatX0 + col * 2.0;
+      const sz = seatZ0 + row * 1.5;
+      const seat = box(0.55, 0.6, 0.5, C(0x4a1f24, 0.85), sx, 0.35, sz);
+      add(world, seat, sx, 0.35, sz);
+      const back = box(0.52, 0.5, 0.08, C(0x3b181d, 0.85), sx, 0.7, sz + 0.25);
+      add(world, back, sx, 0.7, sz + 0.25);
     }
   }
   add(world, makePiano(), x1 + 3.0, 0, z1 + 5.5, Math.PI / 2);
@@ -873,8 +880,10 @@ export function decorateCorridor(world) {
   }
   // trophy case
   const tc = makeTrophyCase(2.2); add(world, tc, -45.5, 0, -2.62, 0);
-  // bulletin boards
-  bulletin(world, -8.5, 1.85, -2.86, 0, 'NOTICES', 6);
+  // Bulletin boards sit on solid wall spans. The old NOTICES board was at
+  // x=-8.5, directly across the open central passage, so it floated over
+  // the mouth of the hall. Move it onto the solid stretch west of the gap.
+  bulletin(world, -11.9, 1.85, -2.86, 0, 'NOTICES', 6);
   bulletin(world, 25.5, 1.85, 2.86, Math.PI, 'EXAM RESULTS', 5);
   // posters
   poster(world, 3, -16, 1.8, -2.86, 0);
