@@ -74,10 +74,12 @@
       <div class="subtitle">AFTERSCHOOL LOCKDOWN</div>
       <div class="tagline">The bell rang. Nobody went home.<br /><span>8 keys. 8 doors. One crowbar. One very committed hall monitor.</span></div>
       <div class="btn-row">
-        <button id="btn-play" class="big-btn">▶ PLAY</button>
+        <button id="btn-play" class="big-btn">▶ STORY</button>
+        <button id="btn-versus" class="big-btn versus-btn">5 VS 2</button>
         <button id="btn-controls" class="ghost-btn">CONTROLS</button>
       </div>
-      <div class="title-note">Best played with headphones · Contains: jump scares, bad grades</div>
+      <div class="title-note">STORY: one survivor, one hall monitor<br />5 VS 2: four friends, two killers, domain expansions</div>
+      <div class="title-note small">Best played with headphones · Contains: jump scares, bad grades</div>
     </div>
     <div class="credits-corner">YOUR GRADE: Q</div>
   </div>
@@ -102,6 +104,9 @@
         <p><b>Stay quiet.</b> The Hall Monitor hears running, doors and bad decisions. A sprint is 25% faster than he is — use it.</p>
         <p><b>Follow the keys.</b> Key 1 is outside Room 101. Every keyed room hides the next key. Key 8 is the exit.</p>
         <p><b>Find the crowbar</b> to pry the barricade. It is not where you hope it is.</p>
+        <p><b>Two exit steps:</b> restore the auxiliary breaker on the cafeteria mezzanine, then hold E at the gate override panel.</p>
+        <p><b>Block with the crowbar.</b> If your breath is high, an axe attack becomes a timing challenge. Nail the block, then nail the counter to kick the Hall Monitor down. He may drop laser pizza.</p>
+        <p><b>5 VS 2:</b> you wake up with four friends and two Hall Monitors. Crowbars are shared. The killers can stop to cast a red-tile domain. Leave the tiles before they detonate.</p>
         <p><b>You get 40 seconds</b> when you go down. Bots will try to reach you. You can rescue them too.</p>
       </div>
       <button id="btn-controls-back" class="ghost-btn">BACK</button>
@@ -213,6 +218,24 @@
   <div id="letterbox"><div class="bar top"></div><div class="bar bottom"></div></div>
   <div id="fade"></div>
   <div id="chapter-card"><div class="chapter-kicker"></div><div class="chapter-title"></div></div>
+
+  <!-- COMBAT SKILL CHECK / DUEL CAPTIONS -->
+  <div id="skillcheck" class="hidden">
+    <div class="sc-kicker" id="sc-kicker">CROWBAR GUARD</div>
+    <div class="sc-title" id="sc-title">BLOCK THE AXE</div>
+    <div class="sc-bar">
+      <div class="sc-zone" id="sc-zone"></div>
+      <div class="sc-needle" id="sc-needle"></div>
+      <div class="sc-lock" id="sc-lock"></div>
+    </div>
+    <div class="sc-hint">PRESS <b>E</b> · SPACE · TAP</div>
+    <div class="sc-timer"><i id="sc-timer-fill"></i></div>
+  </div>
+  <div id="duel-ui" class="hidden">
+    <div id="duel-kicker">CROWBAR GUARD</div>
+    <div id="duel-title">BLOCKED</div>
+    <div id="duel-sub"></div>
+  </div>
 
   <!-- TOUCH -->
   <div id="touch-ui" class="hidden">

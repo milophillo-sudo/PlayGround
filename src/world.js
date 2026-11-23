@@ -6,7 +6,8 @@ import {
   makeVending, makeStall, makeTrash, makeCone, makeBoiler, makeBreaker,
   makeComputerDesk, makeClock, makeSinkCounter, makeMirror, makeCar,
   makeStreetlight, makeDumpster, makePoliceStation, makeBatteryModel,
-  makeKeyModel, makeCrowbarModel, makeNoteModel, makeMedkitModel, makeGlow
+  makeKeyModel, makeCrowbarModel, makeNoteModel, makeMedkitModel, makeGlow,
+  makePlant, makeFireExtinguisher
 } from './props.js';
 import { decorateRoom, decorateCorridor, decorateOutdoor } from './decor.js';
 
@@ -224,10 +225,21 @@ export class World {
     this._lightPoolTimer = 0;
     this.viewCamera = null;
     this.time = 0;
-    this.exit = { unlocked: false, barricaded: true, open: false, y: 0, collider: null, mesh: null, planks: [] };
+    this.exit = { unlocked: false, barricaded: true, open: false, powered: false, overridden: false, y: 0, collider: null, mesh: null, planks: [] };
     this.powerOn = false;
     this.bodiesVisible = false;
     this._paths = new Map();
+    // The cafeteria is double-height. A mezzanine deck runs along its
+    // north wall, reached by a real stair flight. The deck holds the
+    // auxiliary breaker that powers the east gate.
+    this.mezzanine = {
+      x1: -33.7, x2: -16.3, z1: 3.35, z2: 7.7, y: 3.55,
+      stair: { x1: -33.7, x2: -30.5, z1: 7.7, z2: 11.4 }
+    };
+    this.upperConsole = null;
+    this.gateConsole = null;
+    this.consoles = [];
+    this.crouchZones = [];
     this.build();
   }
 
@@ -277,7 +289,11 @@ export class World {
   }
 
   addCollider(x1, z1, x2, z2, opts = {}) {
-    const c = { x1: Math.min(x1, x2), x2: Math.max(x1, x2), z1: Math.min(z1, z2), z2: Math.max(z1, z2), sight: opts.sight !== false, enabled: opts.enabled !== false, type: opts.type || 'furniture' };
+    const c = {
+      x1: Math.min(x1, x2), x2: Math.max(x1, x2), z1: Math.min(z1, z2), z2: Math.max(z1, z2),
+      sight: opts.sight !== false, enabled: opts.enabled !== false,
+      type: opts.type || 'furniture', floor: opts.floor, crouchOnly: !!opts.crouchOnly
+    };
     this.colliders.push(c);
     return c;
   }
@@ -366,6 +382,9 @@ export class World {
   build() {
     this.buildFloors();
     this.buildWalls();
+    this.buildSecondFloor();
+    this.buildStackedTable();
+    this.buildConsoles();
     this.buildDoors();
     decorateCorridor(this);
     for (const room of ROOMS) {
@@ -400,7 +419,9 @@ export class World {
     this.addFloorRect(-10, -24, -7, -3, new THREE.MeshStandardMaterial({ map: cent, roughness: 0.8 }));
     for (const r of ROOMS) {
       this.addFloorRect(r.x1, r.z1, r.x2, r.z2, this.floorMaterial(r));
-      this.addCeilingRect(r.x1, r.z1, r.x2, r.z2);
+      // The cafeteria is double-height now: its old low ceiling is
+      // replaced by an upper roof in buildSecondFloor().
+      if (r.id !== 'cafeteria') this.addCeilingRect(r.x1, r.z1, r.x2, r.z2);
     }
     this.addCeilingRect(-52, -3, 52, 3);
     this.addCeilingRect(-52, -30, 52, -24);
@@ -464,6 +485,226 @@ export class World {
     this.wallZ(-30, 3, 58, 3, [[EXIT_Z1, EXIT_Z2]]);
     // windows on outer walls (visual)
     this.addWindows();
+  }
+
+  // ── second floor: cafeteria mezzanine + stair ────────────────
+  buildSecondFloor() {
+    const m = this.mezzanine, s = m.stair;
+    const deckMat = new THREE.MeshStandardMaterial({ color: 0x4b5149, roughness: 0.82, metalness: 0.08 });
+    const deckTop = new THREE.MeshStandardMaterial({ color: 0x6d7469, roughness: 0.75 });
+    const railMat = new THREE.MeshStandardMaterial({ color: 0x2a3132, roughness: 0.45, metalness: 0.62 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x9fc4d0, transparent: true, opacity: 0.25, roughness: 0.12, metalness: 0.18, side: THREE.DoubleSide });
+    const wallMat = this.wallMaterial(1, 18);
+    const stepMat = new THREE.MeshStandardMaterial({ color: 0x555b53, roughness: 0.85 });
+
+    // upper wall band around the double-height cafeteria
+    const yb = WALL_H, yt = 7.0;
+    this.scene.add(box(m.x2 - m.x1 + 0.5, yt - yb, T_WALL, wallMat, (m.x1 + m.x2) / 2, (yb + yt) / 2, 3.02));
+    this.scene.add(box(m.x2 - m.x1 + 0.5, yt - yb, T_WALL, wallMat, (m.x1 + m.x2) / 2, (yb + yt) / 2, 17.98));
+    this.scene.add(box(T_WALL, yt - yb, 15.1, wallMat, -34.02, (yb + yt) / 2, 10.5));
+    this.scene.add(box(T_WALL, yt - yb, 15.1, wallMat, -15.98, (yb + yt) / 2, 10.5));
+    this.addCeilingRect(-34, 3, -16, 18, 7.0);
+    // skylight over the deck
+    this.scene.add(box(10.5, 0.06, 2.8, new THREE.MeshBasicMaterial({ color: 0x9fc6dc, transparent: true, opacity: 0.28 }), -24.6, 6.96, 5.3));
+    for (const x of [-29.8, -19.4]) this.scene.add(box(0.1, 0.1, 2.9, railMat, x, 6.93, 5.3));
+    for (const z of [3.95, 6.65]) this.scene.add(box(10.5, 0.1, 0.1, railMat, -24.6, 6.93, z));
+
+    // deck slab, with a real 0.22 m edge so it reads from below
+    this.scene.add(box(m.x2 - m.x1, 0.22, m.z2 - m.z1, deckMat, (m.x1 + m.x2) / 2, m.y - 0.11, (m.z1 + m.z2) / 2));
+    this.scene.add(box(m.x2 - m.x1 - 0.05, 0.045, m.z2 - m.z1 - 0.05, deckTop, (m.x1 + m.x2) / 2, m.y - 0.006, (m.z1 + m.z2) / 2));
+    // deck support columns
+    for (const x of [-30.4, -25.6, -20.8, -16.7]) {
+      const col = cyl(0.13, 0.16, m.y - 0.2, railMat, x, (m.y - 0.2) / 2, m.z2 - 0.25);
+      this.scene.add(col);
+      this.addCollider(x - 0.18, m.z2 - 0.43, x + 0.18, m.z2 - 0.07, { type: 'post' });
+    }
+
+    // stair flight: 12 stacked steps from the cafeteria floor to the deck
+    const steps = 12;
+    const rise = m.y / steps, run = (s.z2 - s.z1) / steps;
+    for (let i = 0; i < steps; i++) {
+      const h = rise * (i + 1);
+      this.scene.add(box(s.x2 - s.x1, h, run + 0.03, stepMat, (s.x1 + s.x2) / 2, h / 2, s.z2 - run * (i + 0.5)));
+    }
+    // stair side walls / stringers
+    for (const x of [s.x1 - 0.05, s.x2 + 0.05]) {
+      this.scene.add(box(0.18, 0.55, s.z2 - s.z1 + 0.2, railMat, x, 1.0, (s.z1 + s.z2) / 2));
+    }
+    // railings — deck edge and stair sides
+    const rail = (x1, z1, x2, z2, y = m.y) => {
+      const len = Math.hypot(x2 - x1, z2 - z1);
+      const ang = Math.atan2(z2 - z1, x2 - x1);
+      const g = new THREE.Group();
+      g.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
+      g.rotation.y = -ang;
+      g.add(box(len, 0.06, 0.06, railMat, 0, 1.02, 0));
+      g.add(box(len, 0.04, 0.04, railMat, 0, 0.54, 0));
+      for (let i = 0; i <= Math.floor(len / 1.25); i++) {
+        g.add(box(0.05, 1.05, 0.05, railMat, -len / 2 + i * 1.25, 0.52, 0));
+      }
+      this.scene.add(g);
+    };
+    rail(-30.5, m.z2 - 0.04, -16.35, m.z2 - 0.04);
+    rail(s.x1 + 0.01, s.z1 + 0.1, s.x1 + 0.01, s.z2);
+    rail(s.x2 - 0.01, s.z1 + 0.1, s.x2 - 0.01, s.z2);
+    // colliders (upper floor only) so you cannot walk off the mezzanine
+    this.addCollider(-30.55, m.z2 - 0.12, -16.3, m.z2 + 0.04, { type: 'rail', floor: 1 });
+    this.addCollider(s.x1 - 0.16, s.z1, s.x1 + 0.02, s.z2, { type: 'rail', floor: 1 });
+    this.addCollider(s.x2 - 0.02, s.z1, s.x2 + 0.16, s.z2, { type: 'rail', floor: 1 });
+
+    // upper security office: glass front with an opening, desk, monitors
+    this.scene.add(box(9.2, 2.9, 0.12, glassMat, -20.9, m.y + 1.45, 6.02));
+    this.scene.add(box(0.1, 2.9, 0.1, railMat, -25.5, m.y + 1.45, 6.02));
+    this.scene.add(box(0.1, 2.9, 0.1, railMat, -16.3, m.y + 1.45, 6.02));
+    this.scene.add(box(9.2, 0.1, 0.1, railMat, -20.9, m.y + 2.9, 6.02));
+    // leave a door gap around x=-19.5..-18.2
+    this.addCollider(-25.5, 5.96, -19.5, 6.08, { type: 'wall', floor: 1 });
+    this.addCollider(-18.2, 5.96, -16.3, 6.08, { type: 'wall', floor: 1 });
+    this.scene.add(box(2.2, 2.9, 0.12, glassMat, -27.8, m.y + 1.45, 3.45));
+    this.scene.add(box(2.2, 2.9, 0.12, glassMat, -22.1, m.y + 1.45, 3.45));
+    const desk = makeComputerDesk();
+    desk.position.set(-20.4, m.y, 4.55);
+    desk.rotation.y = 0;
+    this.scene.add(desk);
+    this.addCollider(-21.8, 4.05, -18.9, 5.0, { type: 'prop', floor: 1 });
+    const chair = makeChair();
+    chair.position.set(-20.1, m.y, 5.35);
+    chair.rotation.y = Math.PI;
+    this.scene.add(chair);
+    this.addCollider(-20.6, 5.05, -19.6, 5.65, { type: 'prop', floor: 1 });
+    const shelf = makeBookshelf();
+    shelf.position.set(-16.9, m.y, 4.5);
+    shelf.rotation.y = -Math.PI / 2;
+    this.scene.add(shelf);
+    this.addCollider(-17.4, 3.3, -16.4, 5.7, { type: 'prop', floor: 1 });
+    const plant = makePlant();
+    plant.position.set(-31.7, m.y, 6.9);
+    this.scene.add(plant);
+    const ext = makeFireExtinguisher();
+    ext.position.set(-17.0, m.y, 7.1);
+    this.scene.add(ext);
+
+    // upper fixture + warm practical light
+    this.ceilingLight(-20.5, 5.2, 1.0);
+    const uplight = this.addPointSource(0xffe2b0, 2.6, 12, -25.5, 6.1, 5.2);
+    this.uplight = uplight;
+    // sign over the staircase
+    const sign = makeLabelPlane('SECOND FLOOR  ·  SECURITY & BREAKER', { color: '#dfe8d8', bg: 'rgba(10,18,13,.92)', size: 1100, h: 88, font: 'bold 28px Courier New' });
+    sign.scale.set(4.6, 0.45, 1);
+    sign.position.set(-31.9, 2.62, 7.55);
+    sign.rotation.y = Math.PI;
+    this.scene.add(sign);
+    // caution strip at the stair foot
+    const stripe = box(3.0, 0.04, 0.18, new THREE.MeshBasicMaterial({ color: 0xd9b53e }), -32.1, 0.025, 11.45);
+    this.scene.add(stripe);
+    this.scene.add(box(3.0, 0.04, 0.18, new THREE.MeshBasicMaterial({ color: 0x24241d }), -32.1, 0.03, 11.62));
+  }
+
+  // ── stacked lunch tables: crawl to pass, killers are slower ──
+  buildStackedTable() {
+    const wood = new THREE.MeshStandardMaterial({ color: 0x7a5a34, roughness: 0.86 });
+    const metal = new THREE.MeshStandardMaterial({ color: 0x4f5654, roughness: 0.45, metalness: 0.55 });
+    const g = new THREE.Group();
+    // two side stacks hold a tabletop bridge at chest height; the gap
+    // underneath is the only way through.
+    for (const x of [-9.55, -7.45]) {
+      for (let i = 0; i < 3; i++) {
+        const t = makeTable(0.9, 1.05);
+        t.position.set(x, 0.38 + i * 0.34, -14.0);
+        t.rotation.y = Math.PI / 2;
+        g.add(t);
+      }
+    }
+    g.add(box(2.7, 0.16, 1.18, wood, -8.5, 1.24, -14.0));
+    g.add(box(2.75, 0.08, 1.24, metal, -8.5, 1.15, -14.0));
+    // legs on the sides
+    for (const x of [-9.7, -7.3]) {
+      for (const z of [-14.52, -13.48]) g.add(box(0.1, 1.16, 0.1, metal, x, 0.58, z));
+    }
+    // a couple of hanging chairs for comedy
+    const c1 = makeChair(); c1.position.set(-8.5, 1.46, -14.05); c1.rotation.z = Math.PI / 2; g.add(c1);
+    const label = makeLabelPlane('CAFETERIA OVERFLOW  ·  CRAWL', { color: '#ffe3a8', bg: 'rgba(38,22,6,.94)', size: 1024, h: 88, font: 'bold 30px Courier New' });
+    label.scale.set(2.8, 0.34, 1); label.position.set(-8.5, 1.78, -13.35); g.add(label);
+    const arrow = makeLabelPlane('▼  CROUCH  ▼', { color: '#ffd166', bg: 'rgba(10,6,2,.9)', size: 512, h: 90, font: 'bold 40px Courier New' });
+    arrow.scale.set(1.8, 0.3, 1); arrow.position.set(-8.5, 1.5, -13.34); g.add(arrow);
+    this.scene.add(g);
+    const c = this.addCollider(-10.0, -14.72, -7.0, -13.28, { type: 'crouchgap', crouchOnly: true });
+    this.crouchCollider = c;
+    this.crouchZones.push({ x1: -10.4, x2: -6.6, z1: -15.2, z2: -12.8 });
+    // side supports are solid at any height
+    this.addCollider(-10.0, -14.62, -9.25, -13.38, { type: 'prop' });
+    this.addCollider(-7.75, -14.62, -7.0, -13.38, { type: 'prop' });
+  }
+
+  // ── interaction consoles for the two new exit steps ──────────
+  buildConsoles() {
+    // Auxiliary breaker on the mezzanine.
+    const bg = new THREE.Group();
+    bg.add(box(0.9, 1.35, 0.34, new THREE.MeshStandardMaterial({ color: 0x323a38, roughness: 0.6, metalness: 0.4 }), 0, 0.7, 0));
+    bg.add(box(0.72, 0.62, 0.04, new THREE.MeshStandardMaterial({ color: 0x111713, emissive: 0x3a8a55, emissiveIntensity: 0.5, roughness: 0.35 }), 0, 0.95, 0.19));
+    for (let i = 0; i < 3; i++) bg.add(box(0.12, 0.26, 0.05, new THREE.MeshStandardMaterial({ color: 0xd8b24a, roughness: 0.4, metalness: 0.5 }), -0.22 + i * 0.22, 0.52, 0.2));
+    const bLabel = makeLabelPlane('AUXILIARY BREAKER', { color: '#bfffd0', bg: 'rgba(6,22,12,.92)', size: 512, h: 80, font: 'bold 30px Courier New' });
+    bLabel.scale.set(1.25, 0.22, 1); bLabel.position.set(0, 1.52, 0.02); bg.add(bLabel);
+    bg.position.set(-32.45, 3.55, 4.55);
+    bg.rotation.y = Math.PI / 2;
+    this.scene.add(bg);
+    this.addCollider(-32.8, 4.0, -32.05, 5.15, { type: 'console', floor: 1 });
+    const bGlow = new THREE.PointLight(0x66ffa0, 0.9, 4, 2);
+    bGlow.position.set(-32.1, 4.5, 4.55);
+    this.scene.add(bGlow);
+    this.upperConsole = { id: 'power', label: 'RESTORE POWER', x: -31.95, z: 4.55, y: 3.55, range: 2.5, used: false, mesh: bg, light: bGlow };
+    this.consoles.push(this.upperConsole);
+
+    // Gate override panel inside the east vestibule.
+    const gg = new THREE.Group();
+    gg.add(box(0.2, 1.0, 0.9, new THREE.MeshStandardMaterial({ color: 0x303636, roughness: 0.5, metalness: 0.5 }), 0, 1.2, 0));
+    const screen = box(0.05, 0.5, 0.64, new THREE.MeshStandardMaterial({ color: 0x110b0b, emissive: 0xff3344, emissiveIntensity: 0.4, roughness: 0.3 }), 0.12, 1.3, 0);
+    gg.add(screen);
+    for (let i = 0; i < 4; i++) gg.add(box(0.06, 0.07, 0.08, new THREE.MeshStandardMaterial({ color: 0xd8c45a, metalness: 0.4, roughness: 0.4 }), 0.16, 1.48 - i * 0.12, -0.22));
+    const gLabel = makeLabelPlane('GATE OVERRIDE', { color: '#ffc4ca', bg: 'rgba(30,4,8,.94)', size: 512, h: 80, font: 'bold 30px Courier New' });
+    gLabel.scale.set(1.1, 0.2, 1); gLabel.position.set(0.08, 1.85, 0);
+    gLabel.rotation.y = -Math.PI / 2;
+    gg.add(gLabel);
+    gg.position.set(56.55, 0, 1.55);
+    this.scene.add(gg);
+    this.addCollider(56.4, 1.05, 56.75, 2.05, { type: 'console' });
+    this.gateConsole = { id: 'gate', label: 'GATE OVERRIDE', x: 56.15, z: 1.55, y: 0, range: 2.6, used: false, mesh: gg, screen };
+    this.consoles.push(this.gateConsole);
+  }
+
+  floorY(x, z) {
+    const m = this.mezzanine;
+    if (!m) return 0;
+    const s = m.stair;
+    if (x >= s.x1 && x <= s.x2 && z >= s.z1 && z <= s.z2) {
+      return clamp((s.z2 - z) / (s.z2 - s.z1), 0, 1) * m.y;
+    }
+    if (x >= m.x1 && x <= m.x2 && z >= m.z1 && z <= m.z2) return m.y;
+    return 0;
+  }
+
+  // Floor height depends on your current height: walking under the deck
+  // must not teleport you onto it, but stepping off the stairs must.
+  groundHeight(x, z, currentY = 0) {
+    const m = this.mezzanine;
+    if (!m) return 0;
+    const s = m.stair;
+    if (x >= s.x1 && x <= s.x2 && z >= s.z1 && z <= s.z2) {
+      return clamp((s.z2 - z) / (s.z2 - s.z1), 0, 1) * m.y;
+    }
+    if (x >= m.x1 && x <= m.x2 && z >= m.z1 && z <= m.z2) return currentY > 2.0 ? m.y : 0;
+    return 0;
+  }
+
+  levelAt(x, z, currentY = 0) {
+    return this.groundHeight(x, z, currentY) > 1.2 ? 1 : 0;
+  }
+
+  inCrouchZone(x, z) {
+    for (const c of this.crouchZones) {
+      if (x > c.x1 && x < c.x2 && z > c.z1 && z < c.z2) return c;
+    }
+    return null;
   }
 
   addWindows() {
@@ -1074,11 +1315,15 @@ export class World {
   }
 
   // ── collision & sight ────────────────────────────────────────
-  resolveCircle(pos, radius) {
+  resolveCircle(pos, radius, opts = {}) {
+    const crouch = !!opts.crouch;
+    const level = opts.level || 0;
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
       for (const c of this.colliders) {
         if (!c.enabled) continue;
+        if (c.floor !== undefined && c.floor !== level) continue;
+        if (c.crouchOnly && crouch) continue;
         const cx = clamp(pos.x, c.x1, c.x2);
         const cz = clamp(pos.z, c.z1, c.z2);
         let dx = pos.x - cx, dz = pos.z - cz;
@@ -1229,9 +1474,14 @@ export class World {
       label = makeLabel('CROWBAR', { color: '#ffb066', bg: 'rgba(18,8,2,.82)', size: 256, h: 64, font: 'bold 28px Courier New' });
       label.position.y = 0.6; label.scale.set(1.1, 0.28, 1); g.add(label);
     }
-    g.position.set(x, 1.05, z);
+    const floor = extra.floor || 0;
+    const baseY = floor ? (this.mezzanine?.y || 3.55) : 0;
+    g.position.set(x, baseY + 1.05, z);
     this.itemGroup.add(g);
-    const item = { kind, x, z, y: 1.05, mesh: g, base: mesh, label, data: extra, picked: false, id: this.items.length, phase: Math.random() * 6.28 };
+    const item = {
+      kind, x, z, y: baseY + 1.05, mesh: g, base: mesh, label, data: extra,
+      picked: false, id: this.items.length, phase: Math.random() * 6.28, floor
+    };
     this.items.push(item);
     if (kind === 'key') this.keyItems.push(item);
     if (kind === 'note') this.notes.push(item);
@@ -1287,9 +1537,38 @@ export class World {
     shuffle(batSpots).slice(0, 6).forEach(([x, z]) => this.addItem('battery', x, z));
     // medkits
     [[-43, 5.6], [4.6, -21.8], [7.4, -42.2]].forEach(([x, z]) => this.addItem('medkit', x, z));
+    // second-floor supplies
+    this.addItem('note', -26.2, 4.3, { floor: 1 });
+    this.addItem('battery', -30.4, 4.9, { floor: 1 });
+    this.addItem('medkit', -18.2, 4.2, { floor: 1 });
   }
 
   // ── exit actions ─────────────────────────────────────────────
+  restorePower() {
+    if (this.exit.powered) return false;
+    this.exit.powered = true;
+    this.powerOn = true;
+    if (this.upperConsole) {
+      this.upperConsole.used = true;
+      if (this.upperConsole.light) this.upperConsole.light.color.set(0x8dffb2);
+    }
+    if (this.gateConsole?.screen) this.gateConsole.screen.material.color.set(0x8dffb2);
+    if (this.audio) this.audio.unlock();
+    return true;
+  }
+
+  overrideExit() {
+    if (!this.exit.powered || this.exit.overridden) return false;
+    this.exit.overridden = true;
+    if (this.gateConsole) {
+      this.gateConsole.used = true;
+      if (this.gateConsole.screen) this.gateConsole.screen.material.color.set(0x8dffb2);
+    }
+    if (this.exit.plate) this.exit.plate.material.color.set('#8dffb2');
+    if (this.audio) this.audio.unlock();
+    return true;
+  }
+
   unlockExit() {
     if (this.exit.unlocked) return false;
     this.exit.unlocked = true;
@@ -1299,7 +1578,7 @@ export class World {
   }
 
   pryExit() {
-    if (!this.exit.unlocked || !this.exit.barricaded) return false;
+    if (!this.exit.unlocked || !this.exit.overridden || !this.exit.barricaded) return false;
     this.exit.barricaded = false;
     for (const p of this.exit.planks) {
       p.userData.remove = true;
@@ -1374,14 +1653,25 @@ export class World {
     return best;
   }
 
-  nearestItem(x, z, ignorePicked = true) {
+  nearestItem(x, z, ignorePicked = true, level = 0) {
     let best = null, bd = 2.2;
     for (const it of this.items) {
       if (it.picked && ignorePicked) continue;
+      if ((it.floor || 0) !== level) continue;
       const d = Math.hypot(it.x - x, it.z - z);
       if (d < bd) { bd = d; best = it; }
     }
     return best;
+  }
+
+  nearestConsole(x, z, level = 0) {
+    let best = null, bd = 1e9;
+    for (const c of this.consoles) {
+      if ((c.y > 1 ? 1 : 0) !== level || c.used) continue;
+      const d = Math.hypot(c.x - x, c.z - z);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best && bd <= (best.range || 2.5) ? best : null;
   }
 
   nearestDoor(x, z, maxDist = 2.4) {

@@ -24,7 +24,9 @@ export const UI = {
       'report-card', 'card-name', 'card-rows', 'card-foot', 'card-stamp', 'note-popup', 'note-title',
       'note-body', 'letterbox', 'fade', 'chapter-card', 'down-fx', 'down-secs', 'jumpscare-fx',
       'cine-ui', 'cine-subtitle-wrap', 'cine-speaker', 'cine-subtitle', 'cine-card', 'cine-grade',
-      'cine-flash', 'cine-flare', 'cine-speedlines', 'cine-skip', 'touch-ui', 'btn-play'
+      'cine-flash', 'cine-flare', 'cine-speedlines', 'cine-skip', 'touch-ui', 'btn-play',
+      'btn-versus', 'skillcheck', 'sc-kicker', 'sc-title', 'sc-zone', 'sc-needle', 'sc-lock',
+      'sc-timer-fill', 'duel-ui', 'duel-kicker', 'duel-title', 'duel-sub'
     ]) this.el[id] = $(id);
     this.el.chapterKicker = document.querySelector('#chapter-card .chapter-kicker');
     this.el.chapterTitle = document.querySelector('#chapter-card .chapter-title');
@@ -108,6 +110,48 @@ export const UI = {
     if (stamina !== undefined) this.el['stamina-fill'].style.width = `${Math.max(0, Math.min(100, stamina))}%`;
     if (battery !== undefined) this.el['battery-fill'].style.width = `${Math.max(0, Math.min(100, battery))}%`;
   },
+  showSkillCheck(on, opts = {}) {
+    const el = this.el.skillcheck;
+    if (!el) return;
+    if (!on) { el.classList.add('hidden'); el.classList.remove('success', 'fail'); this._syncTouch(); return; }
+    el.classList.remove('hidden', 'success', 'fail');
+    if (opts.kicker) this.el['sc-kicker'].textContent = opts.kicker;
+    if (opts.title) this.el['sc-title'].textContent = opts.title;
+    if (opts.zone !== undefined) {
+      const w = opts.width ?? 0.22;
+      this.el['sc-zone'].style.left = `${Math.max(0, Math.min(1, opts.zone - w / 2)) * 100}%`;
+      this.el['sc-zone'].style.width = `${w * 100}%`;
+    }
+    this.el['sc-lock'].style.opacity = '0';
+    this._syncTouch();
+  },
+  updateSkillCheck(needle, t, lock = null) {
+    if (!this.el.skillcheck || this.el.skillcheck.classList.contains('hidden')) return;
+    this.el['sc-needle'].style.left = `${Math.max(0, Math.min(1, needle)) * 100}%`;
+    if (lock !== null) {
+      this.el['sc-lock'].style.left = `${Math.max(0, Math.min(1, lock)) * 100}%`;
+      this.el['sc-lock'].style.opacity = '1';
+    }
+    this.el['sc-timer-fill'].style.width = `${Math.max(0, Math.min(1, t)) * 100}%`;
+  },
+  skillResult(ok) {
+    if (!this.el.skillcheck) return;
+    this.el.skillcheck.classList.toggle('success', !!ok);
+    this.el.skillcheck.classList.toggle('fail', !ok);
+  },
+  duel(on, kicker = '', title = '', sub = '', tone = '') {
+    const el = this.el['duel-ui'];
+    if (!el) return;
+    el.classList.toggle('hidden', !on);
+    this.el.app.classList.toggle('duel', !!on);
+    if (!on) return;
+    this.el['duel-kicker'].textContent = kicker;
+    const t = this.el['duel-title'];
+    t.textContent = title;
+    t.classList.remove('counter', 'domain');
+    if (tone) t.classList.add(tone);
+    this.el['duel-sub'].textContent = sub;
+  },
   setTorch(on, battery) {
     this.el['torch-state'].textContent = on ? `TORCH ON [F] · ${Math.round(battery)}%` : `TORCH OFF [F] · ${Math.round(battery)}%`;
     this.el['torch-state'].classList.toggle('on', on);
@@ -190,12 +234,14 @@ export const UI = {
       g.fillStyle = b.downed ? '#ff3448' : b.controlled ? '#8dffb2' : '#6fa8ff';
       g.beginPath(); g.arc(X(b.pos.x), Z(b.pos.z), b.controlled ? 3 : 2.2, 0, 7); g.fill();
     }
-    // killer
-    if (game.killer && game.killer.active) {
-      g.fillStyle = '#ff2637';
-      g.beginPath(); g.arc(X(game.killer.pos.x), Z(game.killer.pos.z), 3.1, 0, 7); g.fill();
-      g.strokeStyle = 'rgba(255,38,55,.5)';
-      g.beginPath(); g.arc(X(game.killer.pos.x), Z(game.killer.pos.z), 6 + Math.sin(game.time * 5) * 2, 0, 7); g.stroke();
+    // killer(s)
+    const killers = game.killers || (game.killer ? [game.killer] : []);
+    for (const k of killers) {
+      if (!k || !k.active) continue;
+      g.fillStyle = k.state === 'domain' ? '#ff8a5c' : '#ff2637';
+      g.beginPath(); g.arc(X(k.pos.x), Z(k.pos.z), 3.1, 0, 7); g.fill();
+      g.strokeStyle = k.state === 'domain' ? 'rgba(255,140,80,.8)' : 'rgba(255,38,55,.5)';
+      g.beginPath(); g.arc(X(k.pos.x), Z(k.pos.z), 6 + Math.sin(game.time * 5) * 2, 0, 7); g.stroke();
     }
     // player
     if (!game.player.escaped) {
