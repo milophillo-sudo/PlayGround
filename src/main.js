@@ -1310,6 +1310,10 @@ async function startGame() {
     scene.setBoss('off', selectedTrack.theme || 'untouchable');
     setBossIntro(false);
   }
+  // setBoss('off') resets the stage palette to 'normal', so re-apply the
+  // selected theme after it. Without this, Sleeve loses its scarlet lane
+  // palette (and its shard hit effects) for the entire run.
+  scene.setTheme?.(selectedTrack.theme || 'untouchable');
   setIntentPresentation(selectedTrack.theme === 'intention', !isChaos());
   resetGame();
   if (isChaos()) {
