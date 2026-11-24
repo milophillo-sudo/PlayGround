@@ -223,6 +223,11 @@ class Game {
         if (this.noteOpen) this.closeNote();
         else if (this.state === 'play' || this.state === 'down') this.togglePause();
       }
+      if (k === ' ' && this.skill && !this.skill.resolved) {
+        e.preventDefault();
+        this.pressInteract();
+        return;
+      }
       if (k === ' ' && this.state === 'cutscene') {
         e.preventDefault();
         this.cinematic.skip();
@@ -302,7 +307,7 @@ class Game {
       stickId = e.pointerId;
       const r = zone.getBoundingClientRect();
       cx = r.left + r.width / 2; cy = r.top + r.height / 2;
-      zone.setPointerCapture(e.pointerId);
+      try { zone.setPointerCapture?.(e.pointerId); } catch {}
       setStick(e);
     });
     zone.addEventListener('pointermove', (e) => { if (e.pointerId === stickId) setStick(e); });
@@ -316,6 +321,13 @@ class Game {
 
     const look = { id: null, x: 0, y: 0 };
     this.canvas.addEventListener('pointerdown', (e) => {
+      // Timed crowbar blocks resolve on a screen tap: the skill-check layer is
+      // intentionally click-through, so the touch lands on the canvas.
+      if (this.skill && !this.skill.resolved) {
+        e.preventDefault?.();
+        this.pressInteract();
+        return;
+      }
       if (this.state !== 'play' || this.noteOpen) return;
       look.id = e.pointerId; look.x = e.clientX; look.y = e.clientY;
     });
@@ -328,10 +340,6 @@ class Game {
     });
     this.canvas.addEventListener('pointerup', (e) => { if (look.id === e.pointerId) look.id = null; });
     document.getElementById('tb-interact').addEventListener('pointerdown', (e) => { e.preventDefault(); this.pressInteract(); });
-    const tsw = document.getElementById('tb-switch');
-    if (tsw) tsw.addEventListener('pointerdown', (e) => { e.preventDefault(); this.cycleSurvivor(); });
-    const tq = document.getElementById('tb-kick');
-    if (tq) tq.addEventListener('pointerdown', (e) => { e.preventDefault(); this.tryKickStagger(); });
     const bindHold = (id, on, off) => {
       const el = document.getElementById(id);
       el.addEventListener('pointerdown', (e) => { e.preventDefault(); on(); });
@@ -737,7 +745,7 @@ class Game {
         'Tip: Okafor patrols the whole corridor. Wait until he walks past, crouch behind the lockers, then move.',
         {
           kicker: 'PRINCIPAL OKAFOR — ELECTRIC PIZZA PROTOCOL',
-          title: 'DETECTED',
+          title: 'DETECTED.',
           button: 'TRY AGAIN'
         }
       );
@@ -1614,7 +1622,7 @@ Object.assign(Game.prototype, {
   },
 
   nearExit(e) {
-    return Math.hypot(e.pos.x - 58, e.pos.z) < 3.4;
+    return Math.hypot(e.pos.x - 58, e.pos.z) < 2.2;
   },
 
   handleExit(e) {
