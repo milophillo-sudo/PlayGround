@@ -43,6 +43,20 @@ const BOT_DEFS = [
       low: ['I\'m bleeding. That\'s inconvenient.', 'Low HP. Not ideal. Extremely not ideal.', 'I need a bandage and a lawyer.'],
       dead: ['...I hate group projects.', 'The exit was literally right there.']
     }
+  },
+  {
+    id: 'theo', name: 'THEO', role: 'scout',
+    shirt: 0x4a5d7a, pants: 0x2a2e36, hair: 0x1b1510, hairStyle: 'short',
+    backpack: 0x5b4a2e, skin: 0x6f4a33, voice: 0.9,
+    barks: {
+      found: ['Yoink. That\'s mine now. I mean ours.', 'Found something. It is not a hall pass.', 'Loot. Loot. Loot.'],
+      door: ['Open sesame. That\'s the whole trick.', 'Unlocked it. Please clap.', 'Door\'s open. I accept gifts.'],
+      killer: ['BIG MAN WITH AXE. MOVE.', 'He\'s right there. Why is he right there!', 'Nope nope nope nope!'],
+      calm: ['I think we\'re good. I think.', 'My heart is doing a drum solo.', 'Alive. Somehow. Great.'],
+      rescue: ['Get up. You can be sad later.', 'I got you. Don\'t make it weird.', 'On your feet. The axe guy is not patient.'],
+      low: ['I\'m not doing great here.', 'Low health. Extremely low health.', 'Tell my dog I love him.'],
+      dead: ['...worth a try.', 'I should have stayed in class.']
+    }
   }
 ];
 
@@ -61,6 +75,8 @@ export class Bot {
     this.yaw = yaw;
     this.hp = 100;
     this.stamina = 100;
+    this.maxStamina = 100;
+    this.crouch = false;
     this.state = 'follow';
     this.downed = false;
     this.downTimer = 0;
@@ -174,6 +190,17 @@ export class Bot {
     this.speed = 0;
   }
 
+  nearCrouchRoute() {
+    const w = this.game.world;
+    if (!w.crouchZones || !w.crouchZones.length) return false;
+    for (const z of w.crouchZones) {
+      const dx = Math.max(z.x1 - this.pos.x, 0, this.pos.x - z.x2);
+      const dz = Math.max(z.z1 - this.pos.z, 0, this.pos.z - z.z2);
+      if (Math.hypot(dx, dz) < 2.0) return true;
+    }
+    return false;
+  }
+
   moveToward(x, z, dt, run) {
     const dx = x - this.pos.x, dz = z - this.pos.z;
     const dist = Math.hypot(dx, dz);
@@ -183,21 +210,26 @@ export class Bot {
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
     this.yaw += Math.max(-1, Math.min(1, diff)) * dt * 7;
+    const w = this.game.world;
+    this.crouch = w.inCrouchZone(this.pos.x, this.pos.z) ? true : this.nearCrouchRoute();
     let maxSpeed = run ? 5.05 : 2.55;
+    if (this.crouch) maxSpeed = Math.min(maxSpeed, 1.22);
     if (this.downed || this.dead) maxSpeed = 0;
-    if (run && this.stamina <= 0.5) maxSpeed = 2.55;
+    if (run && !this.crouch && this.stamina <= 0.5) maxSpeed = 2.55;
     const step = Math.min(dist, maxSpeed * dt);
     this.pos.x += Math.sin(this.yaw) * step;
     this.pos.z += Math.cos(this.yaw) * step;
-    this.game.world.resolveCircle(this.pos, 0.31);
+    const level = w.levelAt(this.pos.x, this.pos.z, this.pos.y || 0);
+    w.resolveCircle(this.pos, 0.31, { crouch: this.crouch, level });
+    this.pos.y = w.groundHeight(this.pos.x, this.pos.z, this.pos.y || 0);
     this.speed = maxSpeed;
-    if (run && maxSpeed > 3) this.stamina = Math.max(0, this.stamina - dt * 21);
-    else this.stamina = Math.min(100, this.stamina + dt * (this.speed > 0.2 ? 9 : 15));
+    if (run && !this.crouch && maxSpeed > 3) this.stamina = Math.max(0, this.stamina - dt * 21);
+    else this.stamina = Math.min(this.maxStamina || 100, this.stamina + dt * (this.speed > 0.2 ? 9 : 15));
     this.stepPhase += dt * maxSpeed * 1.9;
     if (this.stepPhase > Math.PI) {
       this.stepPhase = 0;
-      if (this.game.audio && maxSpeed > 1) this.game.audio.footstep(run, false);
-      this.game.noise(this.pos.x, this.pos.z, run ? 12 : 5);
+      if (this.game.audio && maxSpeed > 1) this.game.audio.footstep(run && !this.crouch, false);
+      this.game.noise(this.pos.x, this.pos.z, this.crouch ? 3.5 : run ? 12 : 5);
     }
     return dist < 0.3;
   }
@@ -278,7 +310,9 @@ export class Bot {
     }
     if (this.downed) {
       if (this._nearCam) { this._nearCam = false; this.model.visible = true; }
-      this.downTimer -= dt;
+      if (!(this.game.state === 'down' && this.game.downEntity === this)) {
+        this.downTimer -= dt;
+      }
       if (this.downTimer <= 0) this.die();
       this.animate(dt);
       this.updateDanger();
@@ -287,13 +321,31 @@ export class Bot {
     }
     if (this.escaped) { this._nearCam = false; this.model.visible = false; this.danger.visible = false; return; }
 
-    const w = this.game.world;
-    const killer = this.game.killer;
-    const kd = killer && killer.active ? Math.hypot(killer.pos.x - this.pos.x, killer.pos.z - this.pos.z) : 999;
-    const playerDowned = this.game.player.downed || (this.game.controlledBot && this.game.controlledBot.downed);
-    const canSeeKiller = killer && killer.active && kd < 14 && !w.losBlocked(this.pos.x, this.pos.z, killer.pos.x, killer.pos.z);
+    // Once the barricade is down, companions run for the gate instead of
+    // waiting to be individually micro-managed. They still stop to pick up
+    // a downed classmate if one is nearby.
+    if (this.game.world.exit?.open) {
+      const rescue = this.findRescueTarget();
+      if (!rescue && this.state !== 'exit') {
+        this.state = 'exit';
+        this.path = [];
+        this.pathTimer = 0;
+      }
+    }
 
-    if (canSeeKiller && !this.killerSeen) {
+    const w = this.game.world;
+    const killers = (this.game.killers || [this.game.killer]).filter(k => k && k.active);
+    let killer = null, kd = 999;
+    for (const k of killers) {
+      const d = Math.hypot(k.pos.x - this.pos.x, k.pos.z - this.pos.z);
+      if (d < kd) { kd = d; killer = k; }
+    }
+    const playerDowned = this.game.player.downed || (this.game.controlledBot && this.game.controlledBot.downed);
+    const canSeeKiller = killer && kd < 14 && !w.losBlocked(this.pos.x, this.pos.z, killer.pos.x, killer.pos.z);
+    const caster = killers.find(k => k.domainCast > 0);
+    const domainClose = caster && Math.hypot(caster.pos.x - this.pos.x, caster.pos.z - this.pos.z) < 13;
+
+    if ((canSeeKiller || domainClose) && !this.killerSeen) {
       this.killerSeen = true;
       this.say('killer', true);
       this.game.broadcastPanic(this, 16);
@@ -302,6 +354,7 @@ export class Bot {
       this.pickFleeTarget();
     }
     if (!canSeeKiller && kd > 18) this.killerSeen = false;
+    this.dodgeDomain(dt);
 
     // rescue downed player/bot
     const rescueTarget = this.findRescueTarget();
@@ -442,6 +495,32 @@ export class Bot {
     this.animate(dt);
   }
 
+  dodgeDomain(dt) {
+    const killers = (this.game.killers || []).filter(k => k && (k.domainCast > 0 || k.domainReady > 0));
+    if (!killers.length) return;
+    for (const k of killers) {
+      if (k.domainCast > 0 && this.state !== 'flee' && this.state !== 'rescue') {
+        const dk = Math.hypot(k.pos.x - this.pos.x, k.pos.z - this.pos.z);
+        if (dk < 12) {
+          this.state = 'flee';
+          this.fleeTimer = Math.max(this.fleeTimer, 3.2);
+          this.pickFleeTarget();
+        }
+      }
+      for (const t of k.domainTiles) {
+        if (t.safe) continue;
+        let dx = this.pos.x - t.x, dz = this.pos.z - t.z;
+        let d = Math.hypot(dx, dz);
+        if (d > 1.15) continue;
+        if (d < 0.001) { dx = Math.sin(this.yaw); dz = Math.cos(this.yaw); d = 1; }
+        const push = (1.15 - d) * dt * 5;
+        this.pos.x += dx / d * push;
+        this.pos.z += dz / d * push;
+      }
+    }
+    this.game.world.resolveCircle(this.pos, 0.31, { crouch: this.crouch, level: this.game.world.levelAt(this.pos.x, this.pos.z, this.pos.y || 0) });
+  }
+
   // A companion standing on the player's face fills the screen with
   // elbows. Shove them gently out of a small bubble and hide the model
   // for the instant they are actually clipping the near plane.
@@ -498,6 +577,7 @@ export class Bot {
     const g = this.game;
     const p = g.avatar;
     if (p && p.downed && p !== this) return p;
+    if (g.controlledBot && g.player !== this && g.player.downed && !g.player.dead && !g.player.escaped) return g.player;
     let best = null, bd = 14;
     for (const b of g.bots) {
       if (b === this || !b.downed || b.dead) continue;
@@ -514,7 +594,8 @@ export class Bot {
 
   pickFleeTarget() {
     const w = this.game.world;
-    const killer = this.game.killer;
+    const killer = (this.game.killers || [this.game.killer]).filter(k => k && k.active)
+      .sort((a, b) => Math.hypot(a.pos.x - this.pos.x, a.pos.z - this.pos.z) - Math.hypot(b.pos.x - this.pos.x, b.pos.z - this.pos.z))[0];
     if (!killer) return;
     let best = null, bd = -1;
     for (let i = 0; i < 12; i++) {
@@ -627,18 +708,18 @@ export class Bot {
   animate(dt) {
     if (this.escaped) return;
     if (this.downed || this.dead) {
-      this.model.position.set(this.pos.x, 0.22, this.pos.z);
+      this.model.position.set(this.pos.x, (this.pos.y || 0) + 0.22, this.pos.z);
       this.model.rotation.y = this.yaw;
       return;
     }
-    this.model.position.set(this.pos.x, 0, this.pos.z);
+    this.model.position.set(this.pos.x, this.pos.y || 0, this.pos.z);
     this.model.rotation.y = this.yaw;
     let mode = 'idle';
     if (this.speed > 3.2) mode = 'run';
     else if (this.speed > 0.3) mode = 'walk';
     const panic = this.state === 'flee' ? 0.8 : 0;
     animatePerson(this.model, dt, {
-      mode, speed: this.speed, talk: this.talk, panic,
+      mode, speed: this.speed, talk: this.talk, panic, crouch: this.crouch ? 0.58 : 0,
       lookAt: this.game.getActivePos ? { x: this.game.getActivePos().x, z: this.game.getActivePos().z } : null
     });
     // Keep the name tags readable but never let them swallow the screen

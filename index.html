@@ -95,6 +95,8 @@
         <div><kbd>C / CTRL</kbd><span>Crouch (quiet)</span></div>
         <div><kbd>F</kbd><span>Flashlight (visible)</span></div>
         <div><kbd>E</kbd><span>Interact / rescue / hide</span></div>
+        <div><kbd>TAB</kbd><span>Switch survivor</span></div>
+        <div><kbd>Q</kbd><span>Kick / interrupt domain</span></div>
         <div><kbd>SPACE</kbd><span>Skip cutscene</span></div>
         <div><kbd>ESC</kbd><span>Pause</span></div>
         <div><kbd>M</kbd><span>Mute</span></div>
@@ -106,7 +108,7 @@
         <p><b>Find the crowbar</b> to pry the barricade. It is not where you hope it is.</p>
         <p><b>Two exit steps:</b> restore the auxiliary breaker on the cafeteria mezzanine, then hold E at the gate override panel.</p>
         <p><b>Block with the crowbar.</b> If your breath is high, an axe attack becomes a timing challenge. Nail the block, then nail the counter to kick the Hall Monitor down. He may drop laser pizza.</p>
-        <p><b>5 VS 2:</b> you wake up with four friends and two Hall Monitors. Crowbars are shared. The killers can stop to cast a red-tile domain. Leave the tiles before they detonate.</p>
+        <p><b>5 VS 2:</b> you wake up with four friends and two Hall Monitors. Crowbars are shared. The killers can stop to cast a red-tile domain. Leave the red tiles before they detonate; cyan tiles are safe. Press TAB to switch survivors and Q to kick a staggered killer or interrupt a domain.</p>
         <p><b>You get 40 seconds</b> when you go down. Bots will try to reach you. You can rescue them too.</p>
       </div>
       <button id="btn-controls-back" class="ghost-btn">BACK</button>
@@ -241,6 +243,8 @@
   <div id="touch-ui" class="hidden">
     <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
     <div id="touch-buttons">
+      <div class="tbtn" id="tb-kick">KICK Q</div>
+      <div class="tbtn" id="tb-switch">SWITCH</div>
       <button class="tbtn" id="tb-flash">TORCH</button>
       <button class="tbtn" id="tb-crouch">CROUCH</button>
       <button class="tbtn" id="tb-sprint">RUN</button>

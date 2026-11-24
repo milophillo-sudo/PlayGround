@@ -80,7 +80,8 @@ class Game {
     this.skill = null;
     this.blockScene = null;
     this.duelTimer = 0;
-    this.speedBoost = 0;
+    this.speedBoost = null;
+    this._pizza = null;
     this.consoleHold = 0;
     this.consoleTarget = null;
     this.gateHold = 0;
@@ -138,7 +139,7 @@ class Game {
 
     this.player = {
       isPlayer: true, name: 'YOU', pos: new THREE.Vector3(-8.0, 0, 4.9), yaw: Math.PI,
-      hp: 100, stamina: 150, battery: 100, crouch: false, sprint: false,
+      hp: 100, stamina: 150, maxStamina: 100, battery: 100, crouch: false, sprint: false,
       torchOn: false, downed: false, dead: false, escaped: false, hidden: false,
       hideSpot: null, downTimer: 0, keys: new Set(), crowbar: false, notes: 0,
       speed: 0, stepPhase: 0, noise: 0, attackTimer: 0, _jump: false
@@ -152,7 +153,7 @@ class Game {
     this.killers = [this.killer, this.killer2];
     this.bots = [];
     const spots = [[-12.8, 5.3, 0.8], [-3.4, 5.3, -0.6], [-12.8, 9.3, 0.3]];
-    BOT_DEFS.forEach((def, i) => {
+    BOT_DEFS.slice(0, 3).forEach((def, i) => {
       const [x, z, yaw] = spots[i % spots.length];
       const b = new Bot(this, def, x, z, yaw);
       this.bots.push(b);
@@ -208,13 +209,12 @@ class Game {
       if (k === 'shift') this.sprintHeld = true;
       if (k === 'control' || k === 'c') this.crouchHeld = true;
       if (k === 'f' && !e.repeat) this.toggleTorch();
-      if (k === 'e' && !e.repeat) {
-        if (this.skill) {
-          const ok = this.skill.needle >= this.skill.zone - 0.09 && this.skill.needle <= this.skill.zone + 0.09;
-          this.resolveCrowbarBlock(ok);
-        } else this.onInteractPress();
-      }
+      if (k === 'e' && !e.repeat) this.pressInteract();
       if (k === 'q' && !e.repeat) this.tryKickStagger();
+      if (k === 'tab' && !e.repeat) {
+        e.preventDefault?.();
+        this.cycleSurvivor();
+      }
       if (k === 'm' && !e.repeat) {
         const m = audio.toggleMute();
         UI.toast(m ? 'Audio muted' : 'Audio on');
@@ -227,7 +227,7 @@ class Game {
         e.preventDefault();
         this.cinematic.skip();
       }
-      if (['w', 'a', 's', 'd', ' ', 'shift', 'control', 'c', 'e', 'f'].includes(k)) e.preventDefault?.();
+      if (['w', 'a', 's', 'd', ' ', 'shift', 'control', 'c', 'e', 'f', 'q', 'tab'].includes(k)) e.preventDefault?.();
     };
     const up = (e) => {
       const k = e.key.toLowerCase();
@@ -327,7 +327,11 @@ class Game {
       this.pitch = clamp(this.pitch - dy * 0.004, -1.35, 1.35);
     });
     this.canvas.addEventListener('pointerup', (e) => { if (look.id === e.pointerId) look.id = null; });
-    document.getElementById('tb-interact').addEventListener('pointerdown', (e) => { e.preventDefault(); this.onInteractPress(); });
+    document.getElementById('tb-interact').addEventListener('pointerdown', (e) => { e.preventDefault(); this.pressInteract(); });
+    const tsw = document.getElementById('tb-switch');
+    if (tsw) tsw.addEventListener('pointerdown', (e) => { e.preventDefault(); this.cycleSurvivor(); });
+    const tq = document.getElementById('tb-kick');
+    if (tq) tq.addEventListener('pointerdown', (e) => { e.preventDefault(); this.tryKickStagger(); });
     const bindHold = (id, on, off) => {
       const el = document.getElementById(id);
       el.addEventListener('pointerdown', (e) => { e.preventDefault(); on(); });
@@ -350,25 +354,44 @@ class Game {
     UI.hideScreens();
     UI.showHud(true);
     this.setInputActive(true);
-    this.world.setLighting('night');
+    this.world.setLighting('lockdown');
     this.stats.started = performance.now();
 
     const spawnPoints = [
       [-8.0, 5.0], [-11.5, 5.0], [-4.5, 5.0], [-8.0, 8.5], [-12.5, 8.5]
     ];
+    // Story mode runs with its three friends. 5 VS 2 adds a fourth
+    // survivor so the board really is five against two.
+    while (this.bots.length < 4) {
+      const def = BOT_DEFS[this.bots.length] || BOT_DEFS[BOT_DEFS.length - 1];
+      const [x, z] = spawnPoints[this.bots.length + 1];
+      this.bots.push(new Bot(this, def, x, z, Math.PI));
+    }
+
     this.player.pos.set(spawnPoints[0][0], 0, spawnPoints[0][1]);
     this.player.yaw = Math.PI;
     this.camYaw = Math.PI;
     this.player.hp = 100;
     this.player.stamina = 150;
+    this.player.maxStamina = 150;
     this.player.battery = 100;
     this.player.crowbar = false;
     this.player.hidden = false;
     this.player.downed = false;
     this.player.dead = false;
     this.player.escaped = false;
+    this.player.crouch = false;
+    this.player._jump = false;
     this.controlledBot = null;
     this.avatar = this.player;
+    this.playerModel.visible = false;
+    this.skill = null;
+    this.duelTimer = 0;
+    this.speedBoost = null;
+    this._kickStagger = null;
+    this._pizza = null;
+    UI.showSkillCheck(false);
+    UI.duel(false);
 
     this.bots.forEach((bot, i) => {
       const [x, z] = spawnPoints[i + 1];
@@ -381,10 +404,17 @@ class Game {
       bot.controlled = false;
       bot.hp = 100;
       bot.stamina = 150;
+      bot.maxStamina = 150;
+      bot.crouch = false;
       bot.model.visible = true;
-      bot.pos.set(x, 0, z);
+      bot.model.rotation.z = 0;
       bot.model.position.set(x, 0, z);
+      bot.pos.set(x, 0, z);
       bot.state = 'follow';
+      bot.rescueTarget = null;
+      bot.danger.visible = false;
+      const spr = bot.model.userData.nameSprite;
+      if (spr) spr.visible = true;
     });
 
     this.killer.reset(34, 0);
@@ -395,8 +425,13 @@ class Game {
     this.world.exit.unlocked = false;
     this.world.exit.barricaded = true;
     this.world.exit.open = false;
+    this.world.exit.powered = false;
     this.world.exit.overridden = false;
-    UI.setObjective('Find Key 8 and the shared crowbar.', 'Two Hall Monitors are hunting. Switch survivors with Q.');
+    this.world.powerOn = false;
+    if (this.world.upperConsole) this.world.upperConsole.used = false;
+    if (this.world.gateConsole) this.world.gateConsole.used = false;
+    this.world.setLighting('lockdown');
+    UI.setObjective('Find Key 8 and the shared crowbar.', 'Two Hall Monitors are hunting. TAB switches survivors · Q kicks.');
     UI.chapter('5 VS 2', 'FOUR FRIENDS · TWO KILLERS', 2600);
     this.canvas.requestPointerLock?.();
   }
@@ -459,6 +494,7 @@ class Game {
     this.pitch = -0.02;
     this.player.hp = 100;
     this.player.stamina = 100;
+    this.player.maxStamina = 100;
     this.player.battery = 100;
     this.player.crowbar = false;
     this.player.torchOn = false;
@@ -466,6 +502,7 @@ class Game {
     this.player.hidden = false;
     this.avatar = this.player;
     this.controlledBot = null;
+    this.playerModel.visible = false;
     this.downEntity = null;
 
     // Stand Jake a few metres down the hall, visible through the doorway
@@ -486,6 +523,8 @@ class Game {
       b.model.position.y = 0;
       b.hp = 100;
       b.stamina = 100;
+      b.maxStamina = 100;
+      b.crouch = false;
       b.downed = false;
       b.dead = false;
       b.escaped = false;
@@ -614,6 +653,7 @@ class Game {
     this.pitch = -0.02;
     this.player.hp = 100;
     this.player.stamina = 100;
+    this.player.maxStamina = 100;
     this.player.battery = 100;
     this.player.crowbar = false;
     this.player.torchOn = true;
@@ -623,6 +663,7 @@ class Game {
     this.player.hidden = false;
     this.avatar = this.player;
     this.controlledBot = null;
+    this.playerModel.visible = false;
     this.downEntity = null;
 
     // The other three heard the alarm and hid outside the toilets. Flank
@@ -638,6 +679,8 @@ class Game {
       b.yaw = 0;
       b.hp = 100;
       b.stamina = 100;
+      b.maxStamina = 100;
+      b.crouch = false;
       b.downed = false;
       b.dead = false;
       b.escaped = false;
@@ -742,7 +785,7 @@ class Game {
 
   noise(x, z, radius = 6, silent = false) {
     if (!silent) this.noiseLevel = Math.min(100, radius * 6.5);
-    this.killer.hear(x, z, radius);
+    for (const k of this.killers) if (k.active) k.hear(x, z, radius);
   }
 
   broadcastPanic(source, radius = 16) {
@@ -771,6 +814,8 @@ class Game {
       b.danger.visible = v ? false : b.downed;
     }
     this.killer.model.visible = v ? false : this.killer.active;
+    if (this.killer2) this.killer2.model.visible = v ? false : this.killer2.active;
+    if (this.playerModel) this.playerModel.visible = false;
     if (this.principal) this.principal.model.visible = v ? false : this.principal.active;
     if (this.jake) this.jake.model.visible = v ? false : this.jake.active;
     if (this.classTeacher) this.classTeacher.visible = !v && this.phase === 'skip';
@@ -841,6 +886,7 @@ Object.assign(Game.prototype, {
   updateGame(dt) {
     if (this.noteOpen) return;
     this.updateActive(dt);
+    this.updatePlayerCompanion(dt);
     for (const b of this.bots) b.update(dt);
     if (this.phase === 'skip') {
       this.jake.update(dt);
@@ -881,6 +927,7 @@ Object.assign(Game.prototype, {
     // auto-open unlocked doors for anyone walking through
     this.world.autoOpenDoors(this.getControl().pos.x, this.getControl().pos.z, 1.7);
     for (const b of this.bots) if (!b.dead && !b.escaped && !b.dormant && !b.classroom) this.world.autoOpenDoors(b.pos.x, b.pos.z, 1.5);
+    if (this.controlledBot && !this.player.dead && !this.player.escaped) this.world.autoOpenDoors(this.player.pos.x, this.player.pos.z, 1.5);
     this.updateCamera(dt);
     this.updatePrompt(dt);
     this.updateEffects(dt);
@@ -892,7 +939,7 @@ Object.assign(Game.prototype, {
       this.pendingSwitch -= dt;
       if (this.pendingSwitch <= 0) {
         const next = this.chooseNextBot();
-        if (next) this.switchToBot(next, this._switchReason || 'SURVIVOR');
+        if (next) this.switchToSurvivor(next, this._switchReason || 'SURVIVOR');
         else this.finishRun();
       }
     }
@@ -923,6 +970,7 @@ Object.assign(Game.prototype, {
     if (len > 1) { f /= len; s /= len; }
     const moving = len > 0.06;
     const crouch = this.crouchHeld;
+    const maxStamina = e.maxStamina || 100;
     const wantSprint = this.sprintHeld && moving && !crouch && e.stamina > 1;
     const sprint = wantSprint;
     e.crouch = crouch;
@@ -934,9 +982,10 @@ Object.assign(Game.prototype, {
       e.stamina = Math.max(0, e.stamina - dt * 19);
       if (e.stamina <= 0.5) speed = 2.15;
     } else {
-      e.stamina = Math.min(100, e.stamina + dt * (moving ? 8.5 : 16));
+      e.stamina = Math.min(maxStamina, e.stamina + dt * (moving ? 8.5 : 16));
     }
     if (e.hp < 30) speed *= 0.88;
+    if (this.speedBoost && this.time < this.speedBoost.until && !crouch) speed *= this.speedBoost.amount;
 
     const fx = -Math.sin(this.camYaw) * f + Math.cos(this.camYaw) * s;
     const fz = -Math.cos(this.camYaw) * f - Math.sin(this.camYaw) * s;
@@ -944,7 +993,8 @@ Object.assign(Game.prototype, {
       const ml = Math.hypot(fx, fz) || 1;
       e.pos.x += fx / ml * speed * dt;
       e.pos.z += fz / ml * speed * dt;
-      this.world.resolveCircle(e.pos, 0.32);
+      const level = this.world.levelAt(e.pos.x, e.pos.z, e.pos.y || 0);
+      this.world.resolveCircle(e.pos, 0.32, { crouch, level });
       e.yaw = norm(Math.atan2(fx, fz));
       e.stepPhase += dt * speed * 2.1;
       if (e.stepPhase > Math.PI) {
@@ -956,6 +1006,7 @@ Object.assign(Game.prototype, {
     } else {
       e.yaw = norm(this.camYaw - Math.PI);
     }
+    e.pos.y = this.world.groundHeight(e.pos.x, e.pos.z, e.pos.y || 0);
     e.speed = moving ? speed : 0;
     e.torchOn = this.player.torchOn;
     if (e.torchOn) {
@@ -968,6 +1019,78 @@ Object.assign(Game.prototype, {
     // exit threshold
     if (this.world.exit.open && e.pos.x > 59.4) {
       this.escapeActive(e);
+    }
+  },
+
+  updatePlayerCompanion(dt) {
+    const p = this.player;
+    if (!this.controlledBot || p.escaped) {
+      this.playerModel.visible = false;
+      return;
+    }
+    if (p.dead) {
+      this.playerModel.visible = false;
+      return;
+    }
+    if (p.downed) {
+      this.playerModel.visible = true;
+      this.playerModel.position.set(p.pos.x, (p.pos.y || 0) + 0.22, p.pos.z);
+      this.playerModel.rotation.set(0, p.yaw, Math.PI / 2);
+      p.downTimer = Math.max(0, (p.downTimer || DOWN_TIME) - dt);
+      if (p.downTimer <= 0) {
+        p.downed = false;
+        p.dead = true;
+        this.downEntity = null;
+        this.playerModel.visible = false;
+        UI.toast('Your body did not make it. The others have to finish this.');
+      }
+      return;
+    }
+    if (p.hidden) {
+      this.playerModel.visible = false;
+      return;
+    }
+    const lead = this.getControl();
+    if (!lead || lead === p) { this.playerModel.visible = false; return; }
+    const dx = lead.pos.x - p.pos.x;
+    const dz = lead.pos.z - p.pos.z;
+    const d = Math.hypot(dx, dz);
+    let speed = 0;
+    if (d > 2.7) {
+      const yaw = Math.atan2(dx, dz);
+      let diff = yaw - p.yaw;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      p.yaw = norm(p.yaw + Math.max(-1, Math.min(1, diff)) * dt * 6.5);
+      speed = d > 7.5 ? 4.6 : 2.55;
+      const step = Math.min(d - 2.3, speed * dt);
+      p.pos.x += Math.sin(p.yaw) * step;
+      p.pos.z += Math.cos(p.yaw) * step;
+      const level = this.world.levelAt(p.pos.x, p.pos.z, p.pos.y || 0);
+      this.world.resolveCircle(p.pos, 0.32, { crouch: false, level });
+      p.stepPhase = (p.stepPhase || 0) + dt * speed * 2;
+      if (p.stepPhase > Math.PI) {
+        p.stepPhase = 0;
+        audio.footstep(speed > 3, false);
+      }
+    } else {
+      p.yaw = norm(p.yaw + Math.atan2(dx, dz) * 0);
+    }
+    p.pos.y = this.world.groundHeight(p.pos.x, p.pos.z, p.pos.y || 0);
+    p.speed = speed;
+    p.stamina = Math.min(p.maxStamina || 100, (p.stamina || 0) + dt * 12);
+    const cam = this.camera.position;
+    const camD = Math.hypot(p.pos.x - cam.x, p.pos.z - cam.z);
+    this.playerModel.visible = camD > 0.85;
+    if (this.playerModel.visible) {
+      this.playerModel.position.set(p.pos.x, p.pos.y || 0, p.pos.z);
+      this.playerModel.rotation.set(0, p.yaw, 0);
+      animatePerson(this.playerModel, dt, {
+        mode: speed > 3.2 ? 'run' : speed > 0.3 ? 'walk' : 'idle',
+        speed,
+        crouch: this.crouchHeld ? 0.5 : 0,
+        lookAt: speed < 0.3 ? { x: lead.pos.x, z: lead.pos.z } : null
+      });
     }
   },
 
@@ -1001,7 +1124,7 @@ Object.assign(Game.prototype, {
       this.shakeLevel = Math.max(0, this.shakeLevel - dt * 1.4);
     }
     const p = e.pos;
-    this.camera.position.set(p.x + sx, eye + sy + (down ? 0 : 0), p.z + sx * 0.7);
+    this.camera.position.set(p.x + sx, (p.y || 0) + eye + sy, p.z + sx * 0.7);
 
     // lean into turns and strafes, but keep the horizon readable
     let dyaw = this.camYaw - (this._prevCamYaw == null ? this.camYaw : this._prevCamYaw);
@@ -1039,8 +1162,8 @@ Object.assign(Game.prototype, {
     if (this.phase === 'skip' && this.principal && this.principal.active) {
       UI.setDetection(this.principal.detect > 0.18);
       if (this.principal.detect > 0.18) audio.setTension(0.55 + this.principal.detect * 0.45);
-    } else if (active && this.killer.active) {
-      const vis = this.killer.state === 'chase' && (this.killer.target === active) && this.killer.canSee(active);
+    } else if (active && this.killers.some(k => k.active)) {
+      const vis = this.killers.some(k => k.active && k.state === 'chase' && k.target === active && k.canSee(active));
       UI.setDetection(vis);
     } else UI.setDetection(false);
     // heartbeat under pressure / down
@@ -1057,10 +1180,9 @@ Object.assign(Game.prototype, {
   updateUI(dt) {
     if (this.skill && !this.skill.resolved) {
       this.skill.timer -= dt;
-      this.skill.needle = (this.skill.needle + dt * (this.skill.dir || 1) * 0.72 + 1) % 2;
-      if (this.skill.needle > 1) this.skill.needle = 2 - this.skill.needle;
-      this.skill.dir = this.skill.needle <= 0.02 ? 1 : this.skill.needle >= 0.98 ? -1 : this.skill.dir;
-      UI.updateSkillCheck(this.skill.needle, this.skill.timer / 1.35);
+      this.skill.phase = (this.skill.phase || 0) + dt * 2.55;
+      this.skill.needle = 0.5 - 0.5 * Math.cos(this.skill.phase);
+      UI.updateSkillCheck(this.skill.needle, this.skill.timer / 1.35, this.skill.zone);
       if (this.skill.timer <= 0) this.resolveCrowbarBlock(false);
     }
     if (this.speedBoost && this.time > this.speedBoost.until) this.speedBoost = null;
@@ -1068,10 +1190,11 @@ Object.assign(Game.prototype, {
     if (this._uiTimer > 0) return;
     this._uiTimer = 0.12;
     const e = this.getControl();
+    const maxStam = (e && e.maxStamina) || 100;
     UI.setMeters({
       hp: e ? e.hp : 0,
       noise: this.noiseLevel,
-      stamina: e ? e.stamina : 0,
+      stamina: e ? (e.stamina / maxStam) * 100 : 0,
       battery: this.player.battery
     });
     UI.setTorch(this.player.torchOn, this.player.battery);
@@ -1083,6 +1206,15 @@ Object.assign(Game.prototype, {
   },
 
   // ── interactions ────────────────────────────────────────────
+  pressInteract() {
+    if (this.skill && !this.skill.resolved) {
+      const ok = this.skill.needle >= this.skill.zone - 0.1 && this.skill.needle <= this.skill.zone + 0.1;
+      this.resolveCrowbarBlock(ok);
+      return;
+    }
+    this.onInteractPress();
+  },
+
   onInteractPress() {
     if (this.noteOpen) { this.closeNote(); return; }
     if (this.state !== 'play' || !this.inputActive) return;
@@ -1099,8 +1231,11 @@ Object.assign(Game.prototype, {
       this.rescueHold = 0;
       return;
     }
-    const item = this.world.nearestItem(e.pos.x, e.pos.z, true);
+    const level = this.world.levelAt(e.pos.x, e.pos.z, e.pos.y || 0);
+    const item = this.world.nearestItem(e.pos.x, e.pos.z, true, level);
     if (item) { this.collectItem(item, e); return; }
+    const consoleObj = this.nearbyConsole(e);
+    if (consoleObj) { this.handleConsole(consoleObj, e); return; }
     if (this.nearExit(e)) { this.handleExit(e); return; }
     const door = this.world.nearestDoor(e.pos.x, e.pos.z, 2.5);
     if (door) { this.handleDoor(door); return; }
@@ -1108,21 +1243,66 @@ Object.assign(Game.prototype, {
     if (hide) { this.enterHide(hide); return; }
   },
 
+  nearbyConsole(e) {
+    for (const c of this.world.consoles || []) {
+      const cy = c.y || 0;
+      if (Math.abs((e.pos.y || 0) - cy) > 1.9) continue;
+      if (Math.hypot(e.pos.x - c.x, e.pos.z - c.z) <= (c.range || 2.5)) return c;
+    }
+    return null;
+  },
+
+  handleConsole(c, e) {
+    if (!c) return;
+    if (c.id === 'power') {
+      if (c.used) { audio.ui(); this.toast('Auxiliary breaker is already online.'); return; }
+      this.world.restorePower();
+      this.world.setLighting('power');
+      audio.unlock();
+      this.shakeScreen(0.18, 0.25);
+      this.toast('AUXILIARY POWER ONLINE. Override the gate lockdown at the east exit.');
+      this.radio('INTERCOM', 'Power restored. The gate is still locked. This is fine.');
+      this.updateObjective(true);
+      return;
+    }
+    if (c.id === 'gate') {
+      if (!this.world.exit.powered) {
+        audio.ui();
+        this.toast('GATE OVERRIDE — NO POWER. Restore the auxiliary breaker on the cafeteria mezzanine.');
+        return;
+      }
+      if (this.world.exit.overridden || c.used) {
+        audio.ui();
+        this.toast('Gate lockdown already overridden.');
+        return;
+      }
+      this.world.overrideExit();
+      audio.unlock();
+      this.toast('GATE OVERRIDE ACTIVE. The exit lock still needs Key 8.');
+      this.radio('INTERCOM', 'Gate override accepted. Please stop surviving so loudly.');
+      this.updateObjective(true);
+    }
+  },
+
   tryCrowbarBlock(entity, killer) {
     if (!this.versus || !this.player.crowbar || !entity) return false;
-    if ((entity.stamina ?? 150) < 18) {
+    const stamina = entity.stamina ?? entity.maxStamina ?? 150;
+    if (stamina < 18) {
       entity.stamina = 0;
-      this.damagePlayer(42, killer);
+      this.damagePlayer(42, killer, entity);
       UI.toast('CROWBAR GUARD BROKEN — stamina depleted');
       return true;
     }
-    entity.stamina = Math.max(0, (entity.stamina ?? 150) - 18);
-    this.skill = { type: 'block', entity, killer, timer: 1.35, needle: 0, zone: 0.68, dir: 1, resolved: false };
+    entity.stamina = Math.max(0, stamina - 18);
+    this.skill = { type: 'block', entity, killer, timer: 1.35, needle: 0, phase: 0, zone: 0.62, resolved: false };
     this.duelTimer = 1.35;
-    UI.showSkillCheck(true, { kicker: 'CROWBAR GUARD', title: 'TIME THE BLOCK', zone: 0.68, width: 0.18 });
+    UI.showSkillCheck(true, { kicker: 'CROWBAR GUARD', title: 'TIME THE BLOCK', zone: 0.62, width: 0.2 });
     UI.duel(true, 'CROWBAR GUARD', 'BLOCK', 'Press E in the marked zone.', 'counter');
-    this.killerDomainInterrupted = true;
-    if (killer) { killer.state = 'stagger'; killer.attackCd = 2.4; }
+    if (killer) {
+      killer.state = 'stagger';
+      killer.speed = 0;
+      killer.attackCd = Math.max(killer.attackCd, 2.4);
+    }
     return true;
   },
 
@@ -1133,21 +1313,38 @@ Object.assign(Game.prototype, {
     UI.skillResult(!!ok);
     this.skill = null;
     this.duelTimer = 0;
+    const killer = s.killer;
+    const entity = s.entity;
+    if (!killer || !entity) {
+      setTimeout(() => { UI.showSkillCheck(false); UI.duel(false); }, 400);
+      return;
+    }
     if (ok) {
-      s.killer.attackCd = 3.2;
-      s.killer._avoid = { x: s.killer.pos.x, z: s.killer.pos.z, until: this.time + 3.2 };
-      s.killer.state = 'patrol';
-      s.killer.speed = 0;
-      s.killer.pos.x += (s.entity.pos.x - s.killer.pos.x) * -0.8;
-      s.killer.pos.z += (s.entity.pos.z - s.killer.pos.z) * -0.8;
-      s.entity.stamina = Math.min(150, (s.entity.stamina ?? 150) + 22);
+      killer.attackCd = 3.2;
+      killer._avoid = { x: killer.pos.x, z: killer.pos.z, until: this.time + 3.2 };
+      killer.state = 'patrol';
+      killer.speed = 0;
+      killer.playerNear = 0;
+      const dx = killer.pos.x - entity.pos.x;
+      const dz = killer.pos.z - entity.pos.z;
+      const d = Math.max(0.01, Math.hypot(dx, dz));
+      killer.pos.x += dx / d * 1.1;
+      killer.pos.z += dz / d * 1.1;
+      entity.stamina = Math.min(entity.maxStamina || 150, (entity.stamina ?? 150) + 22);
       UI.duel(true, 'CROWBAR GUARD', 'STAGGERED', 'Kick [Q] the Hall Monitor.', 'counter');
-      this._kickStagger = s.killer;
+      this._kickStagger = killer;
+      this._kickUntil = this.time + 3.5;
       this.toast('Perfect block · killer staggered');
     } else {
-      s.entity.stamina = Math.max(0, (s.entity.stamina ?? 150) - 34);
-      s.killer.attackCd = 0.7;
-      this.damagePlayer(58, s.killer);
+      entity.stamina = Math.max(0, (entity.stamina ?? 150) - 34);
+      killer.attackCd = 0.9;
+      killer.state = 'chase';
+      killer.target = entity;
+      killer.lastSeen = { x: entity.pos.x, z: entity.pos.z };
+      killer.searchTimer = 8;
+      this._kickStagger = null;
+      this._kickUntil = 0;
+      this.damageEntity(entity, 58, killer);
       UI.duel(true, 'CROWBAR GUARD', 'GUARD BREAK', 'Find space. The block cost 34 stamina.', 'domain');
       this.toast('Failed block · guard broken');
     }
@@ -1155,24 +1352,92 @@ Object.assign(Game.prototype, {
   },
 
   tryKickStagger() {
-    if (!this.versus || !this._kickStagger) return;
-    const k = this._kickStagger;
+    if (!this.versus || this.state !== 'play') return;
     const e = this.getControl();
-    if (!e || Math.hypot(k.pos.x - e.pos.x, k.pos.z - e.pos.z) > 2.8) return;
-    k.state = 'patrol';
-    k.speed = 0;
-    k.attackCd = 5;
-    k.domainCast = 0;
-    k.domainReady = 0;
-    k.removeDomainVisual?.();
-    k.pos.x += (k.pos.x - e.pos.x) * 1.8;
-    k.pos.z += (k.pos.z - e.pos.z) * 1.8;
-    k._avoid = { x: k.pos.x, z: k.pos.z, until: this.time + 12 };
-    this._kickStagger = null;
-    this.speedBoost = { until: this.time + 4, amount: 1.18 };
-    UI.duel(true, 'COUNTER', 'Riyōki Tenkai', 'The Hall Monitor was knocked back.', 'counter');
-    this.toast('KICK · Riyōki Tenkai knockback');
-    setTimeout(() => UI.duel(false), 900);
+    if (!e || e.downed || e.dead || e.escaped) return;
+    const k = this._kickStagger;
+    if (k && this.time <= (this._kickUntil || 0) &&
+      Math.hypot(k.pos.x - e.pos.x, k.pos.z - e.pos.z) <= 3.4) {
+      const oldX = k.pos.x, oldZ = k.pos.z;
+      k.state = 'patrol';
+      k.speed = 0;
+      k.attackCd = 5;
+      k.cancelDomain?.();
+      const dx = k.pos.x - e.pos.x, dz = k.pos.z - e.pos.z;
+      const d = Math.max(0.01, Math.hypot(dx, dz));
+      k.pos.x += dx / d * 2.4;
+      k.pos.z += dz / d * 2.4;
+      k._avoid = { x: k.pos.x, z: k.pos.z, until: this.time + 12 };
+      this._kickStagger = null;
+      this._kickUntil = 0;
+      this.speedBoost = { until: this.time + 5, amount: 1.16 };
+      this.spawnPizzaBoost(oldX, oldZ);
+      UI.duel(true, 'COUNTER', 'Riyōki Tenkai', 'The Hall Monitor was knocked back. Pizza dropped.', 'counter');
+      this.toast('KICK · Riyōki Tenkai knockback · pizza boost dropped');
+      audio.stinger?.();
+      setTimeout(() => UI.duel(false), 1000);
+      return;
+    }
+    // A crowbar to the face also cancels a domain mid-cast. Without this
+    // the killer could finish every cast while a survivor stood on top of him.
+    const caster = (this.killers || []).find(kk => kk && kk.active && kk.domainCast > 0 &&
+      Math.hypot(kk.pos.x - e.pos.x, kk.pos.z - e.pos.z) <= 3.2);
+    if (caster) {
+      if (!this.player.crowbar) {
+        this.toast('You need the crowbar to interrupt the domain.');
+        return;
+      }
+      const cost = 20;
+      if ((e.stamina || 0) < cost) {
+        this.toast('Too winded to interrupt the domain.');
+        return;
+      }
+      e.stamina = Math.max(0, e.stamina - cost);
+      caster.cancelDomain();
+      this.shakeScreen(0.55, 0.45);
+      audio.stinger?.();
+      UI.duel(true, 'DOMAIN', 'CAST INTERRUPTED', 'The red tiles fade. Move while he recovers.', 'counter');
+      this.toast('DOMAIN INTERRUPTED — crowbar to the ribs');
+      this.updateObjective();
+      setTimeout(() => UI.duel(false), 1000);
+    }
+  },
+
+  spawnPizzaBoost(x, z) {
+    if (this._pizza && !this._pizza.picked) return;
+    const g = new THREE.Group();
+    const crust = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.31, 0.31, 0.07, 18),
+      new THREE.MeshStandardMaterial({ color: 0xd8923f, roughness: 0.7, emissive: 0xff6a18, emissiveIntensity: 0.45 })
+    );
+    crust.position.y = 0.2;
+    g.add(crust);
+    const cheese = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.26, 0.26, 0.035, 18),
+      new THREE.MeshStandardMaterial({ color: 0xffcf5e, roughness: 0.6, emissive: 0xffa21c, emissiveIntensity: 0.55 })
+    );
+    cheese.position.y = 0.245;
+    g.add(cheese);
+    for (let i = 0; i < 5; i++) {
+      const pep = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.055, 0.025, 10),
+        new THREE.MeshStandardMaterial({ color: 0xb62d24, roughness: 0.8 })
+      );
+      const a = (i / 5) * Math.PI * 2;
+      pep.position.set(Math.cos(a) * 0.14, 0.268, Math.sin(a) * 0.14);
+      g.add(pep);
+    }
+    const glow = new THREE.PointLight(0xff9a3c, 1.4, 3.2, 2);
+    glow.position.y = 0.4;
+    g.add(glow);
+    g.position.set(x, 0, z);
+    this.scene.add(g);
+    const item = {
+      kind: 'pizza', x, z, y: 0.2, mesh: g, base: cheese, label: null,
+      data: {}, picked: false, id: 9000 + this.world.items.length, phase: Math.random() * 6.28, floor: 0
+    };
+    this.world.items.push(item);
+    this._pizza = item;
   },
 
   nearestDownedBot(max) {
@@ -1191,6 +1456,15 @@ Object.assign(Game.prototype, {
     const e = this.getControl();
     if (!e || e.downed || e.escaped) { UI.prompt(null); return; }
     if (e.hidden) { UI.prompt('LEAVE HIDING', 0, 'E'); return; }
+    const kick = this._kickStagger;
+    if (kick && this.time <= (this._kickUntil || 0) &&
+      Math.hypot(kick.pos.x - e.pos.x, kick.pos.z - e.pos.z) <= 3.4) {
+      UI.prompt('KICK THE HALL MONITOR', 0, 'Q');
+      return;
+    }
+    const caster = (this.killers || []).find(k => k && k.active && k.domainCast > 0 &&
+      Math.hypot(k.pos.x - e.pos.x, k.pos.z - e.pos.z) <= 3.2);
+    if (caster && this.player.crowbar) { UI.prompt('INTERRUPT THE DOMAIN', 0, 'Q'); return; }
     const mate = this.nearestDownedBot(2.15);
     if (mate) {
       if (this.keysPressed['e']) {
@@ -1209,17 +1483,31 @@ Object.assign(Game.prototype, {
       return;
     }
     this.rescueHold = 0;
-    const item = this.world.nearestItem(e.pos.x, e.pos.z, true);
+    const level = this.world.levelAt(e.pos.x, e.pos.z, e.pos.y || 0);
+    const item = this.world.nearestItem(e.pos.x, e.pos.z, true, level);
     if (item) {
       const txt = item.kind === 'key' ? `TAKE KEY ${item.data.keyId}`
         : item.kind === 'crowbar' ? 'TAKE CROWBAR'
           : item.kind === 'battery' ? 'TAKE BATTERY'
-            : item.kind === 'medkit' ? 'TAKE MEDKIT' : 'READ JOKE NOTE';
+            : item.kind === 'pizza' ? 'TAKE PIZZA BOOST'
+              : item.kind === 'medkit' ? 'TAKE MEDKIT' : 'READ JOKE NOTE';
       UI.prompt(txt);
       return;
     }
+    const consoleObj = this.nearbyConsole(e);
+    if (consoleObj) {
+      if (consoleObj.id === 'power') {
+        UI.prompt(consoleObj.used ? 'BREAKER ONLINE' : 'RESTORE AUXILIARY POWER', 0, consoleObj.used ? '✓' : 'E');
+      } else {
+        if (!this.world.exit.powered) UI.prompt('GATE OVERRIDE — NO POWER', 0, '!');
+        else UI.prompt(consoleObj.used ? 'GATE OVERRIDE ACTIVE' : 'OVERRIDE GATE LOCKDOWN', 0, consoleObj.used ? '✓' : 'E');
+      }
+      return;
+    }
     if (this.nearExit(e)) {
-      if (!this.world.exit.unlocked) UI.prompt(this.hasKey(8) ? 'UNLOCK EXIT' : 'EXIT LOCKED — FIND KEY 8', 0, this.hasKey(8) ? 'E' : '!');
+      if (!this.world.exit.powered) UI.prompt('GATE HAS NO POWER', 0, '!');
+      else if (!this.world.exit.overridden) UI.prompt('OVERRIDE GATE LOCKDOWN', 0, '!');
+      else if (!this.world.exit.unlocked) UI.prompt(this.hasKey(8) ? 'UNLOCK EXIT' : 'EXIT LOCKED — FIND KEY 8', 0, this.hasKey(8) ? 'E' : '!');
       else if (this.world.exit.barricaded) UI.prompt(this.player.crowbar ? 'PRY THE BARRICADE' : 'BARRICADED — NEED CROWBAR', 0, this.player.crowbar ? 'E' : '!');
       else UI.prompt('ESCAPE');
       return;
@@ -1282,6 +1570,13 @@ Object.assign(Game.prototype, {
       e.hp = Math.min(100, e.hp + 55);
       audio.pickup();
       this.toast('Medkit +55 HP');
+    } else if (item.kind === 'pizza') {
+      const e = this.getControl();
+      e.stamina = Math.min(e.maxStamina || 150, (e.stamina || 0) + 45);
+      this.speedBoost = { until: this.time + 6, amount: 1.15 };
+      audio.pickup();
+      this.toast('ELECTRIC PIZZA · breath +45 · 6s speed boost');
+      if (this._pizza === item) this._pizza = null;
     }
     this.updateObjective();
   },
@@ -1323,12 +1618,23 @@ Object.assign(Game.prototype, {
   },
 
   handleExit(e) {
+    if (!this.world.exit.powered) {
+      audio.ui();
+      this.toast('The gate is dead. Restore the auxiliary breaker on the cafeteria mezzanine.');
+      return;
+    }
+    if (!this.world.exit.overridden) {
+      audio.ui();
+      this.toast('Gate lockdown is active. Use the override panel beside the exit.');
+      return;
+    }
     if (!this.world.exit.unlocked) {
       if (this.hasKey(8)) {
         this.world.unlockExit();
         audio.unlock();
-        this.toast('Exit unlocked. The barricade is still nailed shut.');
-        this.updateObjective();
+        this.toast('Key 8 accepted. The exit lock is released — now tear off the barricade.');
+        this.radio('INTERCOM', 'Thank you for choosing the exit. Please hold for an axe.');
+        this.updateObjective(true);
       } else {
         audio.ui();
         this.toast('The exit has an 8 lock. Find Key 8.');
@@ -1337,12 +1643,13 @@ Object.assign(Game.prototype, {
     }
     if (this.world.exit.barricaded) {
       if (this.player.crowbar) {
-        this.world.pryExit();
+        const opened = this.world.pryExit();
+        if (!opened) { audio.ui(); this.toast('The barricade will not budge yet.'); return; }
         audio.unlock();
         audio.door();
         this.shakeScreen(0.4, 0.5);
         this.toast('Barricade torn open. GO.');
-        this.updateObjective();
+        this.updateObjective(true);
       } else {
         audio.ui();
         this.toast('The exit is barricaded with wood. You need a crowbar.');
@@ -1377,24 +1684,40 @@ Object.assign(Game.prototype, {
   },
 
   // ── damage / down / rescue ──────────────────────────────────
-  damagePlayer(amount, source) {
-    const e = this.getControl();
+  damagePlayer(amount, source, target = null) {
+    const e = target || this.getControl();
     if (!e || e.downed || e.dead || e.escaped || this.state === 'cutscene') return;
+    const controlled = e === this.getControl();
     e.hp = Math.max(0, e.hp - amount);
     this.bloodFlash(0.42);
     this.shakeScreen(0.75, 0.55);
     audio.breath();
-    if (e === this.player) UI.setMeters({ hp: e.hp });
+    if (controlled || e === this.player) UI.setMeters({ hp: e.hp });
     if (e.hp <= 0) {
-      if (this.state === 'play' && !e._jump) {
-        e._jump = true;
-        this.triggerJumpscare(e);
-      } else if (this.state !== 'cutscene') {
+      if (controlled) {
+        if (this.state === 'play' && !e._jump) {
+          e._jump = true;
+          this.triggerJumpscare(e);
+        } else if (this.state !== 'cutscene') {
+          this.enterDown(e);
+        }
+      } else {
         this.enterDown(e);
       }
-    } else {
+    } else if (controlled) {
       UI.toast(`HIT — ${Math.ceil(e.hp)} HP`);
     }
+  },
+
+  damageEntity(e, amount, source = 'killer') {
+    if (!e || e.downed || e.dead || e.escaped) return;
+    if (e === this.player || e === this.controlledBot) {
+      this.damagePlayer(amount, source, e);
+      return;
+    }
+    if (e.damage) { e.damage(amount, source); return; }
+    e.hp = Math.max(0, (e.hp || 0) - amount);
+    if (e.hp <= 0) this.enterDown(e);
   },
 
   triggerJumpscare(e) {
@@ -1407,6 +1730,7 @@ Object.assign(Game.prototype, {
 
   enterDown(e) {
     if (!e || e.dead || e.escaped || e.downed) return;
+    const controlled = e === this.getControl();
     e.downed = true;
     e.downTimer = DOWN_TIME;
     e.hp = 0;
@@ -1421,6 +1745,15 @@ Object.assign(Game.prototype, {
     } else {
       this.player.downed = true;
     }
+    if (!controlled) {
+      UI.toast(e === this.player ? 'Your body is down. Keep playing as the controlled survivor.' : `${e.name} is down.`);
+      if (e === this.player) {
+        this.playerModel.visible = true;
+        this.playerModel.position.set(e.pos.x, 0.22, e.pos.z);
+        this.playerModel.rotation.z = Math.PI / 2;
+      }
+      return;
+    }
     this.state = 'down';
     this.setInputActive(false);
     UI.showHud(true);
@@ -1432,8 +1765,9 @@ Object.assign(Game.prototype, {
     audio.alarmStop();
     this._heartTimer = 0;
     this.shakeScreen(0.9, 0.7);
-    const hasHelp = this.bots.some(b => !b.dead && !b.escaped && !b.downed);
-    if (e === this.player) UI.toast(hasHelp ? 'You are down. A classmate is trying to reach you.' : 'You are down. Nobody is coming.');
+    const hasHelp = this.bots.some(b => !b.dead && !b.escaped && !b.downed) ||
+      (this.controlledBot && !this.player.dead && !this.player.escaped && !this.player.downed);
+    UI.toast(hasHelp ? 'You are down. A classmate is trying to reach you.' : 'You are down. Nobody is coming.');
     this.updateObjective();
   },
 
@@ -1517,7 +1851,7 @@ Object.assign(Game.prototype, {
       this.state = 'limbo';
       UI.chapter('YOU DID NOT SURVIVE', 'CONTROL A CLASSMATE', 3000);
       const next = this.chooseNextBot();
-      if (next) setTimeout(() => this.switchToBot(next, 'YOU DID NOT MAKE IT'), 1800);
+      if (next) setTimeout(() => this.switchToSurvivor(next, 'YOU DID NOT MAKE IT'), 1800);
       else this.startJakeReveal();
     } else {
       if (e === this.controlledBot) {
@@ -1528,13 +1862,67 @@ Object.assign(Game.prototype, {
       e.die?.();
       this.downEntity = null;
       const next = this.chooseNextBot();
-      if (next) setTimeout(() => this.switchToBot(next, `${e.name} DID NOT MAKE IT`), 1200);
+      if (next) setTimeout(() => this.switchToSurvivor(next, `${e.name} DID NOT MAKE IT`), 1200);
       else this.startJakeReveal();
     }
   },
 
   chooseNextBot() {
-    return this.bots.find(b => !b.dead && !b.escaped && !b.downed) || null;
+    const out = [];
+    if (this.player !== this.controlledBot && !this.player.dead && !this.player.escaped && !this.player.downed) out.push(this.player);
+    for (const b of this.bots) {
+      if (b === this.controlledBot || b.dead || b.escaped || b.downed) continue;
+      out.push(b);
+    }
+    return out[0] || null;
+  },
+
+  cycleSurvivor() {
+    if (this.state !== 'play' || this.noteOpen || this.skill) return;
+    const list = [this.player, ...this.bots].filter(e =>
+      e && !e.dead && !e.escaped && !e.downed && e !== this.controlledBot);
+    if (!list.length) { this.toast('No other survivor can take over.'); return; }
+    const cur = this.controlledBot || this.player;
+    const all = [this.player, ...this.bots].filter(e => e && !e.dead && !e.escaped && !e.downed);
+    let idx = all.indexOf(cur);
+    if (idx < 0) idx = all.length - 1;
+    const next = all[(idx + 1) % all.length];
+    if (!next || next === cur) return;
+    this.switchToSurvivor(next, 'SWITCHED');
+  },
+
+  switchToSurvivor(target, reason = 'SURVIVOR') {
+    if (!target) { this.finishRun(); return; }
+    if (target === this.player) this.switchToPlayer(reason);
+    else this.switchToBot(target, reason);
+  },
+
+  switchToPlayer(reason = 'SURVIVOR') {
+    if (this.player.dead || this.player.escaped || this.player.downed) return;
+    if (this.controlledBot && this.controlledBot !== this.player) {
+      const b = this.controlledBot;
+      b.controlled = false;
+      b.model.visible = !b.escaped;
+      if (b.model.userData.nameSprite) b.model.userData.nameSprite.visible = true;
+    }
+    this.controlledBot = null;
+    this.avatar = this.player;
+    this.playerModel.visible = false;
+    this.downEntity = null;
+    this.state = 'play';
+    this.pendingSwitch = 0;
+    this.setInputActive(true);
+    this.camYaw = (this.player.yaw || 0) + Math.PI;
+    this.pitch = 0;
+    UI.setDown(false);
+    UI.showHud(true);
+    UI.chapter('POV SWITCH', 'NOW CONTROLLING YOU', 2200);
+    UI.showPov(`YOU · ${reason}`);
+    this.toast('You are back in your own body.');
+    audio.setUnderwater(false);
+    audio.startAmbience();
+    this.updateObjective();
+    this.canvas.requestPointerLock?.();
   },
 
   switchToBot(bot, reason = 'SURVIVOR') {
@@ -1551,9 +1939,6 @@ Object.assign(Game.prototype, {
     bot.state = 'follow';
     bot.downed = false;
     bot.hp = Math.max(45, bot.hp);
-    this.player.downed = false;
-    this.player.hidden = false;
-    this.player.torchOn = false;
     this.downEntity = null;
     this.state = 'play';
     this.pendingSwitch = 0;
@@ -1565,7 +1950,7 @@ Object.assign(Game.prototype, {
     UI.showHud(true);
     UI.showPov(`${bot.name} · ${reason}`);
     UI.chapter('POV SWITCH', `NOW CONTROLLING ${bot.name}`, 2600);
-    this.toast(`You are ${bot.name}. Get to the exit.`);
+    this.toast(`You are ${bot.name}. TAB switches survivors · Q kicks.`);
     bot.directSay('Okay. Okay okay okay. I can do this.');
     audio.setUnderwater(false);
     audio.startAmbience();
@@ -1622,7 +2007,7 @@ Object.assign(Game.prototype, {
       this.avatar = this.player;
       this.state = 'limbo';
       const next = this.chooseNextBot();
-      if (next) setTimeout(() => this.switchToBot(next, `${bot.name} DID NOT MAKE IT`), 1200);
+      if (next) setTimeout(() => this.switchToSurvivor(next, `${bot.name} DID NOT MAKE IT`), 1200);
       else this.startJakeReveal();
     } else if (this.bots.every(b => b.dead)) {
       if (this.player.escaped || this.player.dead || !this.playerInPlay()) this.startJakeReveal();
@@ -1777,12 +2162,8 @@ Object.assign(Game.prototype, {
       );
       return;
     }
-    if (this.player.escaped || this.controlledBot) {
-      if (this.controlledBot) {
-        UI.setObjective(`${this.controlledBot.name}: escape through the east exit.`, sub);
-      } else {
-        UI.setObjective('The others are still inside.', sub);
-      }
+    if (this.player.escaped) {
+      UI.setObjective(this.controlledBot ? `${this.controlledBot.name}: escape through the east exit.` : 'The others are still inside.', sub);
       return;
     }
     if (!this.player.keys.has(8)) {
@@ -1793,12 +2174,20 @@ Object.assign(Game.prototype, {
       else UI.setObjective('All keys found. Pry the exit barricade.', sub);
       return;
     }
+    if (!this.world.exit.powered) {
+      UI.setObjective('Restore auxiliary power on the cafeteria mezzanine.', 'Take the stair at the west end of the cafeteria. The breaker is upstairs.');
+      return;
+    }
+    if (!this.world.exit.overridden) {
+      UI.setObjective('Override the gate lockdown at the east vestibule.', 'The override panel is beside the exit. You need power first.');
+      return;
+    }
     if (!this.player.crowbar) {
       UI.setObjective('Find the crowbar. It is somewhere unlocked.', 'The exit needs wood removal. Wood removal needs crowbar.');
       return;
     }
     if (!this.world.exit.open) {
-      UI.setObjective('Pry the barricade at the east exit.', 'Door 8 is unlocked. Wood is still a problem.');
+      UI.setObjective('Pry the barricade at the east exit.', 'Power is on, the gate is overridden, Key 8 is in. Wood is still a problem.');
       return;
     }
     UI.setObjective('Get to the police station. Do not look back.', sub);
