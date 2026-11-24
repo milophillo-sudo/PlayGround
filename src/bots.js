@@ -239,7 +239,10 @@ export class Bot {
     const p = g.getActivePos();
     const idx = g.bots.indexOf(this);
     const side = (idx % 2 ? 1 : -1) * (1.2 + Math.floor(idx / 2) * 0.6);
-    const back = 1.8 + idx * 0.35;
+    // Keep companions behind the player instead of forming a tight train.
+    // The extra spacing makes it less likely that a killer tracking one
+    // survivor is handed the whole group as an easy chain of targets.
+    const back = 4.2 + idx * 0.8;
     return {
       x: p.x - Math.sin(g.getActiveYaw()) * back + Math.cos(g.getActiveYaw()) * side,
       z: p.z - Math.cos(g.getActiveYaw()) * back - Math.sin(g.getActiveYaw()) * side
@@ -342,10 +345,14 @@ export class Bot {
     }
     const playerDowned = this.game.player.downed || (this.game.controlledBot && this.game.controlledBot.downed);
     const canSeeKiller = killer && kd < 14 && !w.losBlocked(this.pos.x, this.pos.z, killer.pos.x, killer.pos.z);
+    // React to nearby danger even when a wall blocks sight; otherwise
+    // companions keep pathing straight toward the player and can walk into
+    // the killer's patrol route before their visual alarm fires.
+    const dangerClose = killer && kd < 20;
     const caster = killers.find(k => k.domainCast > 0);
     const domainClose = caster && Math.hypot(caster.pos.x - this.pos.x, caster.pos.z - this.pos.z) < 13;
 
-    if ((canSeeKiller || domainClose) && !this.killerSeen) {
+    if ((dangerClose || domainClose) && !this.killerSeen) {
       this.killerSeen = true;
       this.say('killer', true);
       this.game.broadcastPanic(this, 16);
@@ -366,7 +373,7 @@ export class Bot {
     switch (this.state) {
       case 'flee': {
         this.fleeTimer -= dt;
-        if (canSeeKiller) this.fleeTimer = Math.max(this.fleeTimer, 3);
+        if (dangerClose) this.fleeTimer = Math.max(this.fleeTimer, 3);
         if (!this.targetPos || this.pathTimer <= 0) this.pickFleeTarget();
         this.pathTimer -= dt;
         if (this.path.length) {
@@ -376,7 +383,7 @@ export class Bot {
             if (done) { this.pathIndex++; if (this.pathIndex >= this.path.length) this.stop(); }
           }
         }
-        if (this.fleeTimer <= 0 && (!canSeeKiller || kd > 19)) {
+        if (this.fleeTimer <= 0 && (!dangerClose || kd > 22)) {
           this.state = playerDowned ? 'rescue' : (this.role === 'scout' ? 'scout' : 'follow');
           this.targetPos = null;
           this.say('calm');
@@ -463,7 +470,7 @@ export class Bot {
         }
         const fp = this.followPoint();
         const d = Math.hypot(fp.x - this.pos.x, fp.z - this.pos.z);
-        if (d > 2.2) {
+        if (d > 4.8) {
           if (!this.path.length && this.pathTimer <= 0) this.pathTo(fp.x, fp.z);
           this.pathTimer -= dt;
           if (this.path.length) {

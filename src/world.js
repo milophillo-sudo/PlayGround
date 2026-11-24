@@ -668,7 +668,7 @@ export class World {
     gg.position.set(56.55, 0, 1.55);
     this.scene.add(gg);
     this.addCollider(56.4, 1.05, 56.75, 2.05, { type: 'console' });
-    this.gateConsole = { id: 'gate', label: 'GATE OVERRIDE', x: 56.15, z: 1.55, y: 0, range: 2.6, used: false, mesh: gg, screen };
+    this.gateConsole = { id: 'gate', label: 'GATE OVERRIDE', x: 56.15, z: 1.55, y: 0, range: 1.8, used: false, mesh: gg, screen };
     this.consoles.push(this.gateConsole);
   }
 

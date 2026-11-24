@@ -16,7 +16,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#05060a;color:var(--paper);font-family:var(--mono)}
 body{-webkit-user-select:none;user-select:none;touch-action:none}
-#app{position:fixed;inset:0;overflow:hidden;background:radial-gradient(120% 100% at 50% 20%,#111a17 0%,#05070b 70%)}
+#app{position:fixed;inset:0;overflow:hidden;overflow:clip;background:radial-gradient(120% 100% at 50% 20%,#111a17 0%,#05070b 70%)}
 #scene{position:absolute;inset:0;width:100%;height:100%;display:block}
 .hidden{display:none !important}
 button{font-family:var(--mono);cursor:pointer;border:none;outline:none}
@@ -216,8 +216,8 @@ button{font-family:var(--mono);cursor:pointer;border:none;outline:none}
 .tbtn.interact{background:rgba(141,255,178,.16);border-color:rgba(141,255,178,.7);color:#eaffef}
 @media (pointer:coarse){
   #status-panel{width:180px;bottom:calc(174px + var(--safe-b))}
-  #map-panel{transform:scale(.8);transform-origin:top right}
-  #objective-panel{max-width:44vw;font-size:11px}
+  #map-panel{transform:scale(.72);transform-origin:top right}
+  #objective-panel{max-width:36vw;font-size:11px}
   #prompt{bottom:32%}
   #subtitle{font-size:14px}
 }
@@ -233,7 +233,7 @@ button{font-family:var(--mono);cursor:pointer;border:none;outline:none}
 .load-text{font-size:10px;letter-spacing:.3em;color:#6d8476}
 
 @media (max-width:700px){
-  #objective-panel{max-width:52vw}
+  #objective-panel{max-width:42vw}
   #objective-text{font-size:11px}
   #objective-sub{display:none}
   .controls-grid{grid-template-columns:1fr}
