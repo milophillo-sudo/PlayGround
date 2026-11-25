@@ -19,7 +19,7 @@
 
 ## CRYOUT — Dynamic 3D Rhythm
 
-A browser rhythm game built around a flat, bold hit-circle language placed inside a moving 3D field. Five fully charted tracks are included, each with its own section map, lane motion, effects, and difficulty curve.
+A browser rhythm game built around a flat, bold hit-circle language placed inside a moving 3D field. Six fully charted tracks are included, each with its own section map, lane motion, effects, and difficulty curve, plus a 1200-note CHAOS remix of INTENTION.
 
 ### Tracks
 
@@ -30,19 +30,24 @@ A browser rhythm game built around a flat, bold hit-circle language placed insid
 | **CHRONOSTASIS** | 99.4 | Expert | 4 · 6 | 436 notes · 10 holds · 8 pendulum taps |
 | **THE UNTOUCHABLE OF f RA IA'S LAND** | 111.1 / 96 | Boss | 4 · 6 · 8 | 374 notes · 8 holds · 229 events |
 | **INTENTION** | 180 / 195 | Boss | 1 · 2 · 4 · 6 | 532 notes · 19 holds · 284 events |
+| **ONE TRICK LEFT UP MY SLEEVE** | 120 | Expert | 4 · 6 · 8 | 576 notes · 20 holds · 157 events |
 
-Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. One shared generator, `tools/build-game-charts.mjs`, rebuilds all five charts from the authored section maps and the decoded onset files in `tools/source/`. Every section is charted as a four-bar phrase (A A' B C): rhythmic cells come from a groove library keyed to the section's energy, weak slots are thinned against the real onsets, lanes follow bounded figures with hand-safe repeats, chords are reserved for phrase peaks, and long same-lane gaps become holds. Accent events are regenerated from bar energy, while boss camera/glitch cues, CHRONOSTASIS's clock/pendulum score, and INTENTION's memory/guilt cues are copied verbatim from `tools/source/gimmick-events.json`, so every gimmick stays choreographed to the record. Track metadata lives in `src/tracks.js`.
+INTENTION also exposes a **CHAOS** mode that swaps in a 1200-note, 150-hold remix of the same record. It keeps the authored stage and audio, removes the overture, and gives the finale its own charted shape (see below).
+
+Charts are generated offline from beat/onset analysis, then committed as static data in `src/charts/`. One shared generator, `tools/build-game-charts.mjs`, rebuilds all six charts from the authored section maps and the decoded onset files in `tools/source/`. Every section is charted as a four-bar phrase (A A' B C): rhythmic cells come from a groove library keyed to the section's energy, weak slots are thinned against the real onsets, lanes follow bounded figures with hand-safe repeats, chords are reserved for phrase peaks, and long same-lane gaps become holds. Accent events are regenerated from bar energy, while boss camera/glitch cues, CHRONOSTASIS's clock/pendulum score, and INTENTION's memory/guilt cues are copied verbatim from `tools/source/gimmick-events.json`, so every gimmick stays choreographed to the record. Track metadata lives in `src/tracks.js`. The INTENTION CHAOS remix is generated separately by `tools/build-chaos-chart.mjs`, which owns its 1200-note budget, its `[181, 204.5]` rest window, and its DAWN finale.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run charts` | Rebuild all five charts from the committed analyses and section maps. |
+| `npm run charts` | Rebuild all six charts from the committed analyses and section maps. |
+| `npm run charts:chaos` | Rebuild the INTENTION CHAOS remix (1200 notes · 150 holds). |
+| `npm run charts:all` | Run both chart pipelines. |
 | `node tools/analyze-mp3.mjs` | Optional: decode the MP3s in Chromium and refresh the CRYOUT / WORLD / CHRONOSTASIS onset analyses. |
 
 The older `tools/build-charts.mjs`, `tools/build-boss-chart.mjs`, and `tools/build-intention-chart.mjs` scripts are kept as the historical per-track builders; the shared generator is the canonical pipeline now.
 
 ### Gameplay
 
-- **Track selection:** pick any of the five tracks from the start screen. Audio decodes per track and is cached, and personal bests are stored per track in `localStorage`. A run that clears a track (50% accuracy or better) marks its card, and the picker header tracks how many of the five have been cleared.
+- **Track selection:** pick any of the six tracks from the start screen. Audio decodes per track and is cached, and personal bests are stored per track in `localStorage`. A run that clears a track (50% accuracy or better) marks its card, and the picker header tracks how many of the six have been cleared.
 - **Dynamic lane count:** charts move through 4, 6, and 8-lane sections; the field spacing, ring scale, note scale, camera and hit zones re-frame themselves around the playable lanes.
 - **Tap anywhere:** every tap or key press claims the single pending note closest to the hit line. A second finger claims the next-closest note, so chords need two fingers and one tap never clears a stack. Pressing never draws an overlay — all feedback is in the 3D field.
 - **Incoming lanes unlock early:** a lane with a note on the way becomes tappable before its section officially starts, so notes never arrive on a hidden lane.
@@ -55,8 +60,10 @@ The older `tools/build-charts.mjs`, `tools/build-boss-chart.mjs`, and `tools/bui
 - **Cathedral overture:** THE UNTOUCHABLE opens with 28.5 lane-less seconds inside a procedural gothic nave. The camera cuts down the aisle on the beat, stained glass and title cards carry the story, and the playfield stays hidden until the clock chamber arrives.
 - **Wind instead of idle lanes:** in THE UNTOUCHABLE's boss stage any lane that is not playable becomes a stream of 3D wind ribbons that sweep through X, Y and Z while spinning, so the unused field is part of the scene instead of empty tracks.
 - **Free-flight clock stage:** after the overture the nave becomes the playfield and notes travel on curved X/Z paths before converging on their lane rings at the hit line. The boss chart follows a 111.1 → 96 → 111.1 BPM map, and every camera, glitch, caption and clock tick event is keyed to the analysed song. A framing guard measures the live rings and the clock crown after each authored camera move, then only adjusts pitch, lens or distance when the hit line or the crown would leave the frame, so the cinematic direction survives on desktop and phone aspect ratios.
-- **INTENTION's four memories:** a black-particle overture with white lanes opens onto an ocean under dark clouds, a golden libra, four cardinal pillars, and a spinning halo star. A one-lane corkscrew snaps back to the field, the camera leans toward the lane that just answered, and the top-down libra shot carries a glitching INTENTIONS title. The chart then distorts into a heartbeat, hands the screen to a red GUILT bar that only stays full on consistent perfects, fractures into the reference two-lane fourth-beat gimmick, and returns to a fast one-lane run. The memory rises through static, determination opens six lanes, a whiteout cuts to black four-lane false guilt with a decorative bar that cannot refill, and the dawn returns the ocean, adds flowers, hides the notes, and turns the sync bar into a full rainbow. Gameplay is intentionally textless: score, judgement, lane labels, HUD copy and mid-song captions are hidden, leaving only the floating rings, meters and cutscene title cards.
+- **INTENTION's four memories:** a black-particle overture with white lanes opens onto an ocean under dark clouds, a golden libra, four cardinal pillars, and a spinning halo star. A one-lane corkscrew snaps back to the field, the camera leans toward the lane that just answered, and the top-down libra shot carries a glitching INTENTIONS title. The chart then distorts into a heartbeat, hands the screen to a red GUILT bar that only stays full on consistent perfects, fractures into the reference two-lane fourth-beat gimmick, and returns to a fast one-lane run. The memory rises through static, determination opens six lanes, a whiteout cuts to black four-lane false guilt with a decorative bar that cannot refill, and the dawn returns the ocean, adds flowers, and turns the sync bar into a full rainbow; the standard chart's dawn is note-less, while the CHAOS remix keeps DAWN playable. Gameplay is intentionally textless: score, judgement, lane labels, HUD copy and mid-song captions are hidden, leaving only the floating rings, meters and cutscene title cards.
 - **Guilt engine:** during INTENTION's guilt movements the red bar drains with note density and receives a small refill for every perfect/great/good, so sparse phrases are forgiving and dense phrases demand accuracy. The later fake bar is decorative: it drains slowly toward a crack, never refills, and does not affect scoring.
+- **INTENTION CHAOS:** a separate 1200-note, 150-hold remix selected from the mode switch on INTENTION's card. It drops the overture, keeps the authored stage and audio, flashes to white at 180.84s, hides the note layer through the four-lane false-guilt silence from 181s to 204.5s, then returns at DAWN with the record's only rainbow cue and an 18-note finale that ends before the fade. NO FAIL and SUDDEN FAIL stay mutually exclusive, and failed or assisted runs never write a personal best.
+- **Scarlet ruin:** ONE TRICK LEFT runs at 120 BPM across 4, 6 and 8 lanes with its own scarlet lane palette, glass-shard hits, burned stage motion, active-lane framing and beat-driven camera. It is a normal track, not a boss, so it starts straight into the chart with no overture.
 - **Feedback:** perfect/great/good/bad/miss windows, combo, score, accuracy, sync meter, hit bursts, shockwaves, screen flashes, and rank screen.
 - **Results:** animated “COMPILING RESULTS” transition followed by a full results layout with score, accuracy ring, judgement bars, combo trace, rank, and new-best delta.
 - **Fail state:** health drains on misses; at zero the transport tape-stops, the lens pulls back, the field washes red behind a SIGNAL LOST flatline, and the results screen records the failed run without overwriting a personal best.
@@ -81,6 +88,8 @@ The playfield is Three.js with an Unreal Bloom pass; audio transport is Web Audi
 
 ```bash
 node tools/analyze-audio.mjs input.wav analysis.json
+node tools/build-game-charts.mjs   # canonical: all six tracks
+node tools/build-chaos-chart.mjs   # INTENTION CHAOS remix (1200 notes · 150 holds)
 node tools/build-charts.mjs cryout-analysis.json world-analysis.json chronostasis-analysis.json
 node tools/build-boss-chart.mjs   # reads tools/source/untouchable-onsets.json
 node tools/build-intention-chart.mjs   # reads tools/source/intention-onsets.json

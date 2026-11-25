@@ -566,7 +566,7 @@ kbd{
   .hint{margin-top:10px}
 }
 
-/* five-track picker on a 720p screen: keep the launch button above the fold */
+/* six-track picker on a 720p screen: keep the launch button above the fold */
 @media (max-height:820px) and (min-width:721px){
   .start-copy h1{font-size:clamp(72px,10.6vw,132px);margin:10px 0 6px}
   .tagline{margin-bottom:12px}
