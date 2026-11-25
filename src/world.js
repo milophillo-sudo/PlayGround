@@ -668,7 +668,7 @@ export class World {
     gg.position.set(56.55, 0, 1.55);
     this.scene.add(gg);
     this.addCollider(56.4, 1.05, 56.75, 2.05, { type: 'console' });
-    this.gateConsole = { id: 'gate', label: 'GATE OVERRIDE', x: 56.15, z: 1.55, y: 0, range: 1.8, used: false, mesh: gg, screen };
+    this.gateConsole = { id: 'gate', label: 'GATE OVERRIDE', x: 56.15, z: 1.55, y: 0, range: 1.3, used: false, mesh: gg, screen };
     this.consoles.push(this.gateConsole);
   }
 
@@ -1224,7 +1224,11 @@ export class World {
       this.addNav(r.x2 - 2.3, r.z2 - 2.3);
     }
     // outside
-    for (let x = 60; x <= 132; x += 6) this.addNav(x, 0);
+    // A node at x=54 bridges the corridor (x=48) to the street nodes
+    // (x=60). Without it the 11-unit edge limit left the two halves of
+    // the graph disconnected, so companions in `exit` state could never
+    // path through the open gate.
+    for (let x = 54; x <= 132; x += 6) this.addNav(x, 0);
     // edges
     for (let i = 0; i < this.navNodes.length; i++) {
       for (let j = i + 1; j < this.navNodes.length; j++) {
@@ -1242,7 +1246,7 @@ export class World {
   segmentHitsWall(ax, az, bx, bz, ignoreDoors = false) {
     for (const c of this.colliders) {
       if (!c.enabled || !c.sight) continue;
-      if (ignoreDoors && c.type === 'door') continue;
+      if (ignoreDoors && (c.type === 'door' || c.type === 'exit')) continue;
       if (segmentAABB(ax, az, bx, bz, c)) return true;
     }
     return false;

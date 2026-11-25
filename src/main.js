@@ -221,6 +221,7 @@ class Game {
       }
       if (k === 'escape' && !e.repeat) {
         if (this.noteOpen) this.closeNote();
+        else if (this.state === 'paused') this.togglePause(false);
         else if (this.state === 'play' || this.state === 'down') this.togglePause();
       }
       if (k === ' ' && this.skill && !this.skill.resolved) {
@@ -1622,7 +1623,7 @@ Object.assign(Game.prototype, {
   },
 
   nearExit(e) {
-    return Math.hypot(e.pos.x - 58, e.pos.z) < 2.2;
+    return Math.hypot(e.pos.x - 58, e.pos.z) < 1.8;
   },
 
   handleExit(e) {
